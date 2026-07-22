@@ -3,8 +3,11 @@ import { EventClickArg, EventDropArg } from "@fullcalendar/core";
 import { EventResizeDoneArg } from "@fullcalendar/interaction";
 import { Event, EventForm } from "@/globals/types/events";
 import { CALENDAR_CONFIG } from "@/features/calendar/constants/calendarConfig";
-import { findEventById } from "@/features/calendar/utils/calendar";
-import { toastDanger } from "@/globals/components/shared/toasts";
+import {
+  findEventById,
+  isRangeWhollyPast,
+} from "@/features/calendar/utils/calendar";
+import { toastDanger, toastWarning } from "@/globals/components/shared/toasts";
 
 // The save API validates includedGroups as an array of group ids, so a
 // calendar move must send ids - not the Group[] relation carried on Event.
@@ -53,9 +56,24 @@ export const useCalendarEvents = (
         return;
       }
 
+      const newStart = info.event.start!;
+      const newEnd = info.event.end ?? info.event.start!;
+
+      // Reject a resize that leaves the event entirely in the past. Client-side
+      // only (no server date policy); the move is reverted so the calendar
+      // never keeps an optimistic change that the user can't actually schedule.
+      if (isRangeWhollyPast(newStart, newEnd)) {
+        info.revert();
+        toastWarning(
+          "Can't move an event into the past",
+          "Choose a time from now onward."
+        );
+        return;
+      }
+
       const updatedEvent = toEventForm(event, {
-        start: info.event.start!,
-        end: info.event.end ?? info.event.start!,
+        start: newStart,
+        end: newEnd,
         allDay: info.event.allDay,
       });
 
@@ -85,9 +103,24 @@ export const useCalendarEvents = (
         return;
       }
 
+      const newStart = info.event.start!;
+      const newEnd = info.event.end ?? info.event.start!;
+
+      // Reject a drop that leaves the event entirely in the past (client-side
+      // only). Reverting avoids stranding an optimistic move the user can't
+      // actually schedule.
+      if (isRangeWhollyPast(newStart, newEnd)) {
+        info.revert();
+        toastWarning(
+          "Can't move an event into the past",
+          "Choose a time from now onward."
+        );
+        return;
+      }
+
       const updatedEvent = toEventForm(event, {
-        start: info.event.start!,
-        end: info.event.end ?? info.event.start!,
+        start: newStart,
+        end: newEnd,
         allDay: info.event.allDay,
       });
 

@@ -146,7 +146,11 @@ const Calendar = ({
           snapDuration={CALENDAR_CONFIG.SNAP_DURATION}
           editable
           nowIndicator
-          validRange={{ start: new Date() }}
+          // No validRange: clipping the visible range to "today onward" hid the
+          // earlier weekday columns, shortened the week title, and blocked
+          // viewing historical events entirely. Past *scheduling* is instead
+          // rejected per-interaction (see useDraftEvent / useCalendarEvents), so
+          // history stays fully visible and navigable while still un-schedulable.
           eventContent={(arg) => <CalendarEventCard arg={arg} />}
         />
       </div>

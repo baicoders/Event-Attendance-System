@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { DateSelectArg } from "@fullcalendar/core";
 import { DraftEvent } from "@/features/calendar/types/calendar";
-import { createDraftEvent } from "@/features/calendar/utils/calendar";
+import {
+  createDraftEvent,
+  isRangeWhollyPast,
+} from "@/features/calendar/utils/calendar";
 import { CALENDAR_CONFIG } from "@/features/calendar/constants/calendarConfig";
+import { toastWarning } from "@/globals/components/shared/toasts";
 
 export const useDraftEvent = (
   isDrawerOpen: boolean,
@@ -19,6 +23,20 @@ export const useDraftEvent = (
   const handleSelectDate = useCallback(
     (info: DateSelectArg) => {
       const start = info.start;
+
+      // Block creating an event in a slot that is entirely in the past. A
+      // selection that includes or extends past "now" (the rest of today, or
+      // any future time) still opens the drawer. This replaces the old
+      // validRange restriction, which enforced the same rule by hiding the
+      // past outright and thus prevented viewing history.
+      if (isRangeWhollyPast(info.start, info.end)) {
+        info.view.calendar.unselect();
+        toastWarning(
+          "Can't schedule in the past",
+          "Pick a date and time from now onward."
+        );
+        return;
+      }
 
       let end: Date;
       if (!info.allDay) {
