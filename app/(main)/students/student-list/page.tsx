@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useFetchStudents } from "@/globals/hooks/useStudents";
+import { page } from "@/globals/constants/designTokens";
 import StudentListClient from "@/features/students/components/StudentListClient";
 import { StudentListCategory } from "@/features/students/types";
 
@@ -69,8 +70,8 @@ const StudentListPage = () => {
       : `/students/select-category?category=${category}`;
 
   return (
-    <section className="flex flex-1 justify-center overflow-y-auto bg-[radial-gradient(circle_at_top,#eef2ff_0%,#f8fafc_45%,#ffffff_100%)] p-6 text-slate-900 md:p-8">
-      <div className="flex w-full max-w-[1200px] flex-col gap-2">
+    <section className={`${page.surface} min-h-svh`}>
+      <div className={page.containerWide}>
         <Link
           href={backHref}
           className="inline-flex items-center w-fit rounded-full border border-slate-200 bg-white py-2 px-6 md:px-12 text-sm font-medium text-slate-600 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700"

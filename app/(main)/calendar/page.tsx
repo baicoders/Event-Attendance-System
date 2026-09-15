@@ -13,6 +13,7 @@ import {
   type EventFilter,
 } from "@/features/calendar/utils/calendarUrlState";
 import { useUrlSearchParams } from "@/globals/hooks/useUrlSearchParams";
+import { page } from "@/globals/constants/designTokens";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
@@ -137,37 +138,39 @@ const CalendarPageInner = () => {
   }, [searchParams, handleDrawerOpen]);
 
   return (
-    <div className="flex flex-col flex-1 bg-white p-4 md:p-8">
-      <section className="h-[calc(100vh-2.5rem)] md:h-[calc(100vh-3.5rem)]">
-        {/* Calendar Component - displays events and allows date selection */}
-        <Calendar
-          isDrawerOpen={isDrawerOpen}
-          onSelectDate={handleSelectDate}
-          onEditEvent={handleEditEvent}
-          initialView={view}
-          initialDate={initialDate}
-          onViewDateChange={handleViewDateChange}
-        />
-      </section>
+    <section className={`${page.surface} min-h-svh`}>
+      <div className={page.containerWide}>
+        <section className="h-[calc(100svh-10.5rem)] md:h-[calc(100vh-3.5rem)]">
+          {/* Calendar Component - displays events and allows date selection */}
+          <Calendar
+            isDrawerOpen={isDrawerOpen}
+            onSelectDate={handleSelectDate}
+            onEditEvent={handleEditEvent}
+            initialView={view}
+            initialDate={initialDate}
+            onViewDateChange={handleViewDateChange}
+          />
+        </section>
 
-      {/* Events Container - displays list of upcoming/all events */}
-      <section className="mt-6">
-        <EventsContainer
-          onDrawerOpen={handleDrawerOpen}
-          filter={eventFilter}
-          onFilterChange={handleFilterChange}
-        />
-      </section>
+        {/* Events Container - displays list of upcoming/all events */}
+        <section>
+          <EventsContainer
+            onDrawerOpen={handleDrawerOpen}
+            filter={eventFilter}
+            onFilterChange={handleFilterChange}
+          />
+        </section>
 
-      {/* Event Drawer - form for creating/editing events */}
-      <EventDrawer
-        key={formData?.id} // To reset the form whenever data changes lol
-        mode={drawerMode}
-        initialData={formData ?? undefined}
-        isOpen={isDrawerOpen}
-        onClose={handleDrawerClose}
-      />
-    </div>
+        {/* Event Drawer - form for creating/editing events */}
+        <EventDrawer
+          key={formData?.id} // To reset the form whenever data changes lol
+          mode={drawerMode}
+          initialData={formData ?? undefined}
+          isOpen={isDrawerOpen}
+          onClose={handleDrawerClose}
+        />
+      </div>
+    </section>
   );
 };
 

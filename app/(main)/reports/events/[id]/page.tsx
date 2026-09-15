@@ -112,8 +112,8 @@ const EventReportPage = () => {
 
   if (isError || (!isLoading && !report)) {
     return (
-      <section className={page.surface}>
-        <div className={page.container}>
+      <section className={`${page.surface} min-h-svh`}>
+        <div className={page.containerWide}>
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">
             Couldn&apos;t load this event report. It may have been removed, or you
             may not have access.
@@ -130,8 +130,8 @@ const EventReportPage = () => {
   const event = report?.event;
 
   return (
-    <section className={page.surface}>
-      <div className={page.container}>
+    <section className={`${page.surface} min-h-svh`}>
+      <div className={page.containerWide}>
         <Link href="/reports" className={`${pill.back} w-fit`}>
           <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
           Back to reports

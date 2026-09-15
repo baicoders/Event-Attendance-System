@@ -34,6 +34,7 @@ import useEvents, {
 } from "@/globals/hooks/useEvents";
 import { Event } from "@/globals/types/events";
 import { cn } from "@/globals/libs/shad-cn";
+import { page } from "@/globals/constants/designTokens";
 import RejectionDialog from "@/globals/components/shared/RejectionDialog";
 
 const formatDateTime = (dateValue: Date | string) =>
@@ -277,7 +278,8 @@ const AdminDashboard = () => {
     : "Idle";
 
   return (
-    <div className="flex-1 space-y-6 overflow-y-auto bg-[radial-gradient(circle_at_top,#eff6ff_0%,#f8fafc_40%,#ffffff_100%)] p-6 md:p-8">
+    <section className={`${page.surface} min-h-svh`}>
+      <div className={page.containerWide}>
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-[linear-gradient(120deg,#0f172a_0%,#1e3a8a_45%,#4f46e5_100%)] p-6 text-white shadow-[0_20px_45px_rgba(30,64,175,0.25)]">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/75">
           Admin Overview
@@ -572,7 +574,8 @@ const AdminDashboard = () => {
         reasonLabel="Rejection message"
         placeholder="Example: Please update the schedule conflict and include a clearer event description."
       />
-    </div>
+      </div>
+    </section>
   );
 };
 
@@ -644,7 +647,8 @@ const OrganizerDashboard = () => {
   ];
 
   return (
-    <div className="flex-1 space-y-6 overflow-y-auto bg-[radial-gradient(circle_at_top,#eef2ff_0%,#f8fafc_45%,#ffffff_100%)] p-6 md:p-8">
+    <section className={`${page.surface} min-h-svh`}>
+      <div className={page.containerWide}>
       <section className="overflow-hidden rounded-3xl border border-indigo-200/60 bg-[linear-gradient(130deg,#1e1b4b_0%,#1d4ed8_50%,#4f46e5_100%)] p-6 text-white shadow-[0_24px_50px_rgba(30,64,175,0.25)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -826,7 +830,8 @@ const OrganizerDashboard = () => {
           Failed to load events. Please refresh the page.
         </p>
       ) : null}
-    </div>
+      </div>
+    </section>
   );
 };
 

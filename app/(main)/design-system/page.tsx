@@ -57,7 +57,7 @@ const DesignSystemPage = () => {
   }, []);
 
   return (
-    <section className={page.surface}>
+    <section className={`${page.surface} min-h-svh`}>
       <div className={cn(page.containerWide, "gap-8")}>
         <PageHeader
           variant="hero"

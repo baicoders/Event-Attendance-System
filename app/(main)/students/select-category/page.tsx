@@ -2,6 +2,7 @@ import CollegeSelectionBoard from "@/features/students/components/CollegeSelecti
 import HouseSelectionBoard from "@/features/students/components/HouseSelectionBoard";
 import ShsSelectionBoard from "@/features/students/components/ShsSelectionBoard";
 import { StudentListCategory } from "@/features/students/types";
+import { page } from "@/globals/constants/designTokens";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -25,8 +26,8 @@ const SelectCategoryPage = async ({ searchParams }: Props) => {
   };
 
   return (
-    <section className="relative flex min-h-screen flex-1 flex-col items-center bg-[radial-gradient(circle_at_top,#eef2ff_0%,#f8fafc_45%,#ffffff_100%)] p-6 text-slate-900 md:p-12">
-      <div className="flex w-full max-w-6xl flex-col gap-8">
+    <section className={`${page.surface} min-h-svh`}>
+      <div className={page.containerWide}>
         {/* Navigation Header */}
         <div className="flex items-center">
           <Link
