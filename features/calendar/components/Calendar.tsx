@@ -1,11 +1,16 @@
 "use client";
 
 import FullCalendar from "@fullcalendar/react";
-import type { DayHeaderContentArg } from "@fullcalendar/core";
+import type { DatesSetArg, DayHeaderContentArg } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import React, { useMemo, useRef, useCallback } from "react";
+import {
+  DEFAULT_CALENDAR_VIEW,
+  formatYmd,
+} from "@/features/calendar/utils/calendarUrlState";
+import type { CalendarView } from "@/features/calendar/types/calendar";
 import { useSidebar } from "@/globals/contexts/SidebarContext";
 import CalendarEventCard from "@/features/calendar/components/CalendarEventCard";
 import useEvents, { useSaveEvent } from "@/globals/hooks/useEvents";
@@ -24,12 +29,32 @@ const Calendar = ({
   onSelectDate,
   isDrawerOpen,
   onEditEvent,
+  initialView = DEFAULT_CALENDAR_VIEW,
+  initialDate,
+  onViewDateChange,
 }: CalendarProps) => {
   const { isExpanded: isSidebarExpanded } = useSidebar();
   const { user } = useAuth();
   const { data } = useEvents();
   const { mutateAsync: saveEvent } = useSaveEvent();
   const calendarRef = useRef<FullCalendar | null>(null);
+  // FullCalendar fires datesSet several times while it initializes. Persisting
+  // those would spam the URL on load and race with mount effects that strip
+  // one-shot params (create=1). So only persist a datesSet that follows a real
+  // user interaction with the calendar (nav/view buttons, day clicks), tracked
+  // by a pointerdown on the calendar container - init fires have none.
+  const hasInteracted = useRef(false);
+
+  const handleDatesSet = useCallback(
+    (arg: DatesSetArg) => {
+      if (!hasInteracted.current) return;
+      onViewDateChange?.(
+        arg.view.type as CalendarView,
+        formatYmd(arg.view.currentStart),
+      );
+    },
+    [onViewDateChange],
+  );
 
   // Transform events for FullCalendar format; per-event editability follows
   // the server's rules (own drafts/rejected, or admin)
@@ -113,11 +138,19 @@ const Calendar = ({
       <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-indigo-300/25 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-20 -left-14 h-48 w-48 rounded-full bg-sky-300/20 blur-3xl" />
 
-      <div className="event-calendar h-full">
+      <div
+        className="event-calendar h-full"
+        onPointerDown={() => {
+          hasInteracted.current = true;
+        }}
+      >
         <FullCalendar
           ref={calendarRef}
           height="100%"
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView={initialView}
+          initialDate={initialDate}
+          datesSet={handleDatesSet}
           headerToolbar={CALENDAR_HEADER_TOOLBAR}
           buttonText={{
             today: "Today",

@@ -17,16 +17,17 @@ import {
   toastWarning,
 } from "@/globals/components/shared/toasts";
 import RejectionDialog from "@/globals/components/shared/RejectionDialog";
+import type { EventFilter } from "@/features/calendar/utils/calendarUrlState";
 
 type Props = {
   onDrawerOpen: (event: Event | null) => void;
+  // Controlled by the page so the active filter can live in the URL.
+  filter: EventFilter;
+  onFilterChange: (filter: EventFilter) => void;
 };
 
-type EventFilter = "current" | "upcoming" | "finished" | "all";
-
-const EventsContainer = ({ onDrawerOpen }: Props) => {
+const EventsContainer = ({ onDrawerOpen, filter, onFilterChange }: Props) => {
   const { data, isLoading, error } = useEvents();
-  const [filter, setFilter] = useState<EventFilter>("upcoming");
   const { user } = useAuth();
   const approveEvent = useApproveEvent();
   const rejectEvent = useRejectEvent();
@@ -256,7 +257,7 @@ const EventsContainer = ({ onDrawerOpen }: Props) => {
             <button
               key={option.id}
               type="button"
-              onClick={() => setFilter(option.id)}
+              onClick={() => onFilterChange(option.id)}
               className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition-all ${
                 isActive
                   ? "border-transparent bg-primary text-white"
