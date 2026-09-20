@@ -12,6 +12,10 @@ import {
 } from "@/globals/utils/auth";
 import { respondWithError } from "@/globals/utils/httpError";
 import { validateEventGroupIds } from "@/globals/utils/eventGroups";
+import {
+  AUDIENCE_CHANGE_HAS_RECORDS_CODE,
+  getEventAudienceChangeError,
+} from "@/globals/utils/eventAudienceGuard";
 
 const submitSchema = z.object({
   action: z.enum(["SUBMIT", "APPROVE", "REJECT"]),
@@ -38,6 +42,10 @@ const patchSchema = z
     start: z.coerce.date(),
     end: z.coerce.date(),
     allDay: z.boolean().optional().default(false),
+    // See eventSchema: set by the client only after confirming the consequence
+    // of rescoping an approved event that already has attendance. Kept in sync
+    // with globals/schemas/index.ts's eventSchema by hand (do not merge).
+    acknowledgeAudienceChange: z.boolean().optional(),
   })
   .refine((data) => data.end.getTime() >= data.start.getTime(), {
     message: "End must be the same or after start.",
@@ -86,7 +94,10 @@ export async function PATCH(
     const { eventId } = await params;
     const payload = await req.json();
 
-    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: { includedGroups: true },
+    });
 
     if (!event) {
       return NextResponse.json(err("Event not found."), { status: 404 });
@@ -172,6 +183,21 @@ export async function PATCH(
         : ["DRAFT", "REJECTED"]
     );
 
+    // Rescoping an approved event that already has attendance rewrites its
+    // report retroactively, so require an explicit acknowledgement first
+    // (mirrors the delete path's EVENT_HAS_RECORDS guard).
+    const audienceError = await getEventAudienceChangeError(event, {
+      category: data.category,
+      includedGroups: data.includedGroups,
+      acknowledgeAudienceChange: data.acknowledgeAudienceChange,
+    });
+    if (audienceError) {
+      return NextResponse.json(
+        err(audienceError, AUDIENCE_CHANGE_HAS_RECORDS_CODE),
+        { status: 409 }
+      );
+    }
+
     // Editing a rejected event returns it to DRAFT (clearing the review)
     // so the organizer can fix it and resubmit.
     const rejectionReset =
@@ -185,6 +211,8 @@ export async function PATCH(
         : {};
 
     const { includedGroups, ...eventData } = data;
+    // acknowledgeAudienceChange is a client-only signal, not a Prisma column.
+    delete eventData.acknowledgeAudienceChange;
     const updated = await prisma.event.update({
       where: { id: eventId },
       data: {

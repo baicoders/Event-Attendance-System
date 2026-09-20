@@ -138,6 +138,17 @@ scoped, well-understood change — not a redesign.
 interim). **Backlog ticket:** yes — recommend fixing before beta if time allows, since
 the fix is small; otherwise Phase 0/1 per the remediation plan.
 
+**RESOLVED 2026-09-20 (#40):** both event-edit routes now run the shared
+`getEventAudienceChangeError` guard (`globals/utils/eventAudienceGuard.ts`). When an
+`APPROVED` event's `category`/`includedGroups` actually change *and*
+`attendanceCount > 0`, the request is rejected with `409` +
+`AUDIENCE_CHANGE_HAS_RECORDS` unless the caller passes `acknowledgeAudienceChange:
+true`. The `EventDrawer` surfaces the consequence via `useConfirm()` (naming the record
+count) and only re-sends with the flag after the admin confirms; benign edits and
+calendar drag/resize (which echoes the unchanged audience) pass through untouched. This
+is option 2 (confirm with consequence) with a server-side fallback to option 1: without
+the explicit flag, a rescope is always blocked.
+
 ---
 
 ## SEC-04 — see DATA-03 / OPS-07

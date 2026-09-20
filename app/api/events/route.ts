@@ -13,6 +13,10 @@ import { respondWithError } from "@/globals/utils/httpError";
 import { eventSchema } from "@/globals/schemas";
 import { toDate } from "@/globals/utils/events";
 import { validateEventGroupIds } from "@/globals/utils/eventGroups";
+import {
+  AUDIENCE_CHANGE_HAS_RECORDS_CODE,
+  getEventAudienceChangeError,
+} from "@/globals/utils/eventAudienceGuard";
 
 const eventStatusEnum = z.enum(["DRAFT", "PENDING", "APPROVED", "REJECTED"]);
 const eventScopeEnum = z.enum(["visible", "mine"]);
@@ -123,6 +127,7 @@ export async function POST(req: Request) {
     if (payload.id) {
       const existing = await prisma.event.findUnique({
         where: { id: payload.id },
+        include: { includedGroups: true },
       });
 
       if (!existing) {
@@ -140,6 +145,17 @@ export async function POST(req: Request) {
           ? ["DRAFT", "PENDING", "APPROVED", "REJECTED"]
           : ["DRAFT", "REJECTED"];
       assertEventStatus(existing, editableStatuses);
+
+      // Rescoping an approved event that already has attendance rewrites its
+      // report retroactively, so require an explicit acknowledgement first
+      // (mirrors the delete path's EVENT_HAS_RECORDS guard).
+      const audienceError = await getEventAudienceChangeError(existing, payload);
+      if (audienceError) {
+        return NextResponse.json(
+          err(audienceError, AUDIENCE_CHANGE_HAS_RECORDS_CODE),
+          { status: 409 },
+        );
+      }
 
       // Editing a rejected event returns it to DRAFT (clearing the review) so
       // the organizer can fix it and resubmit.

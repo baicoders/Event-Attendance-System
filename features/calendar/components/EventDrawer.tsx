@@ -27,12 +27,19 @@ import {
   useSaveEvent,
   useApproveEvent,
   useSubmitEvent,
+  useStatsOfEvent,
 } from "@/globals/hooks/useEvents";
 import { EVENT_CHOICES } from "@/features/calendar/constants/categoryGroups"; // Keep just the categories here
-import { Event } from "@/globals/types/events";
+import { Event, EventForm } from "@/globals/types/events";
 import EventActionButtons from "./EventActionButtons";
-import { formatEventPayload } from "@/globals/utils/events";
+import {
+  formatEventPayload,
+  hasEventAudienceChanged,
+  AUDIENCE_CHANGE_HAS_RECORDS_CODE,
+} from "@/globals/utils/events";
 import { useFetchGroupsByCategory } from "@/globals/hooks/useGroups";
+import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
+import { ApiError } from "@/globals/utils/api";
 
 type EventDrawerProps = {
   isOpen: boolean;
@@ -49,6 +56,7 @@ export default function EventDrawer({
 }: EventDrawerProps) {
   const isEdit = mode === "edit";
   const { user } = useAuth();
+  const confirm = useConfirm();
   const formScrollRef = useRef<HTMLDivElement | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
@@ -75,6 +83,12 @@ export default function EventDrawer({
   // FETCH DYNAMIC GROUPS based on selected category
   const { data: availableGroups = [], isLoading: isLoadingGroups } =
     useFetchGroupsByCategory(category);
+
+  // Attendance count for the event being edited, used only to phrase the
+  // audience-change confirmation. The server independently enforces the rule;
+  // this query is disabled for a create (no id).
+  const { data: stats } = useStatsOfEvent(initialData?.id);
+  const presentCount = stats?.present ?? 0;
 
   // Role Checks
   const eventStatus = initialData?.status ?? "DRAFT";
@@ -110,9 +124,62 @@ export default function EventDrawer({
     onClose();
   };
 
+  // Only an admin can edit an approved event; if they change its audience
+  // (category/includedGroups) while it already has attendance, make them confirm
+  // the report consequence. The server enforces the same rule, so a stale count
+  // here only affects the messaging, never whether the change is allowed.
+  const needsAudienceConfirmation = (data: EventForm) =>
+    isEdit &&
+    isAdmin &&
+    eventStatus === "APPROVED" &&
+    presentCount > 0 &&
+    hasEventAudienceChanged(initialData ?? {}, data);
+
+  /** Persist an event, prompting once for confirmation when a rescope would
+   *  rewrite an already-recorded event's report. Declining aborts the save. */
+  const saveWithAudienceConfirmation = async (data: EventForm) => {
+    const payload = formatEventPayload(data);
+
+    if (needsAudienceConfirmation(data)) {
+      const confirmed = await confirm({
+        title: "Change this event's audience?",
+        description: `This event already has ${presentCount} attendance record(s). Changing its category or included groups will change who counts toward its report.`,
+      });
+
+      if (!confirmed) return null;
+
+      payload.acknowledgeAudienceChange = true;
+    }
+
+    try {
+      return await saveEvent(payload);
+    } catch (error) {
+      // Fallback: the local count can be stale or still loading, so the server
+      // can reject a rescope we never warned about. Surface the server's own
+      // consequence message and let the admin confirm before retrying once.
+      if (
+        error instanceof ApiError &&
+        error.code === AUDIENCE_CHANGE_HAS_RECORDS_CODE &&
+        !payload.acknowledgeAudienceChange
+      ) {
+        const confirmed = await confirm({
+          title: "Change this event's audience?",
+          description: error.message,
+        });
+
+        if (!confirmed) return null;
+
+        return saveEvent({ ...payload, acknowledgeAudienceChange: true });
+      }
+
+      throw error;
+    }
+  };
+
   const handleSaveDraft = handleSubmit(async (data) => {
     try {
-      await saveEvent(formatEventPayload(data));
+      const saved = await saveWithAudienceConfirmation(data);
+      if (!saved) return;
       toastSuccess("Event saved", "Draft updated successfully.");
       onClose();
     } catch (error) {
@@ -125,7 +192,8 @@ export default function EventDrawer({
 
   const handleSubmitForReview = handleSubmit(async (data) => {
     try {
-      const saved = await saveEvent(formatEventPayload(data));
+      const saved = await saveWithAudienceConfirmation(data);
+      if (!saved) return;
       if (!saved.id) throw Error("No event id");
 
       await submitEvent({ id: saved.id });
@@ -147,10 +215,13 @@ export default function EventDrawer({
         !!existingId &&
         !isDirty &&
         ["PENDING", "REJECTED"].includes(eventStatus);
-      const eventId = isDirectApproval
-        ? existingId
-        : (await saveEvent(formatEventPayload(data))).id;
+      const saved = isDirectApproval
+        ? null
+        : await saveWithAudienceConfirmation(data);
+      const eventId = isDirectApproval ? existingId : saved?.id;
 
+      // Cancel on the audience confirmation aborts the whole approval.
+      if (!isDirectApproval && !saved) return;
       if (!eventId) throw Error("No event id");
 
       await approveEvent({ id: eventId });
