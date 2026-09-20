@@ -236,6 +236,11 @@ change eligibility retroactively. Full detail in
 gap; referenced here because the *consequence* is a data-integrity one (report numbers
 for an already-happened event change without any audit trail explaining why).
 
+**RESOLVED 2026-09-20 (#40)** — see
+[`security.md#sec-03`](./security.md#sec-03) for the guard. An audience change on an
+approved event with attendance now requires an explicit acknowledgement, so the report
+can no longer be rewritten silently.
+
 ---
 
 ## DATA-06 — Eligibility is always computed live, not snapshotted {#data-06}

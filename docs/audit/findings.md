@@ -61,7 +61,7 @@ one deployment task.
 
 | ID | Category | Title | Confidence | Issue |
 |---|---|---|---|---|
-| [SEC-03](./security.md#sec-03) / [DATA-05](./data-integrity.md#data-05) | Authorization / Data integrity | Admin can silently change an APPROVED event's category/audience after attendance already exists | CONFIRMED | [#40](https://github.com/mjfelecio/Event-Attendance-System/issues/40) |
+| [SEC-03](./security.md#sec-03) / [DATA-05](./data-integrity.md#data-05) | Authorization / Data integrity | ~~Admin can silently change an APPROVED event's category/audience after attendance already exists~~ **RESOLVED 2026-09-20** — shared audience guard + explicit acknowledgement | CONFIRMED | [#40](https://github.com/mjfelecio/Event-Attendance-System/issues/40) |
 | [SEC-05](./security.md#sec-05) / [OPS-03](./operability.md#ops-03) | Security / Operability | Signup rate limit is a single network-wide bucket (5 signups / 10 min, for everyone) | CONFIRMED | [#43](https://github.com/mjfelecio/Event-Attendance-System/issues/43) |
 | [DATA-04](./data-integrity.md#data-04) | Data integrity | No backup strategy for the single SQLite file | CONFIRMED (absence) | [#41](https://github.com/mjfelecio/Event-Attendance-System/issues/41) |
 | [DATA-12](./data-integrity.md#data-12) *(new)* | Data integrity | ~~A scoped event with zero groups matched the entire school instead of nobody~~ **FIXED 2026-08-17** | CONFIRMED | found while fixing [#39](https://github.com/mjfelecio/Event-Attendance-System/issues/39) |

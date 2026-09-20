@@ -77,6 +77,11 @@ week.
   [DATA-05](./data-integrity.md#data-05) →
   [#40](https://github.com/mjfelecio/Event-Attendance-System/issues/40)) — either block
   the specific fields or require an explicit confirmation naming the consequence.
+  **DONE 2026-09-20** — shared `getEventAudienceChangeError` guard on both edit routes:
+  an audience change on an approved event with `attendanceCount > 0` returns
+  `409 AUDIENCE_CHANGE_HAS_RECORDS` unless the caller acknowledges; the `EventDrawer`
+  confirms with the record count before re-sending with the flag. Benign edits and
+  calendar drag/resize pass through unchanged.
 - Add a pre-delete attendance-record check (and correct error message) to
   `DELETE /api/students/[id]`, mirroring the existing event-delete guard
   ([DATA-03](./data-integrity.md#data-03) / [OPS-07](./operability.md#ops-07) →

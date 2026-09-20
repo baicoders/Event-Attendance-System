@@ -344,12 +344,22 @@ enforces, purely to hide/disable a control the server would reject anyway. If yo
 new server-side rule, ask whether the UI should mirror it (usually yes, for a good
 error-free experience) — but never treat the client check as the actual enforcement.
 
-**Known gap, not a pattern to copy**: nothing — client or server — stops an admin from
-editing an *approved* event's category/audience after it already has attendance
-records, even though the analogous *delete* path does guard against deleting an event
-with records. See `audit/security.md#sec-03`. If you're adding a new "admin can edit
-anything" pathway, consider whether it needs the same `attendanceCount > 0` guard the
-delete routes already have.
+**Pattern for "admin can edit anything" pathways**: event audience edits are guarded
+the same way the delete paths are. Changing an *approved* event's `category` or
+`includedGroups` after it already has attendance records silently rewrites which
+students count as "eligible" (eligibility is recomputed live — see
+`audit/data-integrity.md#data-06`), so both event-edit routes
+(`POST /api/events`, `PATCH /api/events/[eventId]`) run the shared
+`getEventAudienceChangeError` guard (`globals/utils/eventAudienceGuard.ts`): when the
+audience actually changed and `attendanceCount > 0`, the edit is rejected with
+`409` + code `AUDIENCE_CHANGE_HAS_RECORDS` unless the caller sends
+`acknowledgeAudienceChange: true`. The `EventDrawer` prompts with `useConfirm()` naming
+the record count and only re-sends with that flag after the admin confirms (benign
+edits — title/location/description/schedule — pass through untouched, and the
+changed-ness comparison ignores field order and unchanged re-submissions so calendar
+drag/resize never trips it). If you add another admin-edit pathway that can change an
+event's audience, apply the same `attendanceCount > 0` guard rather than inventing a
+new one. Resolved from `SEC-03` / `DATA-05` (#40).
 
 ---
 

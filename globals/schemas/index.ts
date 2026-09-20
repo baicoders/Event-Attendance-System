@@ -16,6 +16,10 @@ export const eventSchema = z
     end: z.date(),
     description: z.string().max(2000, "Description is too long").nullable(),
     allDay: z.boolean(),
+    // Set by the client only after the admin confirms the consequence of
+    // rescoping an approved event that already has attendance. The server
+    // rejects such a change with AUDIENCE_CHANGE_HAS_RECORDS unless this is true.
+    acknowledgeAudienceChange: z.boolean().optional(),
   })
   // Validate that end date is after start date
   .refine(
