@@ -28,7 +28,9 @@ import { cn } from "@/globals/libs/shad-cn";
 type Props = {
   // Already the live event (the page derives it from useFetchEvent).
   selectedEvent: Event | null;
-  onChangeEvent: (event: Event) => void;
+  // Communicates the chosen event *id* - the page owns the (URL-backed) state
+  // and derives the live event, so the header never passes a copied Event.
+  onSelectEventId: (eventId: string) => void;
 };
 
 // Below `sm`, three stacked DataCards read as three separate decisions to
@@ -58,7 +60,7 @@ const CompactStat = ({
 
 const AttendancePageHeader: React.FC<Props> = ({
   selectedEvent,
-  onChangeEvent,
+  onSelectEventId,
 }) => {
   const { user } = useAuth();
   const { data: events, isLoading: isEventsLoading } = useFetchApprovedEvents();
@@ -88,14 +90,15 @@ const AttendancePageHeader: React.FC<Props> = ({
     }));
   }, [events]);
 
-  // Handle selecting a new event
+  // Handle selecting a new event. Only surface ids we can see in the approved
+  // list; the page validates again before enabling the workflow.
   const handleSelectEvent = (eventId: string) => {
     const found = events?.find((e) => e.id === eventId);
     if (!found) {
       console.warn("Selected event not found in events list");
       return;
     }
-    onChangeEvent(found);
+    onSelectEventId(found.id);
   };
 
   return (
