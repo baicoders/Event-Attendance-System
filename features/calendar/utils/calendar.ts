@@ -33,6 +33,20 @@ export const transformEventsForCalendar = (
   })) ?? [];
 };
 
+/**
+ * True when an entire [start, end) range lies at or before "now" - i.e. the
+ * whole slot/event is in the past. Used to block past *scheduling* interactions
+ * (creating a new event, or dragging/resizing an editable one) without hiding
+ * historical events from view. A range that merely starts in the past but ends
+ * at or after "now" is NOT wholly past, so events and selections spanning the
+ * current moment stay interactive.
+ */
+export const isRangeWhollyPast = (
+  start: Date,
+  end: Date,
+  now: Date = new Date()
+): boolean => end.getTime() <= now.getTime();
+
 export const createDraftEvent = (start: Date, end: Date): DraftEvent => {
   return {
     id: CALENDAR_CONFIG.DRAFT_EVENT_ID,
