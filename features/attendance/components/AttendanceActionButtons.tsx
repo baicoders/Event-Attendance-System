@@ -95,7 +95,8 @@ const AttendanceActionButtons = ({
               : "Attendance was already recorded.",
           );
         } else if (isTimeout) {
-          toastSuccess("Time-out recorded");
+          if (!result.timein) toastWarning("Time-out recorded; no time-in is recorded for this student.");
+          else toastSuccess("Time-out recorded");
         } else if (!recordId) {
           toastSuccess("Student marked as present");
         } else {
@@ -134,12 +135,11 @@ const AttendanceActionButtons = ({
       {actionButtons.map(({ action, icon: Icon, label, title, color }) => {
         // Disable rules:
         // - "absent": nothing to delete when there's no record.
-        // - "present" in timeout mode: can't time out without a time-in, and
-        //   can't time out again once already done.
+        // - "present" in timeout mode: can't time out again once already done.
         // - "present" in normal mode: already timed in, nothing left to do.
         const presentDisabled =
           action === "present" &&
-          (isTimeout ? !hasTimeIn || hasTimeOut : hasTimeIn);
+          (isTimeout ? hasTimeOut : hasTimeIn);
         const isDisabled =
           isLoading || operationBusy || (action === "absent" && !recordId) || presentDisabled;
 

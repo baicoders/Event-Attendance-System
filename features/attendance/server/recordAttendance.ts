@@ -65,7 +65,12 @@ export async function recordAttendance(
     });
     const now = new Date();
     if (operation === "TIME_OUT") {
-      if (!existing?.timein) throw new RecordingError("Student has not timed in for this event.", 409, "NO_TIME_IN");
+      if (!existing) {
+        const record = await tx.record.create({
+          data: { eventId, studentId, method, timeout: now, recordedById: actor.id },
+        });
+        return { record, changed: true, operation, created: true };
+      }
       const changed = !existing.timeout && (await tx.record.updateMany({
         where: { id: existing.id, timeout: null },
         data: { timeout: now, lastModifiedById: actor.id },

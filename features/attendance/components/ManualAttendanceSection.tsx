@@ -22,6 +22,7 @@ type Props = {
   focusRequest?: number;
   onFocusSearch?: () => void;
   onReturnToScanner?: () => void;
+  inSheet?: boolean;
   result?: Attempt | null;
   onAcknowledge?: () => void;
 };
@@ -35,7 +36,7 @@ function identity(student: Student) {
 
 export default function ManualAttendanceSection({ selectedEvent, displayedStudent, onSelect, onRecord,
   operationBusy = false, active = true, focusRequest, onFocusSearch, onReturnToScanner,
-  result, onAcknowledge }: Props) {
+  inSheet = false, result, onAcknowledge }: Props) {
   const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(10);
@@ -126,9 +127,9 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
 
   if (!selectedEvent) return null;
 
-  return <section className="min-w-0 rounded-xl border bg-white p-4" aria-label="Manual attendance">
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-      <h2 className="text-lg font-semibold">Manual attendance</h2>
+  return <section className={inSheet ? "min-w-0 py-4" : "min-w-0 rounded-xl border bg-white p-4"} aria-label="Manual attendance">
+    <div className={inSheet ? "mb-3 flex justify-end" : "mb-3 flex flex-wrap items-center justify-between gap-2"}>
+      {!inSheet && <h2 className="text-lg font-semibold">Manual attendance</h2>}
       {onReturnToScanner && <Button type="button" variant="outline" onClick={onReturnToScanner}>Return to scanner</Button>}
     </div>
     <label htmlFor="manual-attendance-search" className="mb-1 block text-sm font-medium">Search name or student ID</label>
@@ -177,9 +178,13 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
         {recordState.kind === "LOADING" && "Checking attendance status…"}
         {recordState.kind === "ERROR" && "Attendance status could not be checked. Status is unknown."}
         {recordState.kind === "NO_RECORD" && "No record was found at the last check."}
-        {recordState.kind === "NO_TIME_IN" && "No time-in is recorded at the last check."}
+        {recordState.kind === "NO_TIME_IN" && "Time in: not recorded · Time out: " + (recordState.record.timeout ? new Date(recordState.record.timeout).toLocaleString() : "not recorded")}
         {recordState.kind === "READY" && "Time in: " + new Date(recordState.record.timein!).toLocaleString() + " · Time out: " + (recordState.record.timeout ? new Date(recordState.record.timeout).toLocaleString() : "not recorded")}
       </div>
+      {mode === "TIME_OUT" && (recordState.kind === "NO_RECORD" || recordState.kind === "NO_TIME_IN") &&
+        <p role="status" className="mt-2 text-sm text-amber-800">No time-in is recorded. {recordState.kind === "NO_TIME_IN" && recordState.record.timeout
+          ? "The time-out is recorded and time-in remains empty."
+          : "You can still record time-out; time-in will remain empty."}</p>}
       {recordQuery.dataUpdatedAt > 0 && recordState.kind !== "ERROR" && <p className="mt-1 text-xs text-slate-500">Checked {new Date(recordQuery.dataUpdatedAt).toLocaleTimeString()}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button type="button" disabled={!onRecord || operationBusy || detailActionDisabled(mode, recordState)} onClick={() => onRecord?.(displayedStudent)}>{recordLabel}</Button>
