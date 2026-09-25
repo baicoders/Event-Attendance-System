@@ -33,6 +33,7 @@ import { EVENT_CHOICES } from "@/features/calendar/constants/categoryGroups"; //
 import { Event, EventForm } from "@/globals/types/events";
 import EventActionButtons from "./EventActionButtons";
 import EventAudiencePreview from "./EventAudiencePreview";
+import EventReadinessPanel from "./EventReadinessPanel";
 import {
   formatEventPayload,
   hasEventAudienceChanged,
@@ -286,6 +287,15 @@ export default function EventDrawer({
             ref={formScrollRef}
             className="flex-1 min-h-0 overflow-y-auto px-5 pb-6"
           >
+            <div className="mb-4">
+              {isEdit && initialData?.id ? (
+                <EventReadinessPanel key={initialData.id} eventId={initialData.id} dirty={isDirty} />
+              ) : (
+                <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                  Save this draft to check approval and ownership. Audience preview checks your current selection.
+                </p>
+              )}
+            </div>
             <fieldset
               disabled={isReadOnlyView}
               className={cn(

@@ -76,6 +76,7 @@ const useInvalidateGroups = () => {
   return () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.groups.all() });
     queryClient.invalidateQueries({ queryKey: queryKeys.audience.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.events.readinessAll() });
   };
 };
 
@@ -133,6 +134,7 @@ export const useDeleteGroup = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.groups.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.audience.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.readinessAll() });
       // Deleting a group rewrites its students' memberships either way.
       queryClient.invalidateQueries({ queryKey: queryKeys.students.all() });
     },

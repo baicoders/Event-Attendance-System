@@ -10,32 +10,39 @@ const GLOBAL_CATEGORIES = new Set(["ALL", "COLLEGE", "SHS"]);
 
 export class AudienceScopeError extends Error {}
 
-/** Resolve the same predicate used by attendance and reports for an unsaved scope. */
-export async function previewAudience(input: AudiencePreviewInput): Promise<AudiencePreview> {
-  const ids = GLOBAL_CATEGORIES.has(input.category) ? [] : input.includedGroups;
+/** Resolve the canonical event predicate in the caller's read snapshot. */
+export async function resolveAudienceScope(
+  tx: Prisma.TransactionClient,
+  input: Pick<AudiencePreviewInput, "category" | "includedGroups">,
+) {
+  const ids = GLOBAL_CATEGORIES.has(input.category) ? [] : [...new Set(input.includedGroups)];
+  if (!GLOBAL_CATEGORIES.has(input.category) && ids.length === 0) {
+    throw new AudienceScopeError("At least one target group is required.");
+  }
   const groups = ids.length
-    ? await prisma.group.findMany({
+    ? await tx.group.findMany({
         where: { id: { in: ids }, category: input.category },
         select: { id: true, slug: true },
       })
     : [];
-
-  // A group deleted between initial validation and this lookup must not turn
-  // the scope into an apparently valid empty audience.
   if (groups.length !== ids.length) {
     throw new AudienceScopeError("Selected groups changed. Refresh the event form and try again.");
   }
+  return buildEventStudentFilter({ category: input.category, includedGroups: groups });
+}
 
-  const where = buildEventStudentFilter({ category: input.category, includedGroups: groups });
-  const searchWhere: Prisma.StudentWhereInput = input.search
-    ? { AND: [where, { OR: [
-        { id: { contains: input.search } },
-        { firstName: { contains: input.search } },
-        { lastName: { contains: input.search } },
-      ] }] }
-    : where;
-
+/** Resolve the same predicate used by attendance and reports for an unsaved scope. */
+export async function previewAudience(input: AudiencePreviewInput): Promise<AudiencePreview> {
+  const ids = GLOBAL_CATEGORIES.has(input.category) ? [] : input.includedGroups;
   const [totalEligible, searchMatches, students] = await prisma.$transaction(async (tx) => {
+    const where = await resolveAudienceScope(tx, input);
+    const searchWhere: Prisma.StudentWhereInput = input.search
+      ? { AND: [where, { OR: [
+          { id: { contains: input.search } },
+          { firstName: { contains: input.search } },
+          { lastName: { contains: input.search } },
+        ] }] }
+      : where;
     const total = await tx.student.count({ where });
     const matches = input.search ? await tx.student.count({ where: searchWhere }) : total;
     if (!input.includeRoster) return [total, matches, []] as const;

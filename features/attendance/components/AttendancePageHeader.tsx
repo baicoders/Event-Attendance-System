@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { PiExport } from "react-icons/pi";
 import { IoMdCheckmarkCircleOutline } from "react-icons/io";
 import { FaUserGroup } from "react-icons/fa6";
@@ -16,7 +16,6 @@ import {
 import { Event } from "@/globals/types/events";
 import TurnOnTimeoutMode from "@/features/attendance/components/TurnOnTimeoutMode";
 import Link from "next/link";
-import { MdReport } from "react-icons/md";
 import { IoDocument } from "react-icons/io5";
 import { useAuth } from "@/globals/contexts/AuthContext";
 import PageHeader from "@/globals/components/shared/PageHeader";
@@ -24,6 +23,7 @@ import StatusBadge from "@/globals/components/shared/StatusBadge";
 import { surface } from "@/globals/constants/designTokens";
 import { formatAttendanceRate } from "@/globals/utils/attendance";
 import { cn } from "@/globals/libs/shad-cn";
+import EventReadinessPanel from "@/features/calendar/components/EventReadinessPanel";
 
 type Props = {
   // Already the live event (the page derives it from useFetchEvent).
@@ -63,6 +63,7 @@ const AttendancePageHeader: React.FC<Props> = ({
   onSelectEventId,
 }) => {
   const { user } = useAuth();
+  const [checksOpen, setChecksOpen] = useState(false);
   const { data: events, isLoading: isEventsLoading } = useFetchApprovedEvents();
   const currentEvent = selectedEvent;
   const canManageEvent =
@@ -188,6 +189,16 @@ const AttendancePageHeader: React.FC<Props> = ({
             isTimeout={currentEvent?.isTimeout ?? false}
             canToggle={canManageEvent}
           />
+          {currentEvent && <div className="min-w-0">
+            <button type="button" aria-expanded={checksOpen} aria-controls="attendance-event-checks"
+              onClick={() => setChecksOpen((open) => !open)}
+              className="text-sm font-medium text-blue-700 underline">
+              {checksOpen ? "Hide event checks" : "Event checks"}
+            </button>
+            {checksOpen && <div id="attendance-event-checks" className="mt-3">
+              <EventReadinessPanel key={currentEvent.id} eventId={currentEvent.id} />
+            </div>}
+          </div>}
         </div>
 
         {/* Stats Cards */}

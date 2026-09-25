@@ -234,6 +234,12 @@ Two consequences worth remembering:
 - **Attendance requires `status === "APPROVED"`.** No other status accepts records.
 - **An event with any record cannot be deleted** (409 `EVENT_HAS_RECORDS`).
 - Only APPROVED events can have `isTimeout` toggled.
+- `GET /api/events/[eventId]/readiness` describes the saved event against the
+  current roster. It is read-only and advisory: its warnings do not add an
+  approval or recording gate. The count uses the Audience Preview resolver in
+  the event read transaction; an invalid saved scope has a null count, while a
+  valid empty audience has a count of zero. The result is not stored or a
+  historical roster snapshot.
 
 ### Lifecycle
 
