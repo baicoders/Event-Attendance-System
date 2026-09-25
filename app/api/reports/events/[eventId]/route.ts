@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
-import { assertEventVisibility, requireAuth } from "@/globals/utils/auth";
+import { requireAuth } from "@/globals/utils/auth";
 import {
-  REPORT_EVENT_INCLUDE,
   buildEventReport,
+  loadAuthorizedEventReportSnapshot,
 } from "@/globals/utils/eventReport";
 import { respondWithError } from "@/globals/utils/httpError";
 
@@ -27,18 +26,11 @@ export async function GET(
     const user = await requireAuth();
     const { eventId } = await params;
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      include: REPORT_EVENT_INCLUDE,
-    });
-
-    if (!event) {
+    const snapshot = await loadAuthorizedEventReportSnapshot(eventId, user);
+    if (!snapshot) {
       return NextResponse.json(err("Event not found."), { status: 404 });
     }
-
-    assertEventVisibility(event, user);
-
-    return NextResponse.json(ok(await buildEventReport(event)), { status: 200 });
+    return NextResponse.json(ok(buildEventReport(snapshot)), { status: 200 });
   } catch (error) {
     return respondWithError(error);
   }

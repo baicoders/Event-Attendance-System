@@ -5,7 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Switch } from "@/globals/components/shad-cn/switch";
 import { Label } from "@/globals/components/shad-cn/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/globals/components/shad-cn/select";
 import { pill } from "@/globals/constants/designTokens";
+import { GROUP_DIMENSIONS } from "@/globals/utils/reportGroups";
 
 type Toggle = {
   key: string;
@@ -32,6 +34,15 @@ const PrintOptionsBar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const summary = searchParams.get("view") === "summary";
+
+  const setParam = (key: string, value: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === null) params.delete(key);
+    else params.set(key, value);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
   const isOn = (toggle: Toggle) => {
     const value = searchParams.get(toggle.key);
@@ -51,7 +62,14 @@ const PrintOptionsBar = () => {
 
   return (
     <div className="no-print sticky top-0 z-10 mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur">
-      {TOGGLES.map((toggle) => (
+      <Select value={summary ? "summary" : "sheet"} onValueChange={(value) => setParam("view", value === "sheet" ? null : value)}>
+        <SelectTrigger aria-label="Print view" className="w-52"><SelectValue /></SelectTrigger>
+        <SelectContent><SelectItem value="sheet">Attendance sheet</SelectItem><SelectItem value="summary">Event summary</SelectItem></SelectContent>
+      </Select>
+      {summary ? <Select value={searchParams.get("groupBy") ?? "SECTION"} onValueChange={(value) => setParam("groupBy", value)}>
+        <SelectTrigger aria-label="Group summary by" className="w-48"><SelectValue /></SelectTrigger>
+        <SelectContent>{GROUP_DIMENSIONS.map((dimension) => <SelectItem key={dimension} value={dimension}>{dimension}</SelectItem>)}</SelectContent>
+      </Select> : TOGGLES.map((toggle) => (
         <div key={toggle.key} className="flex items-center gap-2">
           <Switch
             id={`print-${toggle.key}`}
