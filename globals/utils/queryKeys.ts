@@ -20,6 +20,10 @@ export const queryKeys = {
     allApproved: () => ["events", "approved"] as const,
     withId: (eventId: string) => ["events", "byId", eventId] as const,
     statsFromEvent: (eventId: string) => ["events", "stats", eventId] as const,
+    progressAll: () => ["events", "progress"] as const,
+    progressPrefix: (eventId: string) => ["events", "progress", eventId] as const,
+    progress: (eventId: string, viewerId: string, query: string) =>
+      ["events", "progress", eventId, viewerId, query] as const,
   },
   students: {
     all: () => ["students"] as const,
@@ -34,8 +38,8 @@ export const queryKeys = {
   records: {
     all: () => ["records"] as const,
     withId: (id: string) => ["records", "byId", id] as const,
-    fromEvent: (eventId: string, includeAbsent = false) =>
-      ["records", "fromEvent", eventId, includeAbsent] as const,
+    fromEvent: (eventId: string, includeAbsent = false, onlyNeedsReview = false) =>
+      ["records", "fromEvent", eventId, includeAbsent, onlyNeedsReview] as const,
     // Prefix (omits the includeAbsent flag) so invalidation covers BOTH the
     // present-only live table and the includeAbsent report variants.
     fromEventPrefix: (eventId: string) =>

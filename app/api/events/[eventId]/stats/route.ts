@@ -14,29 +14,18 @@ export async function GET(
     const user = await requireAuth();
     const { eventId } = await params;
 
-    const event = await prisma.event.findUnique({ where: { id: eventId }, include: { includedGroups: true } });
-
-    if (!event) {
-      return NextResponse.json(err("Event not found."), { status: 404 });
-    }
-
-    assertEventVisibility(event, user);
-
-    // Eligible students based on event criteria
-    const eligibleFilter = buildEventStudentFilter(event);
-    const eligibleStudentsCount = await prisma.student.count({
-      where: eligibleFilter,
+    const result = await prisma.$transaction(async (tx) => {
+      const event = await tx.event.findUnique({ where: { id: eventId }, include: { includedGroups: true } });
+      if (!event) return null;
+      assertEventVisibility(event, user);
+      const eligibleFilter = buildEventStudentFilter(event);
+      const eligible = await tx.student.count({ where: eligibleFilter });
+      const present = await tx.record.count({ where: { eventId, timein: { not: null }, student: eligibleFilter } });
+      return { eligible, present };
     });
-
-    // Students who actually attended, counted only among the currently
-    // eligible ones - otherwise a student who became inactive (or an event
-    // whose groups changed) could push attendance above 100%.
-    const presentStudentsCount = await prisma.record.count({
-      where: {
-        eventId,
-        student: eligibleFilter,
-      },
-    });
+    if (!result) return NextResponse.json(err("Event not found."), { status: 404 });
+    const eligibleStudentsCount = result.eligible;
+    const presentStudentsCount = result.present;
 
     const absentStudentsCount = Math.max(
       eligibleStudentsCount - presentStudentsCount,

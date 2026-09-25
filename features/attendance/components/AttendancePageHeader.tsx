@@ -16,6 +16,7 @@ import {
 import { Event } from "@/globals/types/events";
 import TurnOnTimeoutMode from "@/features/attendance/components/TurnOnTimeoutMode";
 import Link from "next/link";
+import { MdInsights } from "react-icons/md";
 import { IoDocument } from "react-icons/io5";
 import { useAuth } from "@/globals/contexts/AuthContext";
 import PageHeader from "@/globals/components/shared/PageHeader";
@@ -123,6 +124,14 @@ const AttendancePageHeader: React.FC<Props> = ({
               <ButtonWithIcon variant="ghost" icon={IoDocument} disabled>
                 View Report
               </ButtonWithIcon>
+            )}
+
+            {selectedEvent?.id ? (
+              <Link href={`/attendance/progress?eventId=${encodeURIComponent(selectedEvent.id)}`}>
+                <ButtonWithIcon variant="ghost" icon={MdInsights}>View progress</ButtonWithIcon>
+              </Link>
+            ) : (
+              <ButtonWithIcon variant="ghost" icon={MdInsights} disabled>View progress</ButtonWithIcon>
             )}
 
             {selectedEvent?.id ? (

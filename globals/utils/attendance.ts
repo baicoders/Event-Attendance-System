@@ -43,10 +43,9 @@ const toDate = (value: Date | string): Date =>
 /**
  * Present, late, or absent for one eligible student.
  *
- * - **ABSENT** — no record, or a record with neither timestamp.
+ * - **ABSENT** — no recorded time-in, including a time-out-only row.
  * - **LATE** — timed in more than {@link LATE_GRACE_MINUTES} after `event.start`.
- * - **PRESENT** — timed in within the grace period, any time before `start`, or
- *   timed out without a recorded time-in. A missing arrival cannot be judged late.
+ * - **PRESENT** — timed in within the grace period or any time before `start`.
  *
  * **All-day events are never late.** Their `start` is normalized to midnight, so
  * comparing against it would flag every single attendee. For those, the outcome is
@@ -56,12 +55,17 @@ export function deriveOutcome(
   record: OutcomeRecord | null | undefined,
   event: OutcomeEvent,
 ): AttendanceOutcome {
-  if (!record?.timein) return record?.timeout ? "PRESENT" : "ABSENT";
+  if (!hasRecordedTimeIn(record)) return "ABSENT";
   if (event.allDay) return "PRESENT";
 
   const cutoff = toDate(event.start).getTime() + LATE_GRACE_MINUTES * 60_000;
 
   return toDate(record.timein).getTime() > cutoff ? "LATE" : "PRESENT";
+}
+
+/** A time-out alone is not evidence of recorded check-in. */
+export function hasRecordedTimeIn<T extends OutcomeRecord>(record: T | null | undefined): record is T & { timein: Date | string } {
+  return record?.timein != null;
 }
 
 /**
