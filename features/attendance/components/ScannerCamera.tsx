@@ -16,6 +16,8 @@ type ScannerCameraProps = {
    * newly-selected event isn't swallowed as a "duplicate" of a scan of the
    * same student made under the previous event within the debounce window. */
   eventId?: string;
+  mode?: "TIME_IN" | "TIME_OUT";
+  onError?: (error: unknown) => void;
 };
 
 /**
@@ -29,14 +31,18 @@ const ScannerCamera = ({
   isPending,
   onClose,
   eventId,
+  mode,
+  onError,
 }: ScannerCameraProps) => {
   const lastScannedRef = useRef<{
     value: string;
     eventId?: string;
+    mode?: "TIME_IN" | "TIME_OUT";
     timestamp: number;
   }>({
     value: "",
     eventId: undefined,
+    mode: undefined,
     timestamp: 0,
   });
 
@@ -55,14 +61,15 @@ const ScannerCamera = ({
       const isDuplicate =
         rawValue === lastScannedRef.current.value &&
         eventId === lastScannedRef.current.eventId &&
+        mode === lastScannedRef.current.mode &&
         timeSinceLastScan < 1000;
 
       if (!isDuplicate) {
-        lastScannedRef.current = { value: rawValue, eventId, timestamp: now };
+        lastScannedRef.current = { value: rawValue, eventId, mode, timestamp: now };
         onRead(rawValue);
       }
     },
-    [onRead, isPending, eventId]
+    [onRead, isPending, eventId, mode]
   );
 
   return (
@@ -76,9 +83,7 @@ const ScannerCamera = ({
           }}
           onScan={handleScan}
           paused={isPending}
-          onError={(error) => {
-            console.error("Scanner error:", error);
-          }}
+          onError={onError}
         />
       </div>
 

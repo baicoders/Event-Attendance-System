@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:duplicate-event": "node --import tsx --test features/calendar/utils/duplicateEvent.test.ts && node scripts/test-event-duplicate-api.mjs",
+    "test:operator": "node --import tsx --test features/attendance/server/recordAttendance.test.ts features/attendance/utils/operationCoordinator.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
