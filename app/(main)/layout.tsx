@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SidebarProvider } from "@/globals/contexts/SidebarContext";
 import Sidebar from "@/globals/components/shared/Sidebar";
 import MobileTopBar from "@/globals/components/shared/MobileTopBar";
@@ -12,6 +12,7 @@ import ChangePasswordForm from "@/features/settings/components/ChangePasswordFor
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading, logout } = useAuth();
   const router = useRouter();
+  const isOperator = usePathname() === "/attendance/operator";
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -95,6 +96,10 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
         </div>
       </main>
     );
+  }
+
+  if (isOperator) {
+    return <main className="min-h-screen bg-slate-100">{children}</main>;
   }
 
   return (

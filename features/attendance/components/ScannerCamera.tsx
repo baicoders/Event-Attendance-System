@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import { createScanGate } from "@/features/attendance/utils/scanGate";
 import { BiSolidCameraOff } from "react-icons/bi";
 import {
   centerText,
@@ -16,6 +17,8 @@ type ScannerCameraProps = {
    * newly-selected event isn't swallowed as a "duplicate" of a scan of the
    * same student made under the previous event within the debounce window. */
   eventId?: string;
+  mode?: "TIME_IN" | "TIME_OUT";
+  onError?: (error: unknown) => void;
 };
 
 /**
@@ -29,40 +32,24 @@ const ScannerCamera = ({
   isPending,
   onClose,
   eventId,
+  mode,
+  onError,
 }: ScannerCameraProps) => {
-  const lastScannedRef = useRef<{
-    value: string;
-    eventId?: string;
-    timestamp: number;
-  }>({
-    value: "",
-    eventId: undefined,
-    timestamp: 0,
-  });
+  const scanGate = useRef(createScanGate());
 
   const handleScan = useCallback(
     (detectedCodes: IDetectedBarcode[]) => {
       if (!detectedCodes?.length || isPending) return;
 
-      const now = Date.now();
       const rawValue = detectedCodes[0]?.rawValue?.trim();
 
       if (!rawValue) return;
 
-      // Debounce duplicate scans within 1 second, scoped to the current
-      // event so switching events doesn't swallow a genuine re-scan.
-      const timeSinceLastScan = now - lastScannedRef.current.timestamp;
-      const isDuplicate =
-        rawValue === lastScannedRef.current.value &&
-        eventId === lastScannedRef.current.eventId &&
-        timeSinceLastScan < 1000;
-
-      if (!isDuplicate) {
-        lastScannedRef.current = { value: rawValue, eventId, timestamp: now };
+      if (scanGate.current.accept({ value: rawValue, eventId, mode })) {
         onRead(rawValue);
       }
     },
-    [onRead, isPending, eventId]
+    [onRead, isPending, eventId, mode]
   );
 
   return (
@@ -76,9 +63,7 @@ const ScannerCamera = ({
           }}
           onScan={handleScan}
           paused={isPending}
-          onError={(error) => {
-            console.error("Scanner error:", error);
-          }}
+          onError={onError}
         />
       </div>
 

@@ -68,9 +68,12 @@ type Props = {
   event: Event;
   record: Record | null;
   isLoading: boolean;
+  onRecord?: (student: Student) => void;
+  operationBusy?: boolean;
+  operator?: boolean;
 };
 
-const StudentDetails = ({ event, student, record, isLoading }: Props) => {
+const StudentDetails = ({ event, student, record, isLoading, onRecord, operationBusy, operator }: Props) => {
   const [qrStudent, setQrStudent] = useState<Student>();
   const { user } = useAuth();
   const canManage =
@@ -119,7 +122,9 @@ const StudentDetails = ({ event, student, record, isLoading }: Props) => {
             isTimeout={event.isTimeout}
             hasTimeIn={!!record?.timein}
             hasTimeOut={!!record?.timeout}
-            canManage={canManage}
+            canManage={!operator && canManage}
+            onRecord={onRecord ? () => onRecord(student) : undefined}
+            operationBusy={operationBusy}
           />
         </div>
       </div>

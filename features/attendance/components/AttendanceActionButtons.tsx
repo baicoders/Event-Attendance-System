@@ -23,6 +23,8 @@ type Props = {
   hasTimeOut?: boolean;
   /** Whether the user may delete records (event owner or admin). */
   canManage?: boolean;
+  onRecord?: () => void;
+  operationBusy?: boolean;
 };
 
 const AttendanceActionButtons = ({
@@ -33,6 +35,8 @@ const AttendanceActionButtons = ({
   hasTimeIn = false,
   hasTimeOut = false,
   canManage = false,
+  onRecord,
+  operationBusy = false,
 }: Props) => {
   // The "present" action records a time-in normally and a time-out while the
   // event is in timeout mode, so its label must reflect the current mode.
@@ -73,6 +77,10 @@ const AttendanceActionButtons = ({
 
   const handleAction = async (action: "present" | "absent") => {
     if (action === "present") {
+      if (onRecord) {
+        onRecord();
+        return;
+      }
       try {
         const result = await createRecord({
           eventId,
@@ -133,7 +141,7 @@ const AttendanceActionButtons = ({
           action === "present" &&
           (isTimeout ? !hasTimeIn || hasTimeOut : hasTimeIn);
         const isDisabled =
-          isLoading || (action === "absent" && !recordId) || presentDisabled;
+          isLoading || operationBusy || (action === "absent" && !recordId) || presentDisabled;
 
         return (
           <Button

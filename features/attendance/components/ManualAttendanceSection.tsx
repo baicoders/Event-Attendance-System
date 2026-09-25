@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Student } from "@/globals/types/students";
 import { Event } from "@/globals/types/events";
 import { ComboBoxValue } from "@/globals/components/shared/ComboBox";
@@ -19,6 +19,9 @@ type StudentDetailsProps = {
   isFetching: boolean;
   /** Callback when a student is selected from search */
   onSelect: (student: Student) => void;
+  onRecord?: (student: Student) => void;
+  operationBusy?: boolean;
+  operator?: boolean;
 };
 
 /**
@@ -33,7 +36,10 @@ const ManualAttendanceSection = ({
   selectedEvent,
   displayedStudent,
   isFetching,
-  onSelect
+  onSelect,
+  onRecord,
+  operationBusy,
+  operator,
 }: StudentDetailsProps) => {
   const [query, setQuery] = useState("");
 
@@ -61,7 +67,7 @@ const ManualAttendanceSection = ({
     if (!selectedStudent) return;
 
     onSelect(selectedStudent);
-  }, [students]);
+  }, [students, onSelect]);
 
   if (!selectedEvent) return null;
 
@@ -84,6 +90,9 @@ const ManualAttendanceSection = ({
           student={displayedStudent}
           record={studentRecord ?? null}
           isLoading={isFetching}
+          onRecord={onRecord}
+          operationBusy={operationBusy}
+          operator={operator}
         />
       </div>
     </div>

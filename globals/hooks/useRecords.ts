@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Record, NewRecord } from "@/globals/types/records";
+import { Record, CreateRecordInput, RecordWireResult } from "@/globals/types/records";
 import { StudentAttendanceRecord } from "@/globals/types/students";
 import { fetchApi } from "@/globals/utils/api";
 import { queryKeys } from "@/globals/utils/queryKeys";
@@ -10,14 +10,15 @@ import { queryKeys } from "@/globals/utils/queryKeys";
  * Uses optimistic updates to immediately reflect the new record in the UI
  * before the server confirms the change.
  */
-export const useCreateRecord = (eventId: string) => {
+export const useCreateRecord = (_eventId: string) => {
+  void _eventId;
   const queryClient = useQueryClient();
 
   return useMutation({
     // `changed` is false when the scan was a no-op (already timed in/out), so
     // the caller can avoid falsely reporting a fresh record.
-    mutationFn: (record: NewRecord) => {
-      return fetchApi<Record & { changed: boolean }>("/api/records", {
+    mutationFn: (record: CreateRecordInput) => {
+      return fetchApi<RecordWireResult>("/api/records", {
         method: "POST",
         body: JSON.stringify(record),
         headers: { "Content-Type": "application/json" },
@@ -31,7 +32,8 @@ export const useCreateRecord = (eventId: string) => {
     // below refetches immediately, and the live table also polls.
 
     /** Re-sync server state after success */
-    onSuccess: (data) => {
+    onSuccess: (data, input) => {
+      const eventId = input.eventId;
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({
@@ -49,6 +51,7 @@ export const useCreateRecord = (eventId: string) => {
         exact: true,
       });
     },
+    retry: false,
   });
 };
 

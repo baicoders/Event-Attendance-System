@@ -1,14 +1,11 @@
 import { SchoolLevel, YearLevel } from "@prisma/client";
 import { z } from "zod";
+import { studentIdSchema } from "./studentId";
 
 export const studentSchema = z
   .object({
     // Step 1
-    id: z
-      .string()
-      .trim()
-      .min(1, "Student ID is required")
-      .length(11, "ID must be 11 characters"),
+    id: studentIdSchema,
     firstName: z
       .string()
       .trim()
