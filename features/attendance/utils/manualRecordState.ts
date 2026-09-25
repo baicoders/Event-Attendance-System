@@ -15,8 +15,17 @@ export function manualRecordState(selected: boolean, loading: boolean, error: bo
 }
 
 export function detailActionDisabled(mode: "TIME_IN" | "TIME_OUT", state: ManualRecordState) {
+  if (state.kind === "NOT_REQUESTED" || state.kind === "LOADING") return true;
   if (mode === "TIME_OUT") {
     return (state.kind === "NO_TIME_IN" || state.kind === "READY") && !!state.record.timeout;
   }
   return state.kind === "READY";
+}
+
+export function recordActionLabel(mode: "TIME_IN" | "TIME_OUT", state: ManualRecordState) {
+  if (state.kind === "NOT_REQUESTED" || state.kind === "LOADING") return "Checking status…";
+  const action = mode === "TIME_IN" ? "time in" : "time out";
+  if (state.kind === "ERROR") return `Record ${action} (status unknown)`;
+  if (detailActionDisabled(mode, state)) return mode === "TIME_IN" ? "Already timed in" : "Already timed out";
+  return `Record ${action}`;
 }

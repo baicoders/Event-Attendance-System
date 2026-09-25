@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/globals/components/shad-cn/button";
 import { useAuth } from "@/globals/contexts/AuthContext";
 import { useEventRoster } from "@/globals/hooks/useStudents";
-import { useRecordOfStudentInEvent } from "@/globals/hooks/useRecords";
+import { useAllRecordsFromEvent, useRecordOfStudentInEvent } from "@/globals/hooks/useRecords";
 import { StudentQrModal } from "@/features/students/components/StudentQRModal";
 import { indexManualRoster, searchManualRoster } from "@/features/attendance/utils/manualSearch";
-import { detailActionDisabled, manualRecordState } from "@/features/attendance/utils/manualRecordState";
+import { detailActionDisabled, manualRecordState, recordActionLabel } from "@/features/attendance/utils/manualRecordState";
 import type { Attempt } from "@/features/attendance/utils/operationCoordinator";
 import type { Event } from "@/globals/types/events";
 import type { Student } from "@/globals/types/students";
@@ -55,12 +55,13 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
   const refetchRoster = roster.refetch;
   const index = useMemo(() => indexManualRoster(roster.data ?? []), [roster.data]);
   const matches = useMemo(() => query.trim().length >= 2 ? searchManualRoster(index, query) : [], [index, query]);
+  const eventRecords = useAllRecordsFromEvent(active ? eventId : undefined, { live: active });
+  const recordsByStudent = useMemo(() => new Map((eventRecords.data ?? []).map((record) => [record.studentId, record])), [eventRecords.data]);
   const selectedId = active && displayedStudent && eventId ? displayedStudent.id : undefined;
   const recordQuery = useRecordOfStudentInEvent(eventId, selectedId, { live: active, active });
   const recordState = manualRecordState(!!selectedId, recordQuery.isPending || recordQuery.isFetching,
     recordQuery.isError, recordQuery.data ?? null);
   const mode = selectedEvent?.isTimeout ? "TIME_OUT" : "TIME_IN";
-  const recordLabel = mode === "TIME_IN" ? "Record time in" : "Record time out";
   const relevantResult = result?.method === "MANUAL" && result.eventId === eventId ? result : null;
   const resultContext = [eventId, viewerId, relevantResult?.id].join(":");
   const resultContextRef = useRef(resultContext);
@@ -148,6 +149,7 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
     </div>
     {roster.isFetching && <p role="status" className="mt-2 text-sm">{roster.data ? "Refreshing roster…" : "Loading event roster…"}</p>}
     {roster.isError && <p role="alert" className="mt-2 text-sm text-rose-700">{roster.data ? "Roster refresh failed. Showing last-known candidates; recording checks current eligibility." : "Could not load this event’s roster. Retry the read."}</p>}
+    {eventRecords.isError && <p role="alert" className="mt-2 text-sm text-amber-800">Attendance status could not be checked. Actions will be marked as status unknown.</p>}
     {!roster.isError && roster.data?.length === 0 && <p className="mt-3 text-sm">No students are eligible for this event.</p>}
     {query.trim().length >= 2 && !resultsOpen && <p className="mt-3 text-sm text-slate-600">Results closed. Focus search to show them again.</p>}
     {query.trim().length < 2 ? <p className="mt-3 text-sm text-slate-600">Enter two or more characters to find a student.</p> : resultsOpen &&
@@ -155,17 +157,23 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
         <p className="mt-3 text-sm" aria-live="polite">{matches.length} matching students{matches.length > 50 ? " · Narrow the search to see beyond 50" : ""}</p>
         {matches.length === 0 && <p className="mt-2 text-sm">No matching students in this event.</p>}
         <ul className="mt-2 divide-y rounded-md border">
-          {matches.slice(0, visible).map(({ student, displayName }, index) => <li key={student.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+          {matches.slice(0, visible).map(({ student, displayName }, index) => {
+            const rowRecord = recordsByStudent.get(student.id) ?? null;
+            const rowState = manualRecordState(true, eventRecords.isPending && !eventRecords.data, eventRecords.isError, rowRecord);
+            const rowLabel = recordActionLabel(mode, rowState);
+            return <li key={student.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0"><p className="break-words font-semibold">{displayName}</p><p className="text-sm">{student.id}</p>
-              <p className="break-words text-xs text-slate-600">{identity(student)}</p></div>
+              <p className="break-words text-xs text-slate-600">{identity(student)}</p>
+              {rowRecord && <p className="mt-1 text-xs font-medium text-slate-700">{mode === "TIME_IN" && rowRecord.timein ? "Timed in " + new Date(rowRecord.timein).toLocaleTimeString() :
+                mode === "TIME_OUT" && rowRecord.timeout ? "Timed out " + new Date(rowRecord.timeout).toLocaleTimeString() :
+                mode === "TIME_OUT" && !rowRecord.timein ? "No time-in recorded" : ""}</p>}</div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <Button ref={index === 0 ? firstDetailRef : undefined} type="button" size="sm" variant="outline" onClick={() => onSelect(student)}
                 aria-label={"View details for " + displayName + ", " + student.id}>View details</Button>
-              <Button type="button" size="sm" disabled={!onRecord || operationBusy ||
-                (displayedStudent?.id === student.id && detailActionDisabled(mode, recordState))} onClick={() => onRecord?.(student)}
-                aria-label={recordLabel + " for " + displayName + ", " + student.id}>{recordLabel}</Button>
+              <Button type="button" size="sm" disabled={!onRecord || operationBusy || detailActionDisabled(mode, rowState)} onClick={() => onRecord?.(student)}
+                aria-label={rowLabel + " for " + displayName + ", " + student.id}>{rowLabel}</Button>
             </div>
-          </li>)}
+          </li>; })}
         </ul>
         {visible < Math.min(matches.length, 50) && <Button type="button" className="mt-3" variant="outline" onClick={() => setVisible((count) => Math.min(count + 10, 50))}>Show more</Button>}
       </>}
@@ -187,7 +195,7 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
           : "You can still record time-out; time-in will remain empty."}</p>}
       {recordQuery.dataUpdatedAt > 0 && recordState.kind !== "ERROR" && <p className="mt-1 text-xs text-slate-500">Checked {new Date(recordQuery.dataUpdatedAt).toLocaleTimeString()}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" disabled={!onRecord || operationBusy || detailActionDisabled(mode, recordState)} onClick={() => onRecord?.(displayedStudent)}>{recordLabel}</Button>
+        <Button type="button" disabled={!onRecord || operationBusy || detailActionDisabled(mode, recordState)} onClick={() => onRecord?.(displayedStudent)}>{recordActionLabel(mode, recordState)}</Button>
         <Button type="button" variant="outline" onClick={() => void recordQuery.refetch()} disabled={recordQuery.isFetching}>Refresh status</Button>
       </div>
     </div>}
