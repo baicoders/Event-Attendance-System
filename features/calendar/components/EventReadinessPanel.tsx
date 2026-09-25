@@ -35,7 +35,7 @@ export default function EventReadinessPanel({
         </button>
       </div>
       {dirty && <p className="mt-2 rounded-md bg-amber-100 p-2 font-medium text-amber-900">
-        Last saved event — changes below are not included.
+        Last saved event — unsaved form changes are not included.
       </p>}
       {isPending && !error && <p className="mt-2">Checking saved event and current roster…</p>}
       {error && <p role="alert" className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-rose-800">

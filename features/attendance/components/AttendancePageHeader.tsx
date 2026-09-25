@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { PiExport } from "react-icons/pi";
 import { IoMdCheckmarkCircleOutline } from "react-icons/io";
 import { FaUserGroup } from "react-icons/fa6";
@@ -23,7 +23,7 @@ import StatusBadge from "@/globals/components/shared/StatusBadge";
 import { surface } from "@/globals/constants/designTokens";
 import { formatAttendanceRate } from "@/globals/utils/attendance";
 import { cn } from "@/globals/libs/shad-cn";
-import EventReadinessPanel from "@/features/calendar/components/EventReadinessPanel";
+import EventReadinessDialog from "@/features/calendar/components/EventReadinessDialog";
 
 type Props = {
   // Already the live event (the page derives it from useFetchEvent).
@@ -63,7 +63,6 @@ const AttendancePageHeader: React.FC<Props> = ({
   onSelectEventId,
 }) => {
   const { user } = useAuth();
-  const [checksOpen, setChecksOpen] = useState(false);
   const { data: events, isLoading: isEventsLoading } = useFetchApprovedEvents();
   const currentEvent = selectedEvent;
   const canManageEvent =
@@ -189,16 +188,11 @@ const AttendancePageHeader: React.FC<Props> = ({
             isTimeout={currentEvent?.isTimeout ?? false}
             canToggle={canManageEvent}
           />
-          {currentEvent && <div className="min-w-0">
-            <button type="button" aria-expanded={checksOpen} aria-controls="attendance-event-checks"
-              onClick={() => setChecksOpen((open) => !open)}
-              className="text-sm font-medium text-blue-700 underline">
-              {checksOpen ? "Hide event checks" : "Event checks"}
+          {currentEvent && <EventReadinessDialog key={currentEvent.id} eventId={currentEvent.id}>
+            <button type="button" className="self-start rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+              Event checks
             </button>
-            {checksOpen && <div id="attendance-event-checks" className="mt-3">
-              <EventReadinessPanel key={currentEvent.id} eventId={currentEvent.id} />
-            </div>}
-          </div>}
+          </EventReadinessDialog>}
         </div>
 
         {/* Stats Cards */}

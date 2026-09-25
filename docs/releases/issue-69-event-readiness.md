@@ -1,7 +1,10 @@
 # Issue 69: Event readiness
 
-Saved event details and the selected attendance event expose the same on-demand
-checklist. It reports approval, current audience and roster count, schedule,
+Saved event details and the selected attendance event open the same on-demand
+checklist in a modal. The EventDrawer keeps a compact description and Open
+button; attendance keeps a single Event checks button, so the checklist does
+not stretch the event selector or leave an empty grid area. It reports approval,
+current audience and roster count, schedule,
 owner, and recording mode. Only approval reflects the existing event-level
 recording gate. The other warnings are advisory. Time-out still requires a
 prior time-in for each student, and scheduled dates do not constrain scans.
@@ -25,7 +28,7 @@ Run focused tests and static checks from the repository root:
 pnpm exec tsx --test globals/utils/eventReadiness.test.ts globals/utils/buildEventStudentFilter.test.ts globals/schemas/audiencePreview.test.ts
 TZ=UTC pnpm exec tsx --test globals/utils/eventReadiness.test.ts
 pnpm exec tsc --noEmit
-pnpm exec eslint app/api/events/'[eventId]'/readiness/route.ts globals/utils/eventReadiness.ts globals/utils/eventReadiness.test.ts globals/utils/audiencePreview.ts globals/hooks/useEventReadiness.ts features/calendar/components/EventReadinessPanel.tsx features/calendar/components/EventDrawer.tsx features/attendance/components/AttendancePageHeader.tsx globals/hooks/useGroups.ts globals/utils/queryKeys.ts
+pnpm exec eslint app/api/events/'[eventId]'/readiness/route.ts globals/utils/eventReadiness.ts globals/utils/eventReadiness.test.ts globals/utils/audiencePreview.ts globals/hooks/useEventReadiness.ts features/calendar/components/EventReadinessPanel.tsx features/calendar/components/EventReadinessDialog.tsx features/calendar/components/EventDrawer.tsx features/attendance/components/AttendancePageHeader.tsx globals/hooks/useGroups.ts globals/utils/queryKeys.ts
 DATABASE_URL='file:/tmp/event-readiness-issue-69.db' pnpm build
 ```
 
@@ -67,3 +70,8 @@ Both views had 390 px document width with no horizontal
 overflow. A desktop calendar drawer displayed the same panel. The attendance
 disclosure opened with a focused button and Space key. Camera permission, a
 physical scan, and venue network checks were not exercised.
+
+Modal follow-up: at 1440 px, opening the attendance modal left the event
+selector card at the same 205 px height. At 390 px, the checklist fit without
+horizontal overflow. Opening the modal from inside the EventDrawer and closing
+it left the drawer open, with its edit fields and actions intact.

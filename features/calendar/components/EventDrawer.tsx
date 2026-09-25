@@ -33,7 +33,7 @@ import { EVENT_CHOICES } from "@/features/calendar/constants/categoryGroups"; //
 import { Event, EventForm } from "@/globals/types/events";
 import EventActionButtons from "./EventActionButtons";
 import EventAudiencePreview from "./EventAudiencePreview";
-import EventReadinessPanel from "./EventReadinessPanel";
+import EventReadinessDialog from "./EventReadinessDialog";
 import {
   formatEventPayload,
   hasEventAudienceChanged,
@@ -289,11 +289,27 @@ export default function EventDrawer({
           >
             <div className="mb-4">
               {isEdit && initialData?.id ? (
-                <EventReadinessPanel key={initialData.id} eventId={initialData.id} dirty={isDirty} />
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-slate-900">Event checks</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Review approval, current audience, schedule, owner, and recording mode.
+                    </p>
+                    {isDirty && <p className="mt-1 text-xs font-medium text-amber-800">
+                      Unsaved changes are not included.
+                    </p>}
+                  </div>
+                  <EventReadinessDialog key={initialData.id} eventId={initialData.id} dirty={isDirty}>
+                    <button type="button" aria-label="Open event checks" className="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                      Open
+                    </button>
+                  </EventReadinessDialog>
+                </div>
               ) : (
-                <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  Save this draft to check approval and ownership. Audience preview checks your current selection.
-                </p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                  <h3 className="font-semibold text-slate-900">Event checks</h3>
+                  <p className="mt-1">Save this draft to check approval and ownership. Audience preview checks your current selection.</p>
+                </div>
               )}
             </div>
             <fieldset
