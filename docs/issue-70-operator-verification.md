@@ -8,6 +8,7 @@ Run from the repository root:
 pnpm test:operator
 npx tsc --noEmit
 DATABASE_URL='file:./dev.db' pnpm build
+pnpm test:operator-api
 pnpm benchmark:operator
 ```
 
@@ -17,7 +18,9 @@ The recording helper takes a SQLite writer lock on the event row before reading 
 
 In the disposable test fixture, five concurrent requests sharing the server Prisma client preserved one record, the original method, and both write-once timestamps. The two-client mode-switch test found no opposite-mode timestamp across 12 interleavings.
 
-The separate-thread benchmark uses a 500-student roster and distinct students for each request. Across two local runs, two operators took **262–373 ms baseline / 280–439 ms guarded** wall time; five took **510–547 ms baseline / 580–594 ms guarded**. All requests succeeded. The baseline is a proxy for the previous route's read/read/create path; it omits HTTP, cookie authentication, and query invalidation. A separate exploratory run with five synchronous Prisma clients on *one JavaScript thread* took about 40 seconds because each SQLite busy wait blocked the lock holder's event loop. The separate-thread result is more representative of several server workers, but the requested authenticated HTTP benchmark and physical-device test remain outstanding.
+The separate-thread benchmark uses a 500-student roster and distinct students for each request. Across two local runs, two operators took **262–373 ms baseline / 280–439 ms guarded** wall time; five took **510–547 ms baseline / 580–594 ms guarded**. All requests succeeded. The baseline is a proxy for the previous route's read/read/create path; it omits HTTP, cookie authentication, and query invalidation. A separate exploratory run with five synchronous Prisma clients on *one JavaScript thread* took about 40 seconds because each SQLite busy wait blocked the lock holder's event loop. The separate-thread result is more representative of several server workers.
+
+The local authenticated HTTP script uses six distinct login sessions, exercises a scan racing a mode change, and sends five concurrent guarded writes against a 500-student roster. Those five writes completed in **174–1,133 ms** across two runs, all with HTTP 201. It uses a disposable SQLite database and production Next server, then stops the server and removes the database. A matching authenticated HTTP run against the original route and the physical-device test remain outstanding.
 
 ## Device checks still required
 
