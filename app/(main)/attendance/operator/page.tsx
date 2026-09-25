@@ -15,6 +15,7 @@ import { useAttendanceEventContext } from "@/features/attendance/hooks/useAttend
 import { useAttendanceOperation } from "@/features/attendance/hooks/useAttendanceOperation";
 import useToggleTimeoutMode from "@/features/attendance/hooks/useStartTimeoutMode";
 import { Attempt, OperationRequest } from "@/features/attendance/utils/operationCoordinator";
+import { canSubmitAttendance } from "@/features/attendance/utils/captureGate";
 import { Student } from "@/globals/types/students";
 
 function label(attempt: Attempt) {
@@ -45,6 +46,8 @@ function OperatorPageInner() {
   const [modeNotice, setModeNotice] = useState("");
   const [resolution, setResolution] = useState("");
   const [needsRefresh, setNeedsRefresh] = useState(false);
+  const [modeChanging, setModeChanging] = useState(false);
+  const modeChangingRef = useRef(false);
   const previousMode = useRef<string | null>(null);
   const restoreCamera = useRef(false);
 
@@ -68,6 +71,7 @@ function OperatorPageInner() {
 
   useEffect(() => {
     const onVisibility = () => {
+      if (!selectedEvent) return;
       if (document.hidden) {
         setCameraOpen(false);
         setNeedsRefresh(true);
@@ -77,11 +81,13 @@ function OperatorPageInner() {
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [refetchEvent]);
+  }, [refetchEvent, selectedEvent]);
 
   const busy = state.phase === "LOOKUP" || state.phase === "SAVING";
-  const capturePaused = busy || state.phase === "AWAITING_ACKNOWLEDGEMENT" || manualOpen ||
-    !!modeNotice || hasRefreshError || needsRefresh || toggleMode.isPending;
+  const observedModeChanged = previousMode.current !== null && previousMode.current !== mode;
+  const captureAllowed = canSubmitAttendance({ phase: state.phase, modeNotice: !!modeNotice || observedModeChanged,
+    hasRefreshError, needsRefresh, modeChanging });
+  const capturePaused = !captureAllowed || manualOpen;
 
   const exit = async () => {
     if (busy || state.lastResult?.outcome === "RESULT_UNKNOWN") {
@@ -98,6 +104,7 @@ function OperatorPageInner() {
     setManualOpen(true);
   };
   const submitAttempt = (request: OperationRequest) => {
+    if (!captureAllowed || modeChangingRef.current) return false;
     void submit(request).then((attempt) => {
       if (attempt?.outcome === "MODE_CHANGED") {
         setCameraOpen(false);
@@ -105,38 +112,46 @@ function OperatorPageInner() {
         void refetchEvent();
       }
     });
+    return true;
   };
   const closeManual = (open: boolean) => {
     setManualOpen(open);
-    if (!open && restoreCamera.current && !busy && !modeNotice && state.phase === "IDLE") setCameraOpen(true);
+    if (!open && restoreCamera.current && captureAllowed) setCameraOpen(true);
     if (!open) restoreCamera.current = false;
   };
 
   const recordManual = (student: Student) => {
-    submitAttempt({ studentId: student.id, method: "MANUAL", student: {
+    if (!submitAttempt({ studentId: student.id, method: "MANUAL", student: {
       id: student.id, name: fullName(student.firstName, student.middleName ?? "", student.lastName),
-    } });
+    } })) return;
     restoreCamera.current = false;
     setCameraOpen(false);
     setManualOpen(false);
   };
 
   const changeMode = async () => {
-    if (!selectedEvent || busy) return;
+    if (!selectedEvent || !captureAllowed || modeChangingRef.current) return;
+    modeChangingRef.current = true;
+    setModeChanging(true);
     setCameraOpen(false);
     const desired = !selectedEvent.isTimeout;
-    const proceed = await confirm({
+    try {
+      const proceed = await confirm({
       title: `Change all devices to ${desired ? "TIME OUT" : "TIME IN"}?`,
       description: desired ? "Students must already have a time-in. This changes recording mode for the entire event." : "This changes recording mode for the entire event.",
-    });
-    if (!proceed) return;
-    try {
-      await toggleMode.mutateAsync({ eventId: selectedEvent.id, isTimeout: desired });
-      const refreshed = await refetchEvent();
-      if (refreshed.isError) setModeNotice("Mode change result needs a refresh before scanning.");
-    } catch {
-      setModeNotice("Mode change result is uncertain. Refresh the event before scanning.");
-      await refetchEvent();
+      });
+      if (!proceed) return;
+      try {
+        await toggleMode.mutateAsync({ eventId: selectedEvent.id, isTimeout: desired });
+        const refreshed = await refetchEvent();
+        if (refreshed.isError) setModeNotice("Mode change result needs a refresh before scanning.");
+      } catch {
+        setModeNotice("Mode change result is uncertain. Refresh the event before scanning.");
+        await refetchEvent();
+      }
+    } finally {
+      modeChangingRef.current = false;
+      setModeChanging(false);
     }
   };
 
@@ -181,7 +196,7 @@ function OperatorPageInner() {
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <div><p className="text-3xl font-black tracking-wide sm:text-5xl">{mode === "TIME_IN" ? "TIME IN" : "TIME OUT"}</p><p className="text-xs text-slate-600">All scanning devices use this event mode.</p></div>
-          {canChangeMode && <Button variant="outline" disabled={busy || toggleMode.isPending} onClick={changeMode}>Change mode</Button>}
+          {canChangeMode && <Button variant="outline" disabled={!captureAllowed || toggleMode.isPending} onClick={changeMode}>Change mode</Button>}
         </div>
       </header>
 
@@ -203,6 +218,8 @@ function OperatorPageInner() {
               <p className="mt-2">{result.name || "Student"}{result.studentId && ` · ${result.studentId}`}</p>
               {result.time && <p className="mt-2 text-sm">{result.outcome === "ALREADY_RECORDED" ? "Original server time" : "Server time"}: {displayTime(result.time)}</p>}
               {result.message && <p role="alert" className="mt-2 text-sm text-amber-800">{result.message}</p>}
+              {result.outcome !== "RECORDED" && result.outcome !== "ALREADY_RECORDED" &&
+                <p className="mt-2 text-xs text-slate-500">To deliberately rescan the same card, close and reopen the camera after reviewing this result.</p>}
               {!result.time && <p className="mt-2 text-xs text-slate-500">Attempted {displayTime(result.attemptedAt)} (device time)</p>}
               {result.outcome === "RESULT_UNKNOWN" && <Button variant="outline" className="mt-3" onClick={checkRecord}>Check current record</Button>}
               {resolution && <p className="mt-3 text-sm">{resolution}</p>}
@@ -233,7 +250,7 @@ function OperatorPageInner() {
         <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto rounded-t-2xl p-3 sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:w-[520px] sm:max-w-[520px] sm:rounded-none">
           <SheetHeader><SheetTitle>Manual attendance · {selectedEvent.title}</SheetTitle></SheetHeader>
           <ManualAttendanceSection selectedEvent={selectedEvent} displayedStudent={selectedStudent} isFetching={false}
-            onSelect={setSelectedStudent} onRecord={recordManual} operationBusy={busy || state.phase === "AWAITING_ACKNOWLEDGEMENT"} operator />
+            onSelect={setSelectedStudent} onRecord={recordManual} operationBusy={!captureAllowed} operator />
         </SheetContent>
       </Sheet>
     </section>

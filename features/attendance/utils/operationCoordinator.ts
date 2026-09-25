@@ -67,16 +67,25 @@ export function createOperationCoordinator({ lookup, save, onChange }: Dependenc
       generation++;
       pendingRead?.abort();
       publish(sameViewerAndEvent
-        ? { ...state, phase: state.phase === "AWAITING_ACKNOWLEDGEMENT" ? state.phase : "IDLE" }
+        ? { ...state, phase: state.phase === "AWAITING_ACKNOWLEDGEMENT" || state.phase === "SAVING" ? state.phase : "IDLE" }
         : { phase: "IDLE", lastResult: null, recent: [] });
     },
     acknowledge() {
       if (state.phase === "AWAITING_ACKNOWLEDGEMENT") publish({ ...state, phase: "IDLE" });
     },
+    dispose() {
+      generation++;
+      context = null;
+      pendingRead?.abort();
+    },
     async submit(request: OperationRequest): Promise<Attempt | null> {
       if (busy || state.phase === "AWAITING_ACKNOWLEDGEMENT" || !context) return null;
       const parsedId = studentIdSchema.safeParse(request.studentId);
-      if (!parsedId.success) return null;
+      if (!parsedId.success) {
+        return finish({ id: ++nextId, eventId: context.eventId, studentId: "", method: request.method,
+          expectedMode: context.expectedMode, attemptedAt: new Date().toISOString(), outcome: "REJECTED",
+          message: "Invalid student code. Use manual entry or scan another code." }, generation);
+      }
       const studentId = parsedId.data;
       busy = true;
       const captured = context;
@@ -86,6 +95,7 @@ export function createOperationCoordinator({ lookup, save, onChange }: Dependenc
         method: request.method, expectedMode: captured.expectedMode, attemptedAt: new Date().toISOString(),
       };
       const isCurrent = () => capturedGeneration === generation;
+      const sameViewerAndEvent = () => context?.eventId === captured.eventId && context?.viewerId === captured.viewerId;
       let writeSent = false;
       try {
         publish({ ...state, phase: request.student ? "SAVING" : "LOOKUP" });
@@ -107,14 +117,14 @@ export function createOperationCoordinator({ lookup, save, onChange }: Dependenc
         const input: SaveInput = { eventId: captured.eventId, studentId, method: request.method, expectedMode: captured.expectedMode };
         writeSent = true;
         const response = await save(input);
-        if (!isCurrent()) return null;
+        if (!sameViewerAndEvent()) return null;
         const time = validResponse(response, input);
         if (!time) return finish({ ...base, name: student.name, outcome: "RESULT_UNKNOWN",
-          message: "The server response could not confirm this attempt." }, capturedGeneration);
+          message: "The server response could not confirm this attempt." }, generation);
         return finish({ ...base, name: student.name, time,
-          outcome: response.changed ? "RECORDED" : "ALREADY_RECORDED" }, capturedGeneration);
+          outcome: response.changed ? "RECORDED" : "ALREADY_RECORDED" }, generation);
       } catch (error) {
-        if (!isCurrent()) return null;
+        if (writeSent ? !sameViewerAndEvent() : !isCurrent()) return null;
         const code = (error as { code?: string })?.code;
         const status = (error as { status?: number })?.status;
         const outcome: Outcome = code === "EVENT_MODE_CHANGED" ? "MODE_CHANGED" :
@@ -123,7 +133,7 @@ export function createOperationCoordinator({ lookup, save, onChange }: Dependenc
         const message = outcome === "MODE_CHANGED" ? "Event mode changed. Review mode and continue." :
           outcome === "RESULT_UNKNOWN" ? "The server may have recorded this attempt." :
           error instanceof Error ? error.message : "Attendance failed.";
-        return finish({ ...base, outcome, message }, capturedGeneration);
+        return finish({ ...base, outcome, message }, writeSent ? generation : capturedGeneration);
       } finally {
         busy = false;
         pendingRead = null;

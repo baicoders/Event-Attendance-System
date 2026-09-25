@@ -107,10 +107,13 @@ test("malformed QR text makes no request and is never stored in recent attempts"
     save: async () => { writes++; return saved; },
   });
   coordinator.setContext(context);
-  assert.equal(await coordinator.submit({ studentId: "https://example.invalid/qr/payload", method: "SCANNED" }), null);
+  const result = await coordinator.submit({ studentId: "https://example.invalid/qr/payload", method: "SCANNED" });
+  assert.equal(result?.outcome, "REJECTED");
+  assert.equal(result?.studentId, "");
   assert.equal(lookups, 0);
   assert.equal(writes, 0);
-  assert.equal(coordinator.getState().recent.length, 0);
+  assert.equal(coordinator.getState().recent.length, 1);
+  assert.equal(coordinator.getState().phase, "AWAITING_ACKNOWLEDGEMENT");
 });
 
 test("mode changes preserve this view's recent attempts while event and viewer changes clear them", async () => {
@@ -122,4 +125,21 @@ test("mode changes preserve this view's recent attempts while event and viewer c
   assert.equal(coordinator.getState().recent.length, 1);
   coordinator.setContext({ ...context, viewerId: "user-b" });
   assert.equal(coordinator.getState().recent.length, 0);
+});
+
+test("a sent write remains visible with its captured mode after event mode changes", async () => {
+  let resolveSave!: (response: typeof saved) => void;
+  const coordinator = createOperationCoordinator({
+    lookup: async () => student,
+    save: () => new Promise((resolve) => { resolveSave = resolve; }),
+  });
+  coordinator.setContext(context);
+  const pending = coordinator.submit({ studentId: student.id, method: "SCANNED" });
+  await Promise.resolve();
+  coordinator.setContext({ ...context, expectedMode: "TIME_OUT" });
+  resolveSave(saved);
+  const result = await pending;
+  assert.equal(result?.outcome, "RECORDED");
+  assert.equal(result?.expectedMode, "TIME_IN");
+  assert.equal(coordinator.getState().recent.length, 1);
 });

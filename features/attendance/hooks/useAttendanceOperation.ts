@@ -33,8 +33,8 @@ export function useAttendanceOperation(context: OperationContext | null) {
   const expectedMode = context?.expectedMode;
   useEffect(() => {
     coordinatorRef.current?.setContext(eventId && viewerId && expectedMode ? { eventId, viewerId, expectedMode } : null);
-    return () => coordinatorRef.current?.setContext(null);
   }, [eventId, viewerId, expectedMode]);
+  useEffect(() => () => coordinatorRef.current?.dispose(), []);
 
   return {
     state,

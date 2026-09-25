@@ -111,6 +111,34 @@ test("independent SQLite clients never commit the opposite mode during a switch"
   } finally { await second.$disconnect(); }
 });
 
+test("a time-out racing a switch back to time-in preserves the prior time-in", async () => {
+  const { recordAttendance } = await import("./recordAttendance");
+  const second = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) });
+  try {
+    const event = await db.event.create({ data: {
+      title: "Reverse race", category: "ALL", status: "APPROVED", createdById: userId,
+      start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
+    } });
+    const owner = { id: userId, role: "ORGANIZER" as const };
+    const before = await recordAttendance(db,
+      { eventId: event.id, studentId, method: "SCANNED", expectedMode: "TIME_IN" }, owner);
+    await db.event.update({ where: { id: event.id }, data: { isTimeout: true } });
+    const [scan] = await Promise.allSettled([
+      recordAttendance(db, { eventId: event.id, studentId, method: "MANUAL", expectedMode: "TIME_OUT" }, owner),
+      second.event.update({ where: { id: event.id }, data: { isTimeout: false } }),
+    ]);
+    const persisted = await db.record.findUniqueOrThrow({ where: { eventId_studentId: { eventId: event.id, studentId } } });
+    assert.equal(persisted.timein?.toISOString(), before.record.timein?.toISOString());
+    assert.equal(persisted.method, "SCANNED");
+    if (scan.status === "fulfilled") {
+      assert.equal(scan.value.operation, "TIME_OUT");
+      assert.ok(persisted.timeout);
+    } else {
+      assert.equal(persisted.timeout, null);
+    }
+  } finally { await second.$disconnect(); }
+});
+
 test("five concurrent requests on the server client preserve one record and write-once timestamps", async () => {
   const { recordAttendance } = await import("./recordAttendance");
   const clients = Array.from({ length: 5 }, () => db);
