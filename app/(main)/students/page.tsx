@@ -1,6 +1,8 @@
 "use client";
 
 import StudentStatsBoard from "@/features/students/components/StudentStatsBoard";
+import Link from "next/link";
+import { QrCode } from "lucide-react";
 import { page } from "@/globals/constants/designTokens";
 
 const StudentsPage = () => {
@@ -18,6 +20,7 @@ const StudentsPage = () => {
             Choose a student category below to manage its roster and related
             attendance information.
           </p>
+          <Link href="/students/qr-codes?category=ALL&source=directory" className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/50 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"><QrCode className="size-4" /> Manage / Print QR Codes</Link>
         </header>
         <StudentStatsBoard />
       </div>

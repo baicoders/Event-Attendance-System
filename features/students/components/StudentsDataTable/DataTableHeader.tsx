@@ -1,5 +1,5 @@
 import { Table as TableType } from "@tanstack/react-table";
-import { ArrowUpDown, Filter, Plus, Upload } from "lucide-react";
+import { ArrowUpDown, Filter, Plus, QrCode, Upload } from "lucide-react";
 import Link from "next/link";
 import StudentSearchInput from "@/features/students/components/StudentsDataTable/StudentSearchInput";
 import { useCallback, useState } from "react";
@@ -19,6 +19,8 @@ type Props<TData> = {
 
   // CALLBACKS
   onAddStudent: () => void;
+  onOpenQRCenter: () => void;
+  selectedCount: number;
 };
 
 const DataTableHeader = <TData,>({
@@ -28,6 +30,8 @@ const DataTableHeader = <TData,>({
   categorySubheader,
   groupSlug,
   onAddStudent,
+  onOpenQRCenter,
+  selectedCount,
 }: Props<TData>) => {
   const [activePopover, setActivePopover] = useState<"filter" | "sort" | null>(
     null,
@@ -38,7 +42,7 @@ const DataTableHeader = <TData,>({
   }, []);
 
   const totalRows = table.getCoreRowModel().rows.length;
-  const visibleRowsCount = table.getPaginationRowModel().rows.length;
+  const filteredRowsCount = table.getFilteredRowModel().rows.length;
   const activeFilterCount = table.getState().columnFilters.length;
   const isSearching = !!table.getState().globalFilter;
 
@@ -72,7 +76,7 @@ const DataTableHeader = <TData,>({
               Total: {totalRows}
             </span>
             <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-              Visible: {visibleRowsCount}
+              Matching: {filteredRowsCount}
             </span>
             {activeFilterCount > 0 ? (
               <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
@@ -107,6 +111,11 @@ const DataTableHeader = <TData,>({
               <Upload className="size-4" strokeWidth={1.6} />
               Import
             </Link>
+
+            <button type="button" onClick={onOpenQRCenter} className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-indigo-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700 shadow-sm transition hover:bg-indigo-100">
+              <QrCode className="size-4" strokeWidth={1.6} />
+              {selectedCount ? `Print QR Codes (${selectedCount})` : "QR Codes"}
+            </button>
 
             <div className="flex items-center gap-2">
               <StudentSortPopover table={table}>

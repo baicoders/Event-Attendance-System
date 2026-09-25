@@ -6,6 +6,9 @@ import { useFetchStudents } from "@/globals/hooks/useStudents";
 import { page } from "@/globals/constants/designTokens";
 import StudentListClient from "@/features/students/components/StudentListClient";
 import { StudentListCategory } from "@/features/students/types";
+import { Student } from "@/globals/types/students";
+
+const EMPTY_STUDENTS: Student[] = [];
 
 const CATEGORY_CONFIG: Record<
   StudentListCategory,
@@ -84,7 +87,7 @@ const StudentListPage = () => {
           label={config.label}
           item={itemSlug || "General"}
           categoryHeading={config.heading}
-          students={students ?? []}
+          students={students ?? EMPTY_STUDENTS}
           isLoading={isLoading}
           isError={isError}
         />

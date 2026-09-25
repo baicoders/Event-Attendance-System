@@ -393,6 +393,56 @@ body {
   }
 }
 
+.student-qr-print-area { display: none; }
+
+@media print {
+  body:has(.student-qr-center) * { visibility: hidden !important; }
+  body:has(.student-qr-center) .no-print { display: none !important; }
+  body:has(.student-qr-center) main { padding: 0 !important; }
+  body:has(.student-qr-center) .student-qr-center,
+  body:has(.student-qr-center) .min-h-screen { min-height: 0 !important; }
+  body:has(.student-qr-center) .student-qr-print-area,
+  body:has(.student-qr-center) .student-qr-print-area * { visibility: visible !important; }
+  body:has(.student-qr-center) .student-qr-print-area {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 190mm;
+    color: #000;
+  }
+  .student-qr-print-sheet {
+    display: grid;
+    width: 190mm;
+    height: 274mm;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 3mm;
+    break-after: page;
+    page-break-after: always;
+  }
+  .student-qr-print-sheet:last-child { break-after: auto; page-break-after: auto; }
+  .student-qr-print-large .student-qr-print-sheet {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+  }
+  .student-qr-card {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+    padding: 2mm !important;
+    border: 0.25mm solid #aaa !important;
+    border-radius: 1mm !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .student-qr-code { width: 36mm; padding: 1.5mm !important; }
+  .student-qr-print-large .student-qr-code { width: 52mm; }
+  .student-qr-code svg { display: block; width: 100%; height: auto; }
+  .student-qr-card h3 { font-size: 9pt; line-height: 1.1; margin-top: 1mm; }
+  .student-qr-card p { font-size: 8pt; line-height: 1.1; margin-top: 0.5mm; }
+}
+
 @media print {
   @page {
     size: A4 portrait;
