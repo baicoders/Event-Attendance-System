@@ -159,8 +159,10 @@ export const useFetchApprovedEvents = () => {
  * @param live When true (the attendance screen), poll so event mode changes
  *   (isTimeout) made on another device are reflected here. Leave false
  *   elsewhere so it doesn't poll needlessly.
+ * @param freshOnMount Force a fresh read when opening a duplicate form, even
+ *   when the source is already cached by the calendar list.
  */
-export const useFetchEvent = (eventId?: string, live = false) => {
+export const useFetchEvent = (eventId?: string, live = false, freshOnMount = false) => {
   return useQuery({
     queryKey: queryKeys.events.withId(eventId!),
     queryFn: async () => {
@@ -168,6 +170,7 @@ export const useFetchEvent = (eventId?: string, live = false) => {
       return transformEvent(event);
     },
     enabled: !!eventId,
+    refetchOnMount: freshOnMount ? "always" : true,
     ...(live
       ? {
           staleTime: 5_000,

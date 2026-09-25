@@ -41,12 +41,14 @@ import {
 import { useFetchGroupsByCategory } from "@/globals/hooks/useGroups";
 import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 import { ApiError } from "@/globals/utils/api";
+import { Button } from "@/globals/components/shad-cn/button";
 
 type EventDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
   initialData?: Partial<Event>;
   mode: "create" | "edit";
+  onDuplicate?: (id: string) => void;
 };
 
 export default function EventDrawer({
@@ -54,6 +56,7 @@ export default function EventDrawer({
   onClose,
   initialData,
   mode,
+  onDuplicate,
 }: EventDrawerProps) {
   const isEdit = mode === "edit";
   const { user } = useAuth();
@@ -269,6 +272,17 @@ export default function EventDrawer({
             <DrawerTitle className="text-2xl font-bold">
               {isEdit ? "Edit Event" : "Create Event"}
             </DrawerTitle>
+            {isEdit && initialData?.id && onDuplicate && (
+              <Button type="button" variant="outline" className="self-start"
+                onClick={() => {
+                  const sourceId = initialData?.id;
+                  if (!sourceId) return;
+                  handleDrawerClose();
+                  onDuplicate(sourceId);
+                }}>
+                Duplicate event
+              </Button>
+            )}
             {isReadOnlyApprovedView ? (
               <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-center text-sm text-indigo-700">
                 Approved event (view only). Only the event creator or an admin

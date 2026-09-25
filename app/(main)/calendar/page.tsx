@@ -24,6 +24,10 @@ const EventDrawer = dynamic(
   () => import("@/features/calendar/components/EventDrawer"),
   { ssr: false }
 );
+const DuplicateEventSheet = dynamic(
+  () => import("@/features/calendar/components/DuplicateEventSheet"),
+  { ssr: false }
+);
 
 /**
  * CalendarPage Component
@@ -42,6 +46,7 @@ const CalendarPageInner = () => {
   const [drawerMode, setDrawerMode] = useState<"create" | "edit">("create");
   // Event data for the drawer form (null in create mode)
   const [formData, setFormData] = useState<Partial<Event> | null>(null);
+  const [duplicateSourceId, setDuplicateSourceId] = useState<string | null>(null);
 
   // --- URL-backed navigation context (validated + canonicalized) ---
   const rawView = searchParams.get("view");
@@ -168,7 +173,19 @@ const CalendarPageInner = () => {
           initialData={formData ?? undefined}
           isOpen={isDrawerOpen}
           onClose={handleDrawerClose}
+          onDuplicate={setDuplicateSourceId}
         />
+        {duplicateSourceId && (
+          <DuplicateEventSheet
+            key={duplicateSourceId}
+            sourceId={duplicateSourceId}
+            onClose={() => setDuplicateSourceId(null)}
+            onCreated={(created) => {
+              setDuplicateSourceId(null);
+              handleDrawerOpen(created);
+            }}
+          />
+        )}
       </div>
     </section>
   );
