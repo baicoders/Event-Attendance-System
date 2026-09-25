@@ -3,9 +3,8 @@
 import { ChevronLeft } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { format } from "date-fns";
 
 import { Button } from "@/globals/components/shad-cn/button";
 import {
@@ -15,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/globals/components/shad-cn/select";
-import ExportButton from "@/globals/components/shared/buttons/ExportButton";
 import DataTable from "@/globals/components/shared/dataTable/DataTable";
 import {
   DataTableEmptyState,
@@ -24,14 +22,11 @@ import {
 } from "@/globals/components/shared/dataTable/DataTableStates";
 import PageHeader from "@/globals/components/shared/PageHeader";
 import { page, pill } from "@/globals/constants/designTokens";
-import { labelForGroup } from "@/globals/constants/groups";
-import type { ReportRow } from "@/globals/types/reports";
-import { useDataExport } from "@/globals/hooks/useDataExport";
-import { ATTENDANCE_OUTCOME_LABEL } from "@/globals/utils/attendance";
 import { readableDate } from "@/globals/utils/formatting";
 import { capitalizeLabel } from "@/globals/utils/text";
 import DataQualityStrip from "@/features/reports/components/event/DataQualityStrip";
 import ReportMetrics from "@/features/reports/components/event/ReportMetrics";
+import EventExportPicker from "@/features/reports/components/event/EventExportPicker";
 import EventMetadataCard from "@/features/reports/components/EventMetadataCard";
 import { reportColumns } from "@/features/reports/constants/reportTable";
 import { useEventReport } from "@/features/reports/hooks/useEventReport";
@@ -48,41 +43,15 @@ const ArrivalTimelineChart = dynamic(
 /** Radix Select rejects an empty-string value, so "no filter" needs a sentinel. */
 const ANY = "__ANY__";
 
-/**
- * CSV columns for the attendance export.
- *
- * Flat, human-labelled keys with formatted times. The old export shipped the raw
- * API JSON, which serialized the nested `section` relation as `[object Object]`.
- */
-const toCsvRow = (row: ReportRow) => ({
-  "Student No.": row.studentId,
-  Name: row.fullName,
-  "School Level": row.schoolLevel,
-  Year: labelForGroup("YEAR", row.yearLevel),
-  Section: row.section ?? "",
-  Status: ATTENDANCE_OUTCOME_LABEL[row.outcome],
-  "Time In": row.timein ? format(new Date(row.timein), "yyyy-MM-dd HH:mm:ss") : "",
-  "Time Out": row.timeout
-    ? format(new Date(row.timeout), "yyyy-MM-dd HH:mm:ss")
-    : "",
-  Method: row.method ?? "",
-  "No Time-Out": row.noTimeout ? "Yes" : "",
-});
-
 const EventReportPage = () => {
   const { id } = useParams();
+  const searchParams = useSearchParams();
   const eventId = String(id);
 
   const { data: report, isLoading, isError } = useEventReport(eventId);
 
   const [outcome, setOutcome] = useState<string>(ANY);
   const [section, setSection] = useState<string>(ANY);
-
-  const { isExporting, exportData } = useDataExport<ReportRow>({
-    apiUrl: `/api/events/${eventId}/records?includeAbsent=true`,
-    filename: "attendance_records",
-    mapRow: toCsvRow,
-  });
 
   const rows = useMemo(() => report?.rows ?? [], [report]);
 
@@ -93,16 +62,14 @@ const EventReportPage = () => {
       rows.filter(
         (row) =>
           (outcome === ANY || row.outcome === outcome) &&
-          (section === ANY || (row.section ?? "") === section),
+          (section === ANY || row.sectionKey === section),
       ),
     [rows, outcome, section],
   );
 
-  const sections = useMemo(
-    () =>
-      [...new Set(rows.map((row) => row.section).filter(Boolean))].sort() as string[],
-    [rows],
-  );
+  const sections = report?.bySection ?? [];
+  const sectionLabelCounts = new Map<string, number>();
+  for (const item of sections) sectionLabelCounts.set(item.name, (sectionLabelCounts.get(item.name) ?? 0) + 1);
 
   const isFiltered = outcome !== ANY || section !== ANY;
   const clearFilters = useCallback(() => {
@@ -147,18 +114,8 @@ const EventReportPage = () => {
           }
           actions={
             <>
-              <Link
-                href={`/reports/events/${eventId}/print`}
-                target="_blank"
-                rel="noopener"
-              >
-                <Button>Print attendance sheet</Button>
-              </Link>
-              <ExportButton
-                onExport={exportData}
-                isLoading={isExporting}
-                label="Export CSV"
-              />
+              <Button asChild><Link href={`/reports/events/${eventId}/print`} target="_blank" rel="noopener noreferrer">Print attendance sheet</Link></Button>
+              {report ? <EventExportPicker eventId={eventId} initialOpen={searchParams.get("export") === "1"} /> : null}
             </>
           }
         />
@@ -221,9 +178,9 @@ const EventReportPage = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ANY}>All sections</SelectItem>
-                    {sections.map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
+                    {sections.map((item) => (
+                      <SelectItem key={item.key} value={item.key}>
+                        {item.name}{(sectionLabelCounts.get(item.name) ?? 0) > 1 ? ` (${item.key})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -1,15 +1,16 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
-import { prisma } from "@/globals/libs/prisma";
-import { getFreshAuthSession } from "@/globals/utils/auth";
+import { AuthError, getFreshAuthSession } from "@/globals/utils/auth";
 import {
-  REPORT_EVENT_INCLUDE,
   buildEventReport,
+  loadAuthorizedEventReportSnapshot,
 } from "@/globals/utils/eventReport";
+import { GROUP_DIMENSIONS, type GroupDimension } from "@/globals/utils/reportGroups";
 import AttendanceSheet, {
   type SheetOptions,
 } from "@/features/reports/components/print/AttendanceSheet";
 import PrintOptionsBar from "@/features/reports/components/print/PrintOptionsBar";
+import EventSummarySheet from "@/features/reports/components/print/EventSummarySheet";
 
 type PrintPageProps = {
   params: Promise<{ id: string }>;
@@ -26,6 +27,10 @@ export default async function PrintPage({
 }: PrintPageProps) {
   const { id: eventId } = await params;
   const query = await searchParams;
+  if (query.view !== undefined && query.view !== "sheet" && query.view !== "summary") notFound();
+  const view = query.view === "summary" ? "summary" : "sheet";
+  if (view === "summary" && query.groupBy !== undefined && (typeof query.groupBy !== "string" || !GROUP_DIMENSIONS.includes(query.groupBy as GroupDimension))) notFound();
+  const groupBy: GroupDimension = view === "summary" && typeof query.groupBy === "string" ? query.groupBy as GroupDimension : "SECTION";
 
   // This report exposes student PII (names, student numbers, attendance times).
   // The client `(main)` layout never protected a direct request to a server
@@ -36,37 +41,20 @@ export default async function PrintPage({
     redirect("/login");
   }
 
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    include: REPORT_EVENT_INCLUDE,
-  });
-
-  if (!event) {
+  let snapshot;
+  try {
+    snapshot = await loadAuthorizedEventReportSnapshot(eventId, user);
+  } catch (error) {
+    if (!(error instanceof AuthError)) throw error;
+    return <div className="p-8 text-center text-gray-600">You do not have access to this report.</div>;
+  }
+  if (!snapshot) {
     return (
       <div className="p-8 text-center text-gray-600">Event not found.</div>
     );
   }
 
-  // Mirrors `assertEventVisibility`: admins see everything, organizers see their
-  // own events plus anything approved. Rendered as a message rather than thrown,
-  // because this is a page and not an API route with an error handler.
-  const canView =
-    user.role === "ADMIN" ||
-    event.createdById === user.id ||
-    event.status === "APPROVED";
-
-  if (!canView) {
-    return (
-      <div className="p-8 text-center text-gray-600">
-        You do not have access to this report.
-      </div>
-    );
-  }
-
-  // The same builder the on-screen report uses. This page used to query Prisma
-  // and recompute eligibility and totals itself, which is how the screen and the
-  // printout could disagree.
-  const report = await buildEventReport(event);
+  const report = buildEventReport(snapshot);
 
   const options: SheetOptions = {
     includeAbsentees: isEnabled(query.absentees),
@@ -77,7 +65,7 @@ export default async function PrintPage({
   return (
     <>
       <PrintOptionsBar />
-      <AttendanceSheet report={report} options={options} />
+      {view === "summary" ? <EventSummarySheet report={report} groupBy={groupBy} /> : <AttendanceSheet report={report} options={options} />}
     </>
   );
 }
