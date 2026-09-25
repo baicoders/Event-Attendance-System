@@ -33,7 +33,8 @@ function ActionsCell({
     try {
       const result = await recordAttendance(recordId);
       if (result.changed) {
-        toastSuccess("Attendance updated");
+        if (result.timeout && !result.timein) toastWarning("Time-out recorded; no time-in is recorded for this student.");
+        else toastSuccess("Attendance updated");
       } else {
         toastWarning("Attendance was already completed for this student.");
       }

@@ -122,7 +122,10 @@ export function createOperationCoordinator({ lookup, save, onChange }: Dependenc
         if (!time) return finish({ ...base, name: student.name, outcome: "RESULT_UNKNOWN",
           message: "The server response could not confirm this attempt." }, generation);
         return finish({ ...base, name: student.name, time,
-          outcome: response.changed ? "RECORDED" : "ALREADY_RECORDED" }, generation);
+          outcome: response.changed ? "RECORDED" : "ALREADY_RECORDED",
+          message: captured.expectedMode === "TIME_OUT" && !response.timein
+            ? "No time-in is recorded for this student. The time-out is stored with time-in left empty."
+            : undefined }, generation);
       } catch (error) {
         if (writeSent ? !sameViewerAndEvent() : !isCurrent()) return null;
         const code = (error as { code?: string })?.code;

@@ -59,8 +59,8 @@ Plus sample students, events, and attendance records.
   defined once in `globals/constants/groups.ts` - forms, event scoping,
   and the seed all derive from it. Section names live on student rows.
 - **Scan rules**: one scan each for time-in and time-out (first wins);
-  time-out requires a prior time-in; events toggle between time-in and
-  time-out recording modes.
+  time-out can be recorded without time-in, leaving time-in empty. Events
+  toggle between time-in and time-out recording modes.
 
 ## Scripts
 

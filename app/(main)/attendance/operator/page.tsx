@@ -146,7 +146,7 @@ function OperatorPageInner() {
     try {
       const proceed = await confirm({
       title: `Change all devices to ${desired ? "TIME OUT" : "TIME IN"}?`,
-      description: desired ? "Students must already have a time-in. This changes recording mode for the entire event." : "This changes recording mode for the entire event.",
+      description: desired ? "Students without a time-in can still be timed out; their time-in stays empty. This changes recording mode for the entire event." : "This changes recording mode for the entire event.",
       });
       if (!proceed) return;
       try {
@@ -255,10 +255,10 @@ function OperatorPageInner() {
       <Button variant="outline" onClick={exit}>View full attendance / manage records</Button>
 
       <Sheet open={manualOpen} onOpenChange={closeManual}>
-        <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto rounded-t-2xl p-3 sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:w-[520px] sm:max-w-[520px] sm:rounded-none">
-          <SheetHeader><SheetTitle>Manual attendance · {selectedEvent.title}</SheetTitle></SheetHeader>
+        <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto rounded-t-2xl p-4 sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:w-[520px] sm:max-w-[520px] sm:rounded-none">
+          <SheetHeader className="border-b px-0 pb-4 pr-8 pt-1"><SheetTitle>Manual attendance · {selectedEvent.title}</SheetTitle></SheetHeader>
           <ManualAttendanceSection key={selectedEvent.id + ":" + (user?.id ?? "")}
-            selectedEvent={selectedEvent} displayedStudent={selectedStudent} active={manualOpen}
+            selectedEvent={selectedEvent} displayedStudent={selectedStudent} active={manualOpen} inSheet
             onSelect={(student) => setSelection(student && user ? { student, eventId: selectedEvent.id, viewerId: user.id } : null)}
             onRecord={recordManual} operationBusy={!captureAllowed}
             focusRequest={manualFocusRequest} onReturnToScanner={() => closeManual(false)}

@@ -64,6 +64,18 @@ test("malformed response never confirms attendance", async () => {
   assert.equal(result?.outcome, "RESULT_UNKNOWN");
 });
 
+test("a recorded time-out without time-in warns the operator without reporting an error", async () => {
+  const coordinator = createOperationCoordinator({
+    lookup: async () => student,
+    save: async () => ({ ...saved, operation: "TIME_OUT", timein: null, timeout: "2026-09-25T01:00:00.000Z" }),
+  });
+  coordinator.setContext({ ...context, expectedMode: "TIME_OUT" });
+  const result = await coordinator.submit({ studentId: student.id, method: "SCANNED" });
+  assert.equal(result?.outcome, "RECORDED");
+  assert.match(result?.message ?? "", /no time.in/i);
+  assert.equal(coordinator.getState().phase, "IDLE");
+});
+
 test("lost response after commit stays unknown and never replays", async () => {
   const stored: typeof saved[] = [];
   let writes = 0;

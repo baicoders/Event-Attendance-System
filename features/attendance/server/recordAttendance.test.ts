@@ -66,15 +66,22 @@ test("a stale time-in request cannot write after global mode changes", async () 
   assert.equal(current.timeout, null);
 });
 
-test("time-out requires prior time-in, stamps modifier, and never overwrites first time-out", async () => {
-  const { recordAttendance, RecordingError } = await import("./recordAttendance");
+test("time-out without time-in creates a record with null time-in and preserves the first time-out", async () => {
+  const { recordAttendance } = await import("./recordAttendance");
   const other = await db.student.create({ data: {
     id: "00000987654", firstName: "Maria", lastName: "Santos", schoolLevel: "COLLEGE", yearLevel: "YEAR_1",
   } });
-  await assert.rejects(
-    recordAttendance(db, { eventId, studentId: other.id, method: "SCANNED", expectedMode: "TIME_OUT" }, { id: userId, role: "ORGANIZER" }),
-    (error: unknown) => error instanceof RecordingError && error.code === "NO_TIME_IN",
-  );
+  const timeoutOnlyInput = { eventId, studentId: other.id, method: "SCANNED" as const, expectedMode: "TIME_OUT" as const };
+  const timeoutOnly = await recordAttendance(db, timeoutOnlyInput, { id: userId, role: "ORGANIZER" });
+  const timeoutOnlyAgain = await recordAttendance(db, timeoutOnlyInput, { id: userId, role: "ORGANIZER" });
+  assert.equal(timeoutOnly.created, true);
+  assert.equal(timeoutOnly.changed, true);
+  assert.equal(timeoutOnly.record.timein, null);
+  assert.ok(timeoutOnly.record.timeout);
+  assert.equal(timeoutOnly.record.recordedById, userId);
+  assert.equal(timeoutOnlyAgain.changed, false);
+  assert.equal(timeoutOnlyAgain.record.timein, null);
+  assert.equal(timeoutOnlyAgain.record.timeout?.toISOString(), timeoutOnly.record.timeout?.toISOString());
   const input = { eventId, studentId, method: "MANUAL" as const, expectedMode: "TIME_OUT" as const };
   const user = { id: userId, role: "ORGANIZER" as const };
   const first = await recordAttendance(db, input, user);
