@@ -1,18 +1,17 @@
-import { Group, Prisma, SchoolLevel } from "@prisma/client";
-import { Event } from "@/globals/types/events";
+import { Prisma, SchoolLevel, EventCategory } from "@prisma/client";
 import { Student } from "../types/students";
 
 // ============================================================================
 // UTILITY: Build student filter based on event criteria
 // ============================================================================
 export const buildEventStudentFilter = (
-  event: Event,
+  event: { category: EventCategory; includedGroups: { slug: string }[] },
 ): Prisma.StudentWhereInput => {
   const where: Prisma.StudentWhereInput = {};
 
   // Categories that map to enums remain the same
-  if (event.category === "COLLEGE") where.schoolLevel = SchoolLevel.COLLEGE;
-  if (event.category === "SHS") where.schoolLevel = SchoolLevel.SHS;
+  if (event.category === "COLLEGE") return { schoolLevel: SchoolLevel.COLLEGE };
+  if (event.category === "SHS") return { schoolLevel: SchoolLevel.SHS };
   if (event.category === "ALL") return where;
 
   // For everything else, we query the 'groups' relation by slug
@@ -42,7 +41,7 @@ export const buildEventStudentFilter = (
  */
 export const isStudentInEvent = (
   student: Student,
-  event: Event & { includedGroups: Group[] },
+  event: { category: EventCategory; includedGroups: { slug: string }[] },
 ): boolean => {
   const category = event.category;
   if (category === "ALL") return true;
@@ -51,12 +50,5 @@ export const isStudentInEvent = (
 
   const includedSlugs: string[] = event.includedGroups.map((g) => g.slug);
 
-  // Dynamically check the flattened property matching the category
-  // e.g., if category is "HOUSE", it checks student["house"]
-  const studentGroupSlug = student[category.toLowerCase() as keyof Student];
-
-  return (
-    typeof studentGroupSlug === "string" &&
-    includedSlugs.includes(studentGroupSlug)
-  );
+  return student.groups?.some((group) => includedSlugs.includes(group.slug)) ?? false;
 };

@@ -49,6 +49,7 @@ export default function StudentImporter({ onImportSuccess }: Props) {
         // A bulk import changes the roster (and thus counts, event
         // eligibility, and reports); refresh their caches.
         queryClient.invalidateQueries({ queryKey: queryKeys.students.all() });
+        queryClient.invalidateQueries({ queryKey: queryKeys.audience.all() });
         queryClient.invalidateQueries({ queryKey: ["stats", "students"] });
         queryClient.invalidateQueries({ queryKey: queryKeys.events.all() });
         queryClient.invalidateQueries({ queryKey: queryKeys.records.all() });

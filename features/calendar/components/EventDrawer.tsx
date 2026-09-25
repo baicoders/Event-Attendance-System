@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Controller, type FieldErrors } from "react-hook-form";
+import { Controller } from "react-hook-form";
 import {
   Drawer,
   DrawerContent,
@@ -32,6 +32,7 @@ import {
 import { EVENT_CHOICES } from "@/features/calendar/constants/categoryGroups"; // Keep just the categories here
 import { Event, EventForm } from "@/globals/types/events";
 import EventActionButtons from "./EventActionButtons";
+import EventAudiencePreview from "./EventAudiencePreview";
 import {
   formatEventPayload,
   hasEventAudienceChanged,
@@ -78,6 +79,7 @@ export default function EventDrawer({
   } = useEventForm(initialData);
 
   const category = watch("category");
+  const includedGroups = watch("includedGroups");
   const allDay = watch("allDay");
 
   // FETCH DYNAMIC GROUPS based on selected category
@@ -360,6 +362,15 @@ export default function EventDrawer({
                     </p>
                   )}
                 </div>
+              )}
+
+              {!isReadOnlyView && (
+                <EventAudiencePreview
+                  category={category}
+                  includedGroups={includedGroups}
+                  eventId={isEdit ? initialData?.id : undefined}
+                  enabled={isOpen}
+                />
               )}
 
               {/* Schedule Block - full width; Start/End sit side by side once
