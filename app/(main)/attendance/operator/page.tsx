@@ -7,6 +7,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/globals/componen
 import { useAuth } from "@/globals/contexts/AuthContext";
 import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 import { useStatsOfEvent } from "@/globals/hooks/useEvents";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/globals/utils/queryKeys";
 import { fetchApi } from "@/globals/utils/api";
 import { fullName } from "@/globals/utils/formatting";
 import Scanner from "@/features/attendance/components/Scanner";
@@ -34,6 +36,7 @@ function OperatorPageInner() {
   const router = useRouter();
   const confirm = useConfirm();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { eventId, selectedEvent, isRestoring, isUnavailable, hasRefreshError, lastCheckedAt, refetchEvent, retryContext } = useAttendanceEventContext();
   const mode = selectedEvent?.isTimeout ? "TIME_OUT" as const : "TIME_IN" as const;
   const context = selectedEvent && user ? { eventId: selectedEvent.id, viewerId: user.id, expectedMode: mode } : null;
@@ -42,7 +45,9 @@ function OperatorPageInner() {
   const toggleMode = useToggleTimeoutMode();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [manualFocusRequest, setManualFocusRequest] = useState(0);
+  const [selection, setSelection] = useState<{ student: Student; eventId: string; viewerId: string } | null>(null);
+  const selectedStudent = selection && selection.eventId === selectedEvent?.id && selection.viewerId === user?.id ? selection.student : null;
   const [modeNotice, setModeNotice] = useState("");
   const [resolution, setResolution] = useState("");
   const [needsRefresh, setNeedsRefresh] = useState(false);
@@ -52,13 +57,13 @@ function OperatorPageInner() {
   const restoreCamera = useRef(false);
 
   useEffect(() => {
-    setSelectedStudent(null);
+    setSelection(null);
     setCameraOpen(false);
     setManualOpen(false);
     setModeNotice("");
     setResolution("");
     previousMode.current = null;
-  }, [selectedEvent?.id]);
+  }, [selectedEvent?.id, user?.id]);
 
   useEffect(() => {
     if (!selectedEvent) return;
@@ -99,9 +104,13 @@ function OperatorPageInner() {
   };
 
   const openManual = () => {
+    if (selectedEvent && user) void queryClient.invalidateQueries({
+      queryKey: queryKeys.students.fromEvent(selectedEvent.id, user.id), exact: true,
+    });
     restoreCamera.current = cameraOpen;
     setCameraOpen(false);
     setManualOpen(true);
+    setManualFocusRequest((value) => value + 1);
   };
   const submitAttempt = (request: OperationRequest) => {
     if (!captureAllowed || modeChangingRef.current) return false;
@@ -126,7 +135,6 @@ function OperatorPageInner() {
     } })) return;
     restoreCamera.current = false;
     setCameraOpen(false);
-    setManualOpen(false);
   };
 
   const changeMode = async () => {
@@ -209,7 +217,7 @@ function OperatorPageInner() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
         <Scanner onRead={(studentId) => submitAttempt({ studentId, method: "SCANNED" })}
           isPending={capturePaused} eventId={selectedEvent.id} mode={mode} isOpen={cameraOpen}
-          onOpenChange={setCameraOpen} large />
+          onOpenChange={setCameraOpen} onManualEntry={openManual} large />
         <div className="space-y-4">
           <div aria-live="polite" className={`min-h-48 rounded-xl border p-5 shadow-sm ${result?.outcome === "RECORDED" ? "border-emerald-300 bg-emerald-50" : "bg-white"}`}>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Last result</h2>
@@ -249,8 +257,12 @@ function OperatorPageInner() {
       <Sheet open={manualOpen} onOpenChange={closeManual}>
         <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto rounded-t-2xl p-3 sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:w-[520px] sm:max-w-[520px] sm:rounded-none">
           <SheetHeader><SheetTitle>Manual attendance · {selectedEvent.title}</SheetTitle></SheetHeader>
-          <ManualAttendanceSection selectedEvent={selectedEvent} displayedStudent={selectedStudent} isFetching={false}
-            onSelect={setSelectedStudent} onRecord={recordManual} operationBusy={!captureAllowed} operator />
+          <ManualAttendanceSection key={selectedEvent.id + ":" + (user?.id ?? "")}
+            selectedEvent={selectedEvent} displayedStudent={selectedStudent} active={manualOpen}
+            onSelect={(student) => setSelection(student && user ? { student, eventId: selectedEvent.id, viewerId: user.id } : null)}
+            onRecord={recordManual} operationBusy={!captureAllowed}
+            focusRequest={manualFocusRequest} onReturnToScanner={() => closeManual(false)}
+            result={state.lastResult} onAcknowledge={acknowledge} />
         </SheetContent>
       </Sheet>
     </section>

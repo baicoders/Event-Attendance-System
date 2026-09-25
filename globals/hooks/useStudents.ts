@@ -19,20 +19,22 @@ const transformStudent = (e: StudentDTO | StudentDTO): Student => ({
   updatedAt: new Date(e.updatedAt),
 });
 
-/** Fetches all students included in an event */
-export const useStudentsFromEvent = (eventId?: string, query?: string) => {
-  const { data: students, ...queryResult } = useQuery({
-    queryKey: queryKeys.students.fromEvent(eventId!),
-    enabled: !!eventId,
-    queryFn: async () => {
-      if (!eventId) return;
-
-      const students = await fetchApi<StudentDTO[]>(
-        `/api/students?eventId=${eventId}`,
-      );
+/** Raw event roster. Viewer identity keeps cached PII out of a later session. */
+export const useEventRoster = (eventId?: string, viewerId = "", active = true) =>
+  useQuery({
+    queryKey: queryKeys.students.fromEvent(eventId!, viewerId),
+    enabled: !!eventId && active,
+    queryFn: async ({ signal }) => {
+      if (!eventId) return [];
+      const params = new URLSearchParams({ eventId });
+      const students = await fetchApi<StudentDTO[]>(`/api/students?${params}`, { signal });
       return students.map(transformStudent);
     },
   });
+
+/** Keeps the general fuzzy filtering behavior for existing callers. */
+export const useStudentsFromEvent = (eventId?: string, query?: string) => {
+  const { data: students, ...queryResult } = useEventRoster(eventId);
 
   // Memoize filtered and sorted results
   const filteredStudents = useMemo(() => {
@@ -106,7 +108,7 @@ export const useStudentsStats = () => {
  * Fetches students based on active search filters.
  * @param filters - The parsed object from your querySchema (category, house, etc.)
  */
-export const useFetchStudents = (filters: any = {}) => {
+export const useFetchStudents = (filters: Record<string, string | undefined> = {}) => {
   // Generate the query string from the filters object
   const queryString = useMemo(() => {
     const params = new URLSearchParams();

@@ -205,16 +205,16 @@ export const useAllRecordsFromEvent = (
 export const useRecordOfStudentInEvent = (
   eventId?: string,
   studentId?: string,
+  { live = false, active = true }: { live?: boolean; active?: boolean } = {},
 ) => {
   return useQuery({
     queryKey: queryKeys.records.fromEventForStudent(eventId!, studentId!),
-    enabled: !!eventId && !!studentId,
-    queryFn: async () => {
+    enabled: !!eventId && !!studentId && active,
+    queryFn: async ({ signal }) => {
       if (!eventId || !studentId) return null;
-
-      return fetchApi<Record>(
-        `/api/records?eventId=${eventId}&studentId=${studentId}`,
-      );
+      const params = new URLSearchParams({ eventId, studentId });
+      return fetchApi<Record>(`/api/records?${params}`, { signal });
     },
+    ...(live ? { staleTime: 5_000, refetchInterval: 8_000, refetchIntervalInBackground: false } : {}),
   });
 };
