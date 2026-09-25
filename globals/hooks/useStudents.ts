@@ -137,6 +137,7 @@ export const useFetchStudents = (filters: any = {}) => {
 // report records - all of which live under separate query keys - so invalidate
 // them together, not just ["students"].
 const invalidateStudentDependents = (queryClient: QueryClient) => {
+  queryClient.invalidateQueries({ queryKey: queryKeys.audience.all() });
   queryClient.invalidateQueries({ queryKey: queryKeys.students.all() });
   queryClient.invalidateQueries({ queryKey: ["stats", "students"] });
   queryClient.invalidateQueries({ queryKey: queryKeys.events.all() });
