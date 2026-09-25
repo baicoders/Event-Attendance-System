@@ -103,7 +103,7 @@ export async function buildOverview({
         prisma.student.count({ where: filter }),
         prisma.record.groupBy({
           by: ["eventId"],
-          where: { eventId: { in: eventIds }, student: filter },
+          where: { eventId: { in: eventIds }, timein: { not: null }, student: filter },
           _count: { _all: true },
         }),
       ]);

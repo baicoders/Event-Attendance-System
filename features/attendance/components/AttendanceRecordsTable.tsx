@@ -3,8 +3,9 @@
 import { getAttendanceColumns } from "@/features/attendance/constants/eventAttendanceTable";
 import { Event } from "@/globals/types/events";
 import { useAllRecordsFromEvent } from "@/globals/hooks/useRecords";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DataTable from "@/globals/components/shared/dataTable/DataTable";
+import { Button } from "@/globals/components/shad-cn/button";
 import { DataTableErrorState } from "@/globals/components/shared/dataTable/DataTableStates";
 import { useAuth } from "@/globals/contexts/AuthContext";
 
@@ -14,9 +15,11 @@ type Props = {
 
 const AttendanceRecordsTable = ({ selectedEvent }: Props) => {
   const { user } = useAuth();
+  const [onlyNeedsReview, setOnlyNeedsReview] = useState(false);
+  useEffect(() => setOnlyNeedsReview(false), [selectedEvent?.id]);
   const { data, isLoading, isError } = useAllRecordsFromEvent(
     selectedEvent?.id,
-    { live: true }
+    { live: true, onlyNeedsReview }
   );
   const records = useMemo(() => data ?? [], [data]);
 
@@ -46,10 +49,14 @@ const AttendanceRecordsTable = ({ selectedEvent }: Props) => {
           description="Please retry."
         />
       }
-      title="Attendance Records"
+      title={onlyNeedsReview ? "Records needing review" : "Attendance Records"}
+      toolbarTrailing={<Button type="button" variant="outline" size="sm" aria-pressed={onlyNeedsReview}
+        onClick={() => setOnlyNeedsReview((value) => !value)}>
+        {onlyNeedsReview ? "Show checked-in records" : "Review records without time-in"}
+      </Button>}
       // Switching events swaps the rows without unmounting; restart at page 1 so
       // live polling of the previous event's page doesn't linger.
-      resetKey={selectedEvent.id}
+      resetKey={`${selectedEvent.id}:${onlyNeedsReview}`}
     />
   );
 };
