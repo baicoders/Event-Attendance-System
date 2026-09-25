@@ -13,7 +13,7 @@ import {
 import { useState } from "react";
 
 type Props = {
-  date: Date
+  date?: Date
   onChange: (date: Date) => void;
 };
 
