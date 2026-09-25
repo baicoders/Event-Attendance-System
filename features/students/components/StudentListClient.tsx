@@ -35,6 +35,7 @@ const StudentListClient = ({
   const [formData, setFormData] = useState<Student>();
   const [isStudentFormOpen, setIsStudentFormOpen] = useState(false);
   const [isStudentCodeOpen, setIsStudentCodeOpen] = useState(false);
+  const [qrStudent, setQrStudent] = useState<Student>();
 
   const { mutateAsync: saveStudent } = useSaveStudent();
   const { mutateAsync: deleteStudent } = useDeleteStudent();
@@ -48,6 +49,11 @@ const StudentListClient = ({
   const handleAdd = useCallback(() => {
     setFormData(undefined);
     setIsStudentFormOpen(true);
+  }, []);
+
+  const handleViewQR = useCallback((student: Student) => {
+    setQrStudent(student);
+    setIsStudentCodeOpen(true);
   }, []);
 
   const handleDelete = useCallback(async (studentId: string) => {
@@ -71,7 +77,7 @@ const StudentListClient = ({
           : `Failed to delete: ${studentId}`;
       toastDanger(message);
     }
-  }, []);
+  }, [confirm, deleteStudent]);
 
   const handleSubmit = useCallback(async (data: StudentFormValues) => {
     try {
@@ -87,15 +93,16 @@ const StudentListClient = ({
       toastDanger("Failed saving student.");
       throw error;
     }
-  }, []);
+  }, [saveStudent]);
 
   const columns = useMemo(
     () =>
       getStudentColumns({
         onEdit: handleEdit,
         onDelete: handleDelete,
+        onViewQR: handleViewQR,
       }),
-    [],
+    [handleEdit, handleDelete, handleViewQR],
   );
 
   return (
@@ -103,7 +110,7 @@ const StudentListClient = ({
       <StudentsDataTable
         category={category}
         columns={columns}
-        data={students ?? []}
+        data={students}
         isLoading={isLoading}
         isError={isError}
         categoryHeader={label ?? ""}
@@ -116,15 +123,15 @@ const StudentListClient = ({
         key={formData?.id}
         student={formData}
         isOpen={isStudentFormOpen}
-        onViewQR={() => setIsStudentCodeOpen(true)}
+        onViewQR={() => formData && handleViewQR(formData)}
         onClose={() => setIsStudentFormOpen(false)}
         onSubmit={handleSubmit}
       />
 
       <StudentQrModal
         onOpenChange={setIsStudentCodeOpen}
-        open={isStudentCodeOpen && !!formData}
-        student={formData}
+        open={isStudentCodeOpen && !!qrStudent}
+        student={qrStudent}
       />
     </div>
   );

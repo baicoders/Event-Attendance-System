@@ -8,14 +8,17 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   SortingState,
+  RowSelectionState,
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DataTableBody from "./DataTableBody";
 import DataTableHeader from "./DataTableHeader";
 import getDynamicFilters from "../../utils/getDynamicFilters";
 import { StudentListCategory } from "../../types";
+import { Student } from "@/globals/types/students";
+import { useRouter, useSearchParams } from "next/navigation";
 
 /**
  * Props for the application's standard DataTable component.
@@ -24,11 +27,11 @@ import { StudentListCategory } from "../../types";
  * default solution for rendering tabular data across the app.
  * Sorting, filtering, pagination, and a toolbar are provided out of the box.
  */
-type DataTableProps<TData, TValue> = {
+type DataTableProps<TValue> = {
   /** Column definitions compatible with TanStack Table */
-  columns: ColumnDef<TData, TValue>[];
+  columns: ColumnDef<Student, TValue>[];
   /** The dataset to render */
-  data: TData[];
+  data: Student[];
   /** Whether the table is currently loading data */
   isLoading: boolean;
   /** Whether the data fetch failed */
@@ -52,7 +55,7 @@ type DataTableProps<TData, TValue> = {
  * It encapsulates common table behavior such as sorting, filtering,
  * pagination, and global search to avoid reimplementation in each feature.
  */
-function StudentsDataTable<TData, TValue>({
+function StudentsDataTable<TValue>({
   columns,
   data,
   isLoading,
@@ -62,11 +65,15 @@ function StudentsDataTable<TData, TValue>({
   groupSlug,
   onAddStudent,
   category,
-}: DataTableProps<TData, TValue>) {
+}: DataTableProps<TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const previousData = useRef(data);
 
   useEffect(() => {
     if (category === "COLLEGE") {
@@ -94,18 +101,50 @@ function StudentsDataTable<TData, TValue>({
       columnFilters,
       globalFilter,
       columnVisibility,
+      rowSelection,
     },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: (updater) => {
+      setSorting(updater);
+      table.resetPageIndex();
+    },
+    onColumnFiltersChange: (updater) => {
+      setColumnFilters(updater);
+      table.resetPageIndex();
+    },
+    onGlobalFilterChange: (updater) => {
+      setGlobalFilter(updater);
+      table.resetPageIndex();
+    },
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: true,
+    getRowId: (student) => student.id,
     globalFilterFn: "includesString",
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    autoResetPageIndex: false,
   });
 
+  useEffect(() => {
+    if (previousData.current !== data) {
+      previousData.current = data;
+      table.resetPageIndex();
+    }
+  }, [data, table]);
+
   const dynamicFilters = useMemo(() => getDynamicFilters(data), [data]);
+  const selectedIds = data.filter((student) => rowSelection[student.id]).map((student) => student.id);
+
+  const openQRCenter = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("category", category);
+    if (globalFilter) params.set("search", globalFilter);
+    columnFilters.forEach(({ id, value }) => { if (typeof value === "string" && value) params.set(`filter_${id}`, value); });
+    sessionStorage.setItem("student-qr-selection", JSON.stringify({ context: `${category}:${groupSlug}`, ids: selectedIds }));
+    if (selectedIds.length) params.set("scope", "selected");
+    router.push(`/students/qr-codes?${params.toString()}`);
+  };
 
   return (
     <div className="flex flex-col gap-4 w-full rounded-md">
@@ -116,6 +155,8 @@ function StudentsDataTable<TData, TValue>({
         groupSlug={groupSlug}
         onAddStudent={onAddStudent}
         filterOptions={dynamicFilters}
+        selectedCount={selectedIds.length}
+        onOpenQRCenter={openQRCenter}
       />
 
       <DataTableBody table={table} isLoading={isLoading} isError={isError} />

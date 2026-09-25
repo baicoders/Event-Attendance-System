@@ -1,9 +1,11 @@
-import { Student, StudentAttendanceRecord } from "@/globals/types/students";
+import { Student } from "@/globals/types/students";
 import { FaUser } from "react-icons/fa6";
 import AttendanceActionButtons from "@/features/attendance/components/AttendanceActionButtons";
 import { Event } from "@/globals/types/events";
-import { memo } from "react";
+import { memo, useState } from "react";
+import { QrCode } from "lucide-react";
 import AttendanceStatusCard from "@/features/attendance/components/AttendanceStatusCard";
+import { StudentQrModal } from "@/features/students/components/StudentQRModal";
 import { capitalizeLabel } from "@/globals/utils/text";
 import { formatSection, fullName, normalizeName } from "@/globals/utils/formatting";
 import { labelForGroup } from "@/globals/constants/groups";
@@ -69,6 +71,7 @@ type Props = {
 };
 
 const StudentDetails = ({ event, student, record, isLoading }: Props) => {
+  const [qrStudent, setQrStudent] = useState<Student>();
   const { user } = useAuth();
   const canManage =
     user?.role === "ADMIN" || event.createdById === user?.id;
@@ -124,13 +127,21 @@ const StudentDetails = ({ event, student, record, isLoading }: Props) => {
       {/* Right side (Student details) */}
       <div className="flex-1 p-4 sm:p-6">
         {/* Header */}
-        <div className="flex justify-between items-start mb-6">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">
               {fullNameDisplay}
             </h2>
             <p className="text-slate-500 mt-1 text-sm sm:text-base">{fullSection}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setQrStudent(student)}
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+          >
+            <QrCode className="size-4" strokeWidth={1.7} />
+            View QR
+          </button>
         </div>
 
         {/* Student Info Grid */}
@@ -186,6 +197,11 @@ const StudentDetails = ({ event, student, record, isLoading }: Props) => {
           </>
         )}
       </div>
+      <StudentQrModal
+        open={qrStudent?.id === student.id}
+        onOpenChange={(open) => { if (!open) setQrStudent(undefined); }}
+        student={qrStudent}
+      />
     </div>
   );
 };

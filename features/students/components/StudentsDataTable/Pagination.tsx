@@ -29,8 +29,8 @@ function Pagination<TData>({
 
 		{/* <div className="flex items-center justify-between px-2 pt-2 pb-4"> */}
 			<div className="text-muted-foreground flex-1 text-sm">
-				{table.getFilteredSelectedRowModel().rows.length} of{" "}
-				{table.getFilteredRowModel().rows.length} row(s) selected.
+					{table.getSelectedRowModel().rows.length} selected across the roster;{" "}
+					{table.getFilteredRowModel().rows.length} match current filters.
 			</div>
 			<div className="flex items-center space-x-6 lg:space-x-8">
 				<div className="flex items-center space-x-2">
