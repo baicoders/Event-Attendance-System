@@ -30,17 +30,19 @@ type ScannerProps = {
   mode?: "TIME_IN" | "TIME_OUT";
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onManualEntry?: () => void;
+  pausedMessage?: string;
   large?: boolean;
 };
 
 /**
  * Camera off state
  */
-const CameraOffState = ({ onOpen, disabled = false }: { onOpen: () => void; disabled?: boolean }) => (
+const CameraOffState = ({ onOpen, disabled = false, pausedMessage }: { onOpen: () => void; disabled?: boolean; pausedMessage?: string }) => (
   <div className="flex flex-col items-center justify-center px-4 py-6 sm:py-8">
     <IoCameraOutline className="size-16 text-slate-400 mb-4 sm:size-24 sm:mb-6 md:size-28" />
     <p className="text-base font-medium text-slate-600 mb-4 text-center sm:text-lg sm:mb-6">
-      {disabled ? "Scanning paused until this result is reviewed" : "Turn on camera to start attendance"}
+      {disabled ? pausedMessage || "Scanning paused until this result is reviewed" : "Turn on camera to start attendance"}
     </p>
     <Button
       onClick={onOpen}
@@ -56,7 +58,7 @@ const CameraOffState = ({ onOpen, disabled = false }: { onOpen: () => void; disa
 /**
  * Scanner component for QR code and barcode scanning
  */
-const Scanner = ({ onRead, isPending = false, eventId, mode, isOpen, onOpenChange, large = false }: ScannerProps) => {
+const Scanner = ({ onRead, isPending = false, eventId, mode, isOpen, onOpenChange, onManualEntry, pausedMessage, large = false }: ScannerProps) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const cameraOpen = isOpen ?? internalOpen;
@@ -96,7 +98,8 @@ const Scanner = ({ onRead, isPending = false, eventId, mode, isOpen, onOpenChang
       ) : (
         <div className="text-center">
           {cameraError && <p role="alert" className="mb-3 text-sm font-medium text-rose-700">{cameraError}</p>}
-          <CameraOffState onOpen={() => setCameraOpen(true)} disabled={isPending} />
+          <CameraOffState onOpen={() => setCameraOpen(true)} disabled={isPending} pausedMessage={pausedMessage} />
+          {cameraError && onManualEntry && <Button type="button" variant="outline" onClick={onManualEntry}>Manual entry</Button>}
         </div>
       )}
     </div>

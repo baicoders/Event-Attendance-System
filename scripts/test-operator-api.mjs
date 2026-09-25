@@ -46,11 +46,14 @@ try {
   const operator = await prisma.user.create({ data: {
     name: "Operator", email: "issue70-operator@example.test", password: "password-123", status: "ACTIVE",
   } });
+  const admin = await prisma.user.create({ data: {
+    name: "Admin", email: "issue70-admin@example.test", password: "password-123", status: "ACTIVE", role: "ADMIN",
+  } });
   const otherOperators = await Promise.all(Array.from({ length: 4 }, (_, index) => prisma.user.create({ data: {
     name: `Operator ${index + 2}`, email: `issue70-operator-${index + 2}@example.test`,
     password: "password-123", status: "ACTIVE",
   } })));
-  await prisma.student.createMany({ data: Array.from({ length: 500 }, (_, index) => ({
+  await prisma.student.createMany({ data: Array.from({ length: 2_000 }, (_, index) => ({
     id: String(index + 1).padStart(11, "0"), firstName: "Test", lastName: `Student ${index}`,
     schoolLevel: "COLLEGE", yearLevel: "YEAR_1",
   })) });
@@ -60,6 +63,7 @@ try {
     end: new Date(Date.now() + 24 * 60 * 60 * 1000),
   };
   const event = await prisma.event.create({ data: { title: "HTTP contract", ...eventData } });
+  const draft = await prisma.event.create({ data: { title: "Private draft", ...eventData, status: "DRAFT" } });
 
   server = spawn("pnpm", ["start", "--port", String(port)], { env, detached: true, stdio: "ignore" });
   let ready = false;
@@ -74,7 +78,22 @@ try {
 
   const ownerCookie = await login(owner.email);
   const operatorCookie = await login(operator.email);
+  const adminCookie = await login(admin.email);
   const operatorCookies = [operatorCookie, ...await Promise.all(otherOperators.map((user) => login(user.email)))];
+  assert.equal((await request(`/api/students?eventId=${draft.id}`)).response.status, 401);
+  assert.equal((await request(`/api/students?eventId=${draft.id}`, { cookie: ownerCookie })).response.status, 200);
+  assert.equal((await request(`/api/students?eventId=${draft.id}&studentId=00000000001`, { cookie: ownerCookie })).response.status, 200);
+  assert.equal((await request(`/api/students?eventId=${draft.id}`, { cookie: adminCookie })).response.status, 200);
+  assert.equal((await request(`/api/students?eventId=${draft.id}`, { cookie: operatorCookie })).response.status, 403);
+  assert.equal((await request(`/api/students?eventId=${draft.id}&studentId=00000000001`, { cookie: operatorCookie })).response.status, 403);
+  assert.equal((await request(`/api/students?eventId=${event.id}`, { cookie: operatorCookie })).response.status, 200);
+  assert.equal((await request(`/api/students?eventId=${event.id}&studentId=00000000001`, { cookie: operatorCookie })).response.status, 200);
+  assert.equal((await request(`/api/students?eventId=`, { cookie: operatorCookie })).response.status, 400);
+  assert.equal((await request(`/api/students?eventId=&studentId=00000000001`, { cookie: operatorCookie })).response.status, 400);
+  assert.equal((await request(`/api/students`, { cookie: operatorCookie })).response.status, 200);
+  await prisma.user.update({ where: { id: operator.id }, data: { status: "PENDING" } });
+  assert.equal((await request(`/api/students?eventId=${event.id}`, { cookie: operatorCookie })).response.status, 403);
+  await prisma.user.update({ where: { id: operator.id }, data: { status: "ACTIVE" } });
   const input = { eventId: event.id, studentId: "00000000001", method: "SCANNED", expectedMode: "TIME_IN" };
   assert.equal((await request("/api/records", { method: "POST", body: input })).response.status, 401);
   const created = await request("/api/records", { cookie: operatorCookie, method: "POST", body: input });
@@ -150,7 +169,13 @@ try {
   const wallMs = Math.round(performance.now() - started);
   assert.ok(throughput.every(({ response }) => response.status === 201), JSON.stringify(throughput.map(({ response, result }) => [response.status, result])));
   assert.equal(await prisma.record.count({ where: { eventId: throughputEvent.id } }), 5);
-  console.log(`Operator HTTP checks passed: six sessions, mode conflict, actor/method/timestamp, no prior time-in, mode race; five writes in ${wallMs} ms.`);
+  console.log(`Operator HTTP checks passed: seven sessions, event-roster permissions, mode conflict, actor/method/timestamp, no prior time-in, mode race; five writes in ${wallMs} ms.`);
+  if (process.env.MANUAL_BROWSER_TEST === "1") {
+    const browser = spawnSync("python3", ["scripts/test-manual-browser.py", base, throughputEvent.id, owner.email],
+      { env, encoding: "utf8", timeout: 120_000 });
+    assert.equal(browser.status, 0, browser.stderr || browser.stdout);
+    console.log(browser.stdout.trim());
+  }
 } finally {
   if (server?.pid) {
     try { process.kill(-server.pid, "SIGTERM"); } catch { /* Already stopped */ }
