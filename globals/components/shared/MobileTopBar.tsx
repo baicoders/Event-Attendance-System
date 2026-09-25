@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
 
 import { useAuth } from "@/globals/contexts/AuthContext";
@@ -25,7 +26,7 @@ import {
 const MobileTopBar = () => {
   const { user } = useAuth();
   const handleLogout = useLogout();
-  const router = useRouter();
+  const pathname = usePathname();
 
   const initials = (user?.name ?? "Organizer")
     .split(" ")
@@ -71,12 +72,23 @@ const MobileTopBar = () => {
             {user?.name ?? "Organizer"}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => router.push("/settings")}>
-            <Settings />
-            Settings
+          <DropdownMenuItem asChild>
+            <Link
+              href="/settings"
+              aria-current={
+                pathname === "/settings"
+                  ? "page"
+                  : pathname.startsWith("/settings/")
+                    ? "location"
+                    : undefined
+              }
+            >
+              <Settings aria-hidden="true" />
+              Settings
+            </Link>
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={handleLogout}>
-            <LogOut />
+            <LogOut aria-hidden="true" />
             Logout
           </DropdownMenuItem>
         </DropdownMenuContent>

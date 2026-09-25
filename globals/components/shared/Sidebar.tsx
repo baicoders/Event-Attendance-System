@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   CalendarDays,
@@ -18,7 +19,13 @@ import {
 import { useAuth } from "@/globals/contexts/AuthContext";
 import { useSidebar } from "@/globals/contexts/SidebarContext";
 import { useLogout } from "@/globals/hooks/useLogout";
+import { focusRing } from "@/globals/constants/designTokens";
 import { cn } from "@/globals/libs/shad-cn";
+
+const darkFocusRing = cn(
+  focusRing,
+  "focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+);
 
 type NavigationItem = {
   text: string;
@@ -26,11 +33,10 @@ type NavigationItem = {
   route: string;
 };
 
-type NavigationButtonProps = {
+type NavigationLinkProps = {
   item: NavigationItem;
   isExpanded: boolean;
-  active: boolean;
-  onClick: () => void;
+  current?: "page" | "location";
 };
 
 const navigationItems: NavigationItem[] = [
@@ -44,33 +50,29 @@ const navigationItems: NavigationItem[] = [
   { text: "Settings", route: "/settings", icon: Settings },
 ];
 
-const NavigationButton = ({
-  item,
-  isExpanded,
-  active,
-  onClick,
-}: NavigationButtonProps) => {
+const NavigationLink = ({ item, isExpanded, current }: NavigationLinkProps) => {
   const Icon = item.icon;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={item.route}
       className={cn(
         "group flex w-full items-center rounded-xl px-3 py-2.5 transition-all duration-200",
+        darkFocusRing,
         isExpanded ? "gap-3" : "justify-center",
-        active
+        current
           ? "bg-[linear-gradient(90deg,rgba(11,77,255,0.36)_0%,rgba(109,40,217,0.34)_100%)] text-white"
           : "text-slate-300 hover:bg-white/10 hover:text-white"
       )}
-      aria-label={item.text}
-      title={item.text}
+      aria-current={current}
+      aria-label={isExpanded ? undefined : item.text}
+      title={isExpanded ? undefined : item.text}
     >
-      <Icon className="size-5 shrink-0" />
+      <Icon aria-hidden="true" className="size-5 shrink-0" />
       {isExpanded ? (
         <span className="truncate text-sm font-medium">{item.text}</span>
       ) : null}
-    </button>
+    </Link>
   );
 };
 
@@ -80,11 +82,13 @@ const Sidebar = () => {
   const { toggleExpanded, isExpanded } = useSidebar();
   const { user } = useAuth();
   const handleLogout = useLogout();
-  const router = useRouter();
   const pathname = usePathname();
 
-  const isRouteActive = (route: string) =>
-    pathname === route || pathname.startsWith(`${route}/`);
+  const currentRoute = (route: string): "page" | "location" | undefined => {
+    if (pathname === route) return "page";
+    if (pathname.startsWith(`${route}/`)) return "location";
+    return undefined;
+  };
 
   const initials = (user?.name ?? "Organizer")
     .split(" ")
@@ -133,10 +137,13 @@ const Sidebar = () => {
               <button
                 type="button"
                 onClick={toggleExpanded}
-                className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                className={cn(
+                  "rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
+                  darkFocusRing
+                )}
                 aria-label="Collapse sidebar"
               >
-                <ChevronLeft className="size-4" />
+                <ChevronLeft aria-hidden="true" className="size-4" />
               </button>
             </div>
           ) : (
@@ -144,28 +151,26 @@ const Sidebar = () => {
               <button
                 type="button"
                 onClick={toggleExpanded}
-                className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                className={cn(
+                  "rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
+                  darkFocusRing
+                )}
                 aria-label="Expand sidebar"
                 title="Expand sidebar"
               >
-                <Menu className="size-5" />
+                <Menu aria-hidden="true" className="size-5" />
               </button>
             </div>
           )}
         </div>
 
-        <nav className="mt-4 flex-1 space-y-1.5">
+        <nav aria-label="Primary" className="mt-4 flex-1 space-y-1.5">
           {navigationItems.map((item) => (
-            <NavigationButton
+            <NavigationLink
               key={item.route}
               item={item}
               isExpanded={isExpanded}
-              active={isRouteActive(item.route)}
-              onClick={() => {
-                if (!isRouteActive(item.route)) {
-                  router.push(item.route);
-                }
-              }}
+              current={currentRoute(item.route)}
             />
           ))}
         </nav>
@@ -182,9 +187,15 @@ const Sidebar = () => {
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="flex size-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0b4dff_0%,#6d28d9_100%)] text-xs font-semibold text-white">
+              <div
+                aria-hidden="true"
+                className="flex size-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0b4dff_0%,#6d28d9_100%)] text-xs font-semibold text-white"
+              >
                 {initials || "O"}
               </div>
+              <span className="sr-only">
+                {user?.name ?? "Organizer"}, {user?.role ?? "ORGANIZER"}
+              </span>
             </div>
           )}
 
@@ -193,12 +204,13 @@ const Sidebar = () => {
             onClick={handleLogout}
             className={cn(
               "flex w-full items-center rounded-xl bg-red-600 px-3 py-2.5 text-white transition-colors hover:bg-red-700",
+              darkFocusRing,
               isExpanded ? "gap-3" : "justify-center"
             )}
             aria-label="Logout"
             title="Logout"
           >
-            <LogOut className="size-5 shrink-0" />
+            <LogOut aria-hidden="true" className="size-5 shrink-0" />
             {isExpanded ? <span className="text-sm font-medium">Logout</span> : null}
           </button>
         </div>
