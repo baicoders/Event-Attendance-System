@@ -86,6 +86,9 @@ with sync_playwright() as playwright:
     desktop.get_by_role("button", name="Next student").click()
     assert search.input_value() == ""
     assert desktop.evaluate("document.activeElement.id") == "manual-attendance-search"
+    search.fill(student_id)
+    expect(desktop.get_by_role("button", name="Already timed in for Test Student 8, " + student_id)).to_be_disabled()
+    search.fill("")
     desktop.screenshot(path="/tmp/issue-71-desktop.png", full_page=True)
 
     removed_id = "00000000012"
@@ -106,23 +109,26 @@ with sync_playwright() as playwright:
     desktop.wait_for_load_state("networkidle")
     with desktop.expect_response(lambda response: "/api/students?eventId=" in response.url):
         desktop.get_by_role("button", name="Manual entry").click()
-    sheet = desktop.get_by_role("dialog")
-    expect(sheet).to_be_visible()
-    sheet_search = sheet.get_by_label("Search name or student ID")
-    expect(sheet_search).to_be_focused()
-    sheet_search.fill("00000000011")
-    sheet.get_by_role("button", name="Record time in for Test Student 10, 00000000011").click()
-    expect(sheet.get_by_text("Time-in recorded", exact=True)).to_be_visible()
+    panel = desktop.get_by_label("Manual attendance")
+    expect(panel).to_be_visible()
+    assert desktop.locator('[data-slot="sheet-overlay"]').count() == 0, "Desktop manual entry should be inline"
+    panel_search = panel.get_by_label("Search name or student ID")
+    expect(panel_search).to_be_focused()
+    panel_search.fill("00000000011")
+    panel.get_by_role("button", name="Record time in for Test Student 10, 00000000011").click()
+    expect(panel.get_by_text("Time-in recorded", exact=True)).to_be_visible()
     assert writes[-1]["method"] == "MANUAL" and writes[-1]["expectedMode"] == "TIME_IN"
-    sheet.get_by_role("button", name="Next student").click()
-    assert sheet_search.input_value() == ""
-    sheet.get_by_role("button", name="Return to scanner").click()
-    expect(sheet).not_to_be_visible()
+    panel.get_by_role("button", name="Next student").click()
+    assert panel_search.input_value() == ""
+    panel_search.fill("00000000011")
+    expect(panel.get_by_role("button", name="Already timed in for Test Student 10, 00000000011")).to_be_disabled()
+    panel.get_by_role("button", name="Return to scanner").click()
+    expect(panel).not_to_be_visible()
     before_reopen = len(roster_requests)
     with desktop.expect_response(lambda response: "/api/students?eventId=" in response.url):
         desktop.get_by_role("button", name="Manual entry").click()
-    assert len(roster_requests) > before_reopen, "reopening operator Sheet did not refresh roster"
-    desktop.get_by_role("dialog").get_by_role("button", name="Return to scanner").click()
+    assert len(roster_requests) > before_reopen, "reopening operator manual panel did not refresh roster"
+    desktop.get_by_label("Manual attendance").get_by_role("button", name="Return to scanner").click()
 
     scope_calls = {"count": 0}
 
@@ -161,6 +167,6 @@ with sync_playwright() as playwright:
         print("Mobile record responses: " + repr(mobile_record_responses))
         raise
     mobile.screenshot(path="/tmp/issue-71-mobile.png", full_page=True)
-    print("Manual browser checks passed: keyboard selection cannot write, failed status is unknown, explicit row write carries MANUAL + expectedMode, next student restores focus, eligibility rejection and observed scope changes refresh roster, operator Sheet reopening refreshes roster, mobile tap records.")
+    print("Manual browser checks passed: keyboard selection cannot write, failed status is unknown, explicit row write carries MANUAL + expectedMode, next student restores focus, eligibility rejection and observed scope changes refresh roster, desktop operator panel reopening refreshes roster, mobile tap records.")
     print("Chrome headless, 2,000 students: cold roster HTTP " + str(roster_ms) + " ms, " + str(payload_bytes) + " response bytes, 1 initial roster GET; warm input-to-row p95 " + str(p95_ms) + " ms across 25 exact-ID queries (includes Playwright overhead).")
     browser.close()

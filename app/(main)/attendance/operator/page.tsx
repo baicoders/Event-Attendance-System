@@ -45,6 +45,7 @@ function OperatorPageInner() {
   const toggleMode = useToggleTimeoutMode();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [desktopLayout, setDesktopLayout] = useState(false);
   const [manualFocusRequest, setManualFocusRequest] = useState(0);
   const [selection, setSelection] = useState<{ student: Student; eventId: string; viewerId: string } | null>(null);
   const selectedStudent = selection && selection.eventId === selectedEvent?.id && selection.viewerId === user?.id ? selection.student : null;
@@ -55,6 +56,14 @@ function OperatorPageInner() {
   const modeChangingRef = useRef(false);
   const previousMode = useRef<string | null>(null);
   const restoreCamera = useRef(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const updateLayout = () => setDesktopLayout(media.matches);
+    updateLayout();
+    media.addEventListener("change", updateLayout);
+    return () => media.removeEventListener("change", updateLayout);
+  }, []);
 
   useEffect(() => {
     setSelection(null);
@@ -191,6 +200,12 @@ function OperatorPageInner() {
 
   const canChangeMode = user?.role === "ADMIN" || selectedEvent.createdById === user?.id;
   const result = state.lastResult;
+  const manualSection = <ManualAttendanceSection key={selectedEvent.id + ":" + (user?.id ?? "")}
+    selectedEvent={selectedEvent} displayedStudent={selectedStudent} active={manualOpen} inSheet={!desktopLayout}
+    onSelect={(student) => setSelection(student && user ? { student, eventId: selectedEvent.id, viewerId: user.id } : null)}
+    onRecord={recordManual} operationBusy={!captureAllowed}
+    focusRequest={manualFocusRequest} onReturnToScanner={() => closeManual(false)}
+    result={state.lastResult} onAcknowledge={acknowledge} />;
 
   return (
     <section className="mx-auto max-w-7xl space-y-4 p-3 pb-12 sm:p-6">
@@ -217,8 +232,10 @@ function OperatorPageInner() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
         <Scanner onRead={(studentId) => submitAttempt({ studentId, method: "SCANNED" })}
           isPending={capturePaused} eventId={selectedEvent.id} mode={mode} isOpen={cameraOpen}
-          onOpenChange={setCameraOpen} onManualEntry={openManual} large />
-        <div className="space-y-4">
+          onOpenChange={setCameraOpen} onManualEntry={openManual}
+          pausedMessage={manualOpen ? "Scanning paused during manual entry" : undefined} large />
+        <div className="min-w-0 space-y-4">
+          {desktopLayout && manualOpen ? manualSection : <>
           <div aria-live="polite" className={`min-h-48 rounded-xl border p-5 shadow-sm ${result?.outcome === "RECORDED" ? "border-emerald-300 bg-emerald-50" : "bg-white"}`}>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Last result</h2>
             {result ? <>
@@ -235,6 +252,7 @@ function OperatorPageInner() {
             </> : <p className="mt-4 text-slate-600">Open the camera or select a student manually to begin.</p>}
           </div>
           <Button className="w-full py-6 text-lg" variant="outline" onClick={openManual}>Manual entry</Button>
+          </>}
         </div>
       </div>
 
@@ -254,15 +272,10 @@ function OperatorPageInner() {
       </div>
       <Button variant="outline" onClick={exit}>View full attendance / manage records</Button>
 
-      <Sheet open={manualOpen} onOpenChange={closeManual}>
-        <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto rounded-t-2xl p-4 sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:w-[520px] sm:max-w-[520px] sm:rounded-none">
+      <Sheet open={manualOpen && !desktopLayout} onOpenChange={closeManual}>
+        <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto rounded-t-2xl p-4">
           <SheetHeader className="border-b px-0 pb-4 pr-8 pt-1"><SheetTitle>Manual attendance · {selectedEvent.title}</SheetTitle></SheetHeader>
-          <ManualAttendanceSection key={selectedEvent.id + ":" + (user?.id ?? "")}
-            selectedEvent={selectedEvent} displayedStudent={selectedStudent} active={manualOpen} inSheet
-            onSelect={(student) => setSelection(student && user ? { student, eventId: selectedEvent.id, viewerId: user.id } : null)}
-            onRecord={recordManual} operationBusy={!captureAllowed}
-            focusRequest={manualFocusRequest} onReturnToScanner={() => closeManual(false)}
-            result={state.lastResult} onAcknowledge={acknowledge} />
+          {manualSection}
         </SheetContent>
       </Sheet>
     </section>
