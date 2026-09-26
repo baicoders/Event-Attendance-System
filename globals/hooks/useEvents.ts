@@ -36,8 +36,10 @@ export const useSaveEvent = () => {
       });
       return transformEvent(saved);
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.events.all() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
+    },
   });
 };
 
@@ -55,8 +57,10 @@ const useEventAction = (action: "SUBMIT" | "APPROVE" | "REJECT") => {
       });
       return transformEvent(updated);
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.events.all() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
+    },
   });
 };
 
@@ -77,8 +81,10 @@ export const useDeleteEvent = () => {
         method: "DELETE",
       });
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.events.all() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
+    },
   });
 };
 
