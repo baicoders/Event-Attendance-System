@@ -10,6 +10,7 @@ import { respondWithError } from "@/globals/utils/httpError";
 import { flattenStudentGroups } from "@/globals/utils/students";
 import { buildEventStudentFilter } from "@/globals/utils/buildEventStudentFilter";
 import { validateStudentGroupSlugs } from "@/globals/utils/studentGroups";
+import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,33 +52,37 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .map((slug) => ({ id: resolution.slugToId.get(slug as string)! }));
 
-    // We use the student's ID (the 11-character string) as the unique identifier
-    const student = await prisma.student.upsert({
-      where: { id: validatedData.id },
-      update: {
-        firstName: validatedData.firstName,
-        lastName: validatedData.lastName,
-        middleName: validatedData.middleName || null,
-        schoolLevel: validatedData.schoolLevel,
-        yearLevel: validatedData.yearLevel,
-        groups: {
-          set: groupConnectIds, // Replaces old groups with new ones
+    // We use the student's ID (the 11-character string) as the unique identifier.
+    // Single-student roster write freezes eligibility (exclusive form).
+    const student = await prisma.$transaction(async (tx) => {
+      await takeRosterExclusiveLock(tx);
+      return tx.student.upsert({
+        where: { id: validatedData.id },
+        update: {
+          firstName: validatedData.firstName,
+          lastName: validatedData.lastName,
+          middleName: validatedData.middleName || null,
+          schoolLevel: validatedData.schoolLevel,
+          yearLevel: validatedData.yearLevel,
+          groups: {
+            set: groupConnectIds, // Replaces old groups with new ones
+          },
         },
-      },
-      create: {
-        id: validatedData.id,
-        firstName: validatedData.firstName,
-        lastName: validatedData.lastName,
-        middleName: validatedData.middleName || null,
-        schoolLevel: validatedData.schoolLevel,
-        yearLevel: validatedData.yearLevel,
-        groups: {
-          connect: groupConnectIds,
+        create: {
+          id: validatedData.id,
+          firstName: validatedData.firstName,
+          lastName: validatedData.lastName,
+          middleName: validatedData.middleName || null,
+          schoolLevel: validatedData.schoolLevel,
+          yearLevel: validatedData.yearLevel,
+          groups: {
+            connect: groupConnectIds,
+          },
         },
-      },
-      include: {
-        groups: true,
-      },
+        include: {
+          groups: true,
+        },
+      });
     });
 
     return NextResponse.json(ok(student), { status: 200 });

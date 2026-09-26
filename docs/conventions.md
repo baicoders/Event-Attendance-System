@@ -137,25 +137,26 @@ Query patterns actually used, consistently:
 
 ## How do I use a transaction?
 
-Rarely, and the codebase has exactly one non-trivial example:
-`app/api/bulk-import/students/route.ts` uses `prisma.$transaction([...upserts])` (the
-**array form** — a list of already-built Prisma promises, not a callback) so a batch of
-student upserts either all succeed or all roll back.
+Rarely, and the codebase has exactly one bulk-write example:
+`app/api/bulk-import/students/route.ts` runs student upserts in the
+**interactive form** (`prisma.$transaction(async (tx) => { ... })`) with an
+explicit `timeout: 120_000, maxWait: 30_000` and takes the exclusive roster
+advisory lock first (`takeRosterExclusiveLock`), so a 2,000-row import is
+all-or-nothing and serialized against roster edits.
 
-**Know this pattern has a real problem before copying it**: the array form uses
-Prisma's default `timeout`/`maxWait` (5s/2s), which is very likely too short for a
-large batch of relation-heavy upserts — see `audit/data-integrity.md#data-01`. If
-you're adding a new bulk operation, pass an explicit longer `timeout`, or use the
-*interactive* form (`prisma.$transaction(async (tx) => { ... })`) instead, which gives
-you more control and doesn't force the whole batch into one all-or-nothing multi-second
-lock.
+**Know this before copying it**: the explicit timeout/maxWait are load-bearing,
+not generous defaults — the default 5s/2s would roll a full-roster batch back
+(see `audit/data-integrity.md#data-01`). Any new bulk operation needs the same
+explicit budget plus the right roster lock (exclusive if it changes
+membership, shared if it only reads eligibility).
 
-Everywhere else, the codebase deliberately avoids transactions in favor of the
-compare-and-set `updateMany` pattern above, specifically to avoid holding SQLite's
-single-writer lock during a scan burst (`architecture.md` §18). Don't reach for a
+Everywhere else, single-row writes go through the guarded-write protocol
+(compare-and-set `updateMany` inside a short transaction holding the relevant
+advisory/row locks — see `architecture.md` §12), not bare calls. Don't reach for a
 transaction to solve a "don't double-write" problem that a unique constraint plus
 `updateMany(... WHERE column IS NULL)` already solves — that's the established idiom
-here.
+here; the transaction around it exists to linearize concurrent writers, not to
+replace the constraint.
 
 ---
 
@@ -653,11 +654,12 @@ the most instructive):
    Event`/`Student`), `SET NULL` where the relation is informational/audit-only and
    shouldn't cascade-delete anything (`Event/Record → User`), implicit `CASCADE` only
    on pure join tables.
-3. Run `pnpm db:migrate` (wraps `prisma migrate dev`) to generate the migration — don't
-   hand-write migration SQL; every migration in `prisma/migrations/` is generator
-   output (see the `PRAGMA defer_foreign_keys` table-rebuild pattern SQLite's migration
-   engine produces for most schema changes — that's the tool, not something to
-   replicate by hand).
+3. Run `pnpm db:migrate` (wraps `prisma migrate dev`) against PostgreSQL to
+   generate the migration — don't hand-write migration SQL; every migration in
+   `prisma/migrations/` is generator output. (The pre-Postgres SQLite history,
+   with its `PRAGMA defer_foreign_keys` table-rebuild pattern, is archived
+   under `prisma/migrations-sqlite-archive/` and never replayed — that's the
+   old tool's output, not something to replicate by hand).
 4. Add a domain type in `globals/types/` (see the `X`/`XAPI` pairing convention
    above) if the model needs to travel over the wire with date fields.
 5. Add a Zod schema in `globals/schemas/` if it's user-submitted data.
@@ -673,15 +675,14 @@ the most instructive):
 
 ## How do I write a migration?
 
-Don't hand-write one — run `pnpm db:migrate` (`prisma migrate dev`) and let Prisma
-generate it from your `schema.prisma` change. Every one of the 13 existing migrations
-is generator output; several use SQLite's table-rebuild pattern
-(`PRAGMA defer_foreign_keys=ON` → recreate table → copy data → drop/rename → restore
-pragmas) for changes SQLite can't do with a direct `ALTER TABLE`. This is 100%
-SQLite-specific and won't replay against a different database provider — see
-`audit/postgres-migration.md` if that's ever relevant. Name the migration for *what
-changed*, matching the existing style (`add_is_timeout_column_to_events`,
-`remove_section_as_static_field`) — not a ticket number or a date-only name.
+Don't hand-write one — run `pnpm db:migrate` (`prisma migrate dev`) against
+PostgreSQL and let Prisma generate it from your `schema.prisma` change. The
+current history is a single squashed PG baseline; the old SQLite migrations
+live read-only under `prisma/migrations-sqlite-archive/` (see
+`audit/postgres-migration.md` for why they were never replayed). Name the
+migration for *what changed*, matching the existing style
+(`add_is_timeout_column_to_events`, `remove_section_as_static_field`) — not a
+ticket number or a date-only name.
 
 ---
 

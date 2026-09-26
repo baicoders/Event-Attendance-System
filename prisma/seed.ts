@@ -6,24 +6,26 @@ import {
   Group,
 } from "@prisma/client";
 import { faker } from "@faker-js/faker";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 // Derive the school vocabulary from the single source of truth the UI reads,
 // so seeded groups match what the selection boards query (relative import: the
 // seed runs under tsx, and groups.ts has no dependencies of its own).
 import { HOUSES, SHS_STRANDS } from "../globals/constants/groups";
 import { slugify } from "../globals/utils/text";
+import { getMigrationDatabaseUrl, RUNTIME_POOL_TUNING, sslForUrl } from "../globals/libs/dbConfig";
 
-// Fail fast rather than silently seeding a throwaway in-memory database that
-// the app never sees.
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL is not set. Refusing to seed. Set it in .env before running the seed.",
-  );
-}
-
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL,
+// Fail fast rather than silently seeding the wrong database.
+const connectionString = getMigrationDatabaseUrl();
+const ssl = sslForUrl(connectionString);
+const pool = new Pool({
+  connectionString,
+  max: RUNTIME_POOL_TUNING.max,
+  connectionTimeoutMillis: RUNTIME_POOL_TUNING.connectionTimeoutMillis,
+  idleTimeoutMillis: RUNTIME_POOL_TUNING.idleTimeoutMillis,
+  ...(ssl ? { ssl } : {}),
 });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 // Utility functions
@@ -236,4 +238,7 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(async () => await prisma.$disconnect());
+  .finally(async () => {
+    await prisma.$disconnect();
+    await pool.end();
+  });

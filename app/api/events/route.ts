@@ -12,6 +12,7 @@ import {
 import { respondWithError } from "@/globals/utils/httpError";
 import { eventSchema } from "@/globals/schemas";
 import { toDate } from "@/globals/utils/events";
+import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 import { validateEventGroupIds } from "@/globals/utils/eventGroups";
 import {
   AUDIENCE_CHANGE_HAS_RECORDS_CODE,
@@ -125,8 +126,9 @@ export async function POST(req: Request) {
     };
 
     if (payload.id) {
+      const eventId = payload.id;
       const existing = await prisma.event.findUnique({
-        where: { id: payload.id },
+        where: { id: eventId },
         include: { includedGroups: true },
       });
 
@@ -169,32 +171,53 @@ export async function POST(req: Request) {
             }
           : {};
 
-      const updated = await prisma.event.update({
-        where: { id: payload.id },
-        data: {
-          ...baseData,
-          ...rejectionReset,
-          includedGroups: {
-            set: baseData.includedGroups.map((g) => ({ id: g })),
+      // Content mutation (may rescope eligibility): exclusive roster freeze +
+      // FOR UPDATE, with ownership/status rechecked after locking.
+      const updated = await prisma.$transaction(async (tx) => {
+        await takeRosterExclusiveLock(tx);
+        await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+        const fresh = await tx.event.findUnique({
+          where: { id: eventId },
+          include: { includedGroups: true },
+        });
+        if (!fresh) return null;
+        assertEventOwnership(fresh, user);
+        assertEventStatus(fresh, editableStatuses);
+        return tx.event.update({
+          where: { id: eventId },
+          data: {
+            ...baseData,
+            ...rejectionReset,
+            includedGroups: {
+              set: baseData.includedGroups.map((g) => ({ id: g })),
+            },
           },
-        },
+        });
       });
+
+      if (!updated) {
+        return NextResponse.json(ok(null), { status: 404 });
+      }
 
       return NextResponse.json(ok(updated), { status: 200 });
     }
 
     requireRole(user, ["ORGANIZER", "ADMIN"]);
 
-    const created = await prisma.event.create({
-      data: {
-        ...baseData,
-        status: "DRAFT",
-        createdById: user.id,
-        includedGroups: {
-          connect: baseData.includedGroups.map((g) => ({ id: g })),
+    // Creation affects eligibility: exclusive roster freeze for the insert.
+    const created = await prisma.$transaction(async (tx) => {
+      await takeRosterExclusiveLock(tx);
+      return tx.event.create({
+        data: {
+          ...baseData,
+          status: "DRAFT",
+          createdById: user.id,
+          includedGroups: {
+            connect: baseData.includedGroups.map((g) => ({ id: g })),
+          },
         },
-      },
-      include: { includedGroups: true },
+        include: { includedGroups: true },
+      });
     });
 
     return NextResponse.json(ok(created), { status: 201 });
@@ -215,11 +238,30 @@ export async function DELETE(req: Request) {
 
     assertEventOwnership(existing, user);
 
-    const attendanceCount = await prisma.record.count({
-      where: { eventId: existing.id },
+    // Lifecycle write: exclusive roster freeze + FOR UPDATE, with
+    // ownership rechecked and the attendance count taken inside the lock.
+    const outcome = await prisma.$transaction(async (tx) => {
+      await takeRosterExclusiveLock(tx);
+      await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${id} FOR UPDATE`;
+      const fresh = await tx.event.findUnique({ where: { id } });
+      if (!fresh) return "missing" as const;
+      assertEventOwnership(fresh, user);
+
+      const attendanceCount = await tx.record.count({
+        where: { eventId: fresh.id },
+      });
+
+      if (attendanceCount > 0) return "blocked" as const;
+
+      await tx.event.delete({ where: { id } });
+      return "deleted" as const;
     });
 
-    if (attendanceCount > 0) {
+    if (outcome === "missing") {
+      return NextResponse.json(ok(null), { status: 404 });
+    }
+
+    if (outcome === "blocked") {
       return NextResponse.json(
         err(
           "Cannot delete this event because attendance has already been recorded.",
@@ -228,8 +270,6 @@ export async function DELETE(req: Request) {
         { status: 409 },
       );
     }
-
-    await prisma.event.delete({ where: { id } });
 
     return NextResponse.json(ok(null), { status: 200 });
   } catch (error) {

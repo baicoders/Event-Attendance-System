@@ -4,11 +4,11 @@
  * /api/bulk-import/students, then inspect the database to verify the outcome.
  *
  * Requires the app to already be running (production build recommended) against
- * the same database this script inspects:
- *   DATABASE_URL="file:./prisma/benchmark.db" pnpm start
+ * the same PostgreSQL database this script inspects:
+ *   DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/test_benchmark" pnpm start
  *
  * Usage (from repo root):
- *   DB_PATH=prisma/benchmark.db \
+ *   DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/test_benchmark" \
  *   npx tsx scripts/benchmark/http-import-benchmark.ts [fresh|rerun|invalid|all]
  *
  * Scenarios:
@@ -18,12 +18,16 @@
  *           batch (all-or-nothing) and change nothing.
  *   all     fresh, then rerun, then invalid (default).
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import { Pool } from "pg";
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
-const DB_PATH = process.env.DB_PATH ?? "prisma/benchmark.db";
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error("DATABASE_URL is not set. Point it at the PostgreSQL database the app is running against.");
+  process.exit(1);
+}
 const EMAIL = process.env.ADMIN_EMAIL ?? "admin@gmail.com";
 const PASSWORD = process.env.ADMIN_PASSWORD ?? "password";
 
@@ -33,36 +37,27 @@ const roster = JSON.parse(
 
 const scenario = process.argv[2] ?? "all";
 
-if (!existsSync(DB_PATH)) {
-  console.error(`Database not found at ${DB_PATH}`);
-  process.exit(1);
-}
-const db = new Database(DB_PATH, { readonly: true });
+// Read-only snapshots of the PostgreSQL database the app is running against.
+const pool = new Pool({ connectionString: DATABASE_URL, max: 2 });
 
-const dbSnapshot = () => {
-  const students = db
-    .prepare("SELECT COUNT(*) AS n FROM Student")
-    .get() as { n: number };
-  const uniqueIds = db
-    .prepare("SELECT COUNT(DISTINCT id) AS n FROM Student")
-    .get() as { n: number };
-  const joins = db
-    .prepare('SELECT COUNT(*) AS n FROM "_GroupToStudent"')
-    .get() as { n: number };
-  const badJoins = db
-    .prepare(
+async function count(query: string): Promise<number> {
+  const { rows } = await pool.query(query);
+  return Number(rows[0]?.n ?? 0);
+}
+
+const dbSnapshot = async () => {
+  const [students, uniqueIds, joins, badJoins] = await Promise.all([
+    count('SELECT COUNT(*) AS n FROM "Student"'),
+    count('SELECT COUNT(DISTINCT id) AS n FROM "Student"'),
+    count('SELECT COUNT(*) AS n FROM "_GroupToStudent"'),
+    count(
       `SELECT COUNT(*) AS n FROM "_GroupToStudent" j
-       LEFT JOIN Student s ON s.id = j.B
-       LEFT JOIN "Group" g ON g.id = j.A
+       LEFT JOIN "Student" s ON s.id = j."B"
+       LEFT JOIN "Group" g ON g.id = j."A"
        WHERE s.id IS NULL OR g.id IS NULL`,
-    )
-    .get() as { n: number };
-  return {
-    students: students.n,
-    uniqueIds: uniqueIds.n,
-    joins: joins.n,
-    badJoins: badJoins.n,
-  };
+    ),
+  ]);
+  return { students, uniqueIds, joins, badJoins };
 };
 
 async function login() {
@@ -101,9 +96,9 @@ async function postRoster(cookie: string, payload: unknown) {
 }
 
 async function run(label: string, cookie: string, payload: unknown) {
-  const before = dbSnapshot();
+  const before = await dbSnapshot();
   const { status, elapsedMs, body } = await postRoster(cookie, payload);
-  const after = dbSnapshot();
+  const after = await dbSnapshot();
   console.log(`--- ${label} ---`);
   console.log(`  HTTP ${status} in ${(elapsedMs / 1000).toFixed(2)}s`);
   console.log(`  response: ${JSON.stringify(body)}`);
@@ -115,9 +110,9 @@ async function run(label: string, cookie: string, payload: unknown) {
 
 async function main() {
   const cookie = await login();
-  console.log(`Logged in as ${EMAIL} against ${BASE_URL} (db: ${DB_PATH})`);
+  console.log(`Logged in as ${EMAIL} against ${BASE_URL} (db: ${DATABASE_URL})`);
 
-  const before = dbSnapshot();
+  const before = await dbSnapshot();
   console.log(`Baseline: ${JSON.stringify(before)}\n`);
 
   if (scenario === "fresh" || scenario === "all") {
@@ -141,4 +136,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => db.close());
+  .finally(() => pool.end());

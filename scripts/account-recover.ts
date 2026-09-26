@@ -1,5 +1,5 @@
 /**
- * Local no-admin account recovery.
+ * Local no-admin account recovery (PostgreSQL).
  *
  * Usage: pnpm account:recover -- --email <email>
  *
@@ -8,20 +8,21 @@
  * hashes it, increments the credential version, forces a change on next
  * sign-in, and shows the value once on this terminal. Role/status untouched.
  *
- * Safety: requires an explicit DATABASE_URL, refuses a missing database file
- * (never silently creates an empty one), requires a TTY for both confirmation
- * and secret display, and never accepts a caller-supplied password.
+ * Safety: requires explicit DIRECT_URL (or DATABASE_URL) pointing at a
+ * PostgreSQL maintenance target, verifies the target database identity before
+ * any write, requires a TTY for both confirmation and secret display, and
+ * never accepts a caller-supplied password. No second CLI and no second
+ * credentialVersion migration — this is the ported #83 CLI.
  */
 import "dotenv/config";
-import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 
 import { prisma } from "@/globals/libs/prisma";
+import { describeDatabaseUrl, getMigrationDatabaseUrl } from "@/globals/libs/dbConfig";
 import {
   applyAdminPasswordReset,
   generateTemporaryPassword,
+  lockUserRowsForUpdate,
 } from "@/globals/utils/credentials";
 import { hashPassword } from "@/globals/utils/password";
 
@@ -58,20 +59,6 @@ function parseArgs(argv: string[]): { email: string } {
   return { email: normalized };
 }
 
-function resolveDatabaseFile(databaseUrl: string): string {
-  // Only file: URLs are supported by this deployment. Anything else is
-  // refused rather than guessed at.
-  const match = /^file:(.+)$/.exec(databaseUrl.trim());
-  if (!match) {
-    console.error("Refusing: DATABASE_URL must be a file: URL.");
-    process.exit(2);
-  }
-  const raw = match[1];
-  return path.isAbsolute(raw)
-    ? raw
-    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", raw);
-}
-
 function ask(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
@@ -85,16 +72,18 @@ function ask(question: string): Promise<string> {
 async function main() {
   const { email } = parseArgs(process.argv.slice(2));
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.error("Refusing: DATABASE_URL is not set. Nothing was changed.");
-    process.exit(2);
-  }
-  const dbFile = resolveDatabaseFile(databaseUrl);
-  if (!existsSync(dbFile)) {
-    console.error(
-      `Refusing: database file not found at ${dbFile}. Nothing was changed.`,
-    );
+  // Fail closed on missing/non-PostgreSQL maintenance targets. DIRECT_URL is
+  // preferred (non-pooled); DATABASE_URL is the local-dev fallback.
+  const maintenanceUrl = getMigrationDatabaseUrl();
+
+  // Verify the maintenance target identity before any write: confirm we can
+  // connect, the server is PostgreSQL, and the database matches the URL.
+  const identity = await prisma.$queryRaw<Array<{ db: string; ver: string }>>`
+    SELECT current_database() AS db, version() AS ver
+  `;
+  const connectedDb = identity[0]?.db ?? "(unknown)";
+  if (!identity[0]?.ver.toLowerCase().includes("postgresql")) {
+    console.error("Refusing: maintenance target is not PostgreSQL. Nothing was changed.");
     process.exit(2);
   }
 
@@ -131,12 +120,12 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Database: ${dbFile}`);
+  console.log(`Database: ${describeDatabaseUrl(maintenanceUrl)} (connected: ${connectedDb})`);
   console.log(
     `Target: ${target.name} <${target.email}> · ${target.role} · ${target.status} · credentialVersion ${target.credentialVersion}`,
   );
   console.log(
-    "Stop the application and other database writers, and back up the database file before continuing.",
+    "Stop the application and other database writers, and verify a PostgreSQL backup before continuing.",
   );
   console.log("Role and status will not be changed.");
 
@@ -151,10 +140,16 @@ async function main() {
   }
 
   const temporaryPassword = generateTemporaryPassword();
-  const updated = await applyAdminPasswordReset(prisma, {
-    targetId: target.id,
-    expectedCredentialVersion: target.credentialVersion,
-    tempPasswordHash: await hashPassword(temporaryPassword),
+  const tempHash = await hashPassword(temporaryPassword);
+  // Guarded write on the same transaction connection: lock the target row,
+  // then run the conditional reset + winning-generation reread there.
+  const updated = await prisma.$transaction(async (tx) => {
+    await lockUserRowsForUpdate(tx, [target.id]);
+    return applyAdminPasswordReset(tx, {
+      targetId: target.id,
+      expectedCredentialVersion: target.credentialVersion,
+      tempPasswordHash: tempHash,
+    });
   });
 
   if (!updated) {

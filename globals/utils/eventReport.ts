@@ -66,7 +66,7 @@ export type EventReportSnapshot = {
 
 export class ReportAudienceTooLargeError extends Error {}
 
-/** Capture event visibility, current audience and records in one SQLite read transaction. */
+/** Capture event visibility, current audience and records in one PostgreSQL Repeatable Read snapshot. */
 export async function loadAuthorizedEventReportSnapshot(
   eventId: string,
   user: AuthSession,
@@ -97,7 +97,7 @@ export async function loadAuthorizedEventReportSnapshot(
       where: { eventId, student: eligibleFilter },
     });
     return { event, students, records, evaluatedAt: new Date().toISOString() };
-  });
+  }, { isolationLevel: "RepeatableRead" });
 }
 
 const BUCKET_MS = ARRIVAL_BUCKET_MINUTES * 60_000;

@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { createDisposableDatabase } from "./pg-test-db.mjs";
 
-const temp = await mkdtemp(join(tmpdir(), "issue72-progress-api-"));
-const databaseUrl = `file:${join(temp, "test.db")}`;
+const disposable = await createDisposableDatabase("test");
+const databaseUrl = disposable.url;
+const pool = new Pool({ connectionString: databaseUrl, max: 8 });
 const port = 42000 + Math.floor(Math.random() * 10000);
 const base = `http://127.0.0.1:${port}`;
-const env = { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "issue72-progress-test-secret" };
+const env = { ...process.env, DATABASE_URL: databaseUrl, DIRECT_URL: databaseUrl, AUTH_SECRET: "issue72-progress-test-secret" };
 assert.ok(!(process.env.PROGRESS_BROWSER_TEST === "1" && process.env.PROGRESS_BENCHMARK === "1"), "Run browser and benchmark fixtures separately.");
 let server;
 let db;
@@ -30,9 +30,7 @@ async function login(email) {
 }
 
 try {
-  const push = spawnSync("pnpm", ["exec", "prisma", "db", "push"], { env, encoding: "utf8" });
-  assert.equal(push.status, 0, push.stderr || push.stdout);
-  db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: databaseUrl }) });
+  db = new PrismaClient({ adapter: new PrismaPg(pool) });
   const owner = await db.user.create({ data: { name: "Owner", email: "progress-owner@example.test", password: "password-123", status: "ACTIVE" } });
   const viewer = await db.user.create({ data: { name: "Viewer", email: "progress-viewer@example.test", password: "password-123", status: "ACTIVE" } });
   const section = await db.group.create({ data: { name: "Section A", slug: "section-a", category: "SECTION" } });
@@ -143,10 +141,11 @@ try {
     const { readAttendanceProgress } = await import("../globals/utils/attendanceProgressRead.ts");
     const { parseProgressQuery } = await import("../globals/utils/attendanceProgressQuery.ts");
     let queryCount = 0;
-    const metricDb = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: databaseUrl }), log: [{ emit: "event", level: "query" }] });
+    const metricPool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const metricDb = new PrismaClient({ adapter: new PrismaPg(metricPool), log: [{ emit: "event", level: "query" }] });
     metricDb.$on("query", () => { queryCount += 1; });
     try { await readAttendanceProgress(metricDb, event.id, { id: owner.id }, parseProgressQuery(new URLSearchParams("includeRows=1"))); }
-    finally { await metricDb.$disconnect(); }
+    finally { await metricDb.$disconnect(); await metricPool.end(); }
     console.log("Progress 2,000-student benchmark:", JSON.stringify({
       clients: 5, progressRequests: samples.length, responseBytes: samples[0].bytes,
       progressP50Ms: percentile(samples.map((sample) => sample.ms), 0.5),
@@ -162,5 +161,6 @@ try {
 } finally {
   if (server?.pid) { try { process.kill(-server.pid, "SIGTERM"); } catch { /* already stopped */ } }
   await db?.$disconnect();
-  await rm(temp, { recursive: true, force: true });
+  await pool.end();
+  await disposable.cleanup();
 }

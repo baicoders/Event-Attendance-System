@@ -47,7 +47,7 @@ export async function POST(req: Request) {
             groups: { select: { slug: true, category: true } },
           },
         }),
-      { timeout: EXPORT_READ_TIMEOUT_MS, maxWait: 10_000 },
+      { timeout: EXPORT_READ_TIMEOUT_MS, maxWait: 10_000, isolationLevel: "RepeatableRead" },
     );
 
     const found = new Set(students.map((s) => s.id));

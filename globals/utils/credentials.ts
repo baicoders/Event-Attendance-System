@@ -35,6 +35,26 @@ export type CredentialDb = {
   };
 };
 
+export type GuardedTx = CredentialDb & {
+  $queryRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
+  $executeRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
+};
+
+/**
+ * Lock User rows FOR UPDATE in deterministic ID order. Call before any
+ * credential write on PostgreSQL so concurrent resets/changes serialize on
+ * the same rows and the subsequent conditional update + reread observe one
+ * stable generation.
+ */
+export async function lockUserRowsForUpdate(tx: GuardedTx, ids: string[]): Promise<void> {
+  const sorted = [...new Set(ids)].sort();
+  for (const id of sorted) {
+    // Quoted fixed identifiers + parameterized value; one row at a time in
+    // deterministic order avoids deadlocks between concurrent guards.
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`;
+  }
+}
+
 export const PUBLIC_USER_SELECT = {
   id: true,
   name: true,

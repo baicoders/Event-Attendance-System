@@ -22,18 +22,18 @@ in this codebase.
 
 ## The one fact that explains most design decisions
 
-**This runs on a single laptop, on a LAN, backed by one SQLite file, for one week at a
+**This runs on a single laptop, on a LAN, backed by one PostgreSQL 17 database, for one week at a
 time (a school event), with 2,000+ students but only 2–5 concurrent staff users.**
 There is no horizontal scaling, no server cluster, no managed database. Decisions that
-look under-engineered from a "normal SaaS" lens (in-process rate limiting, no
-connection pooling, console-only logging) are deliberate for this scale, not oversights
+look under-engineered from a "normal SaaS" lens (in-process rate limiting, one bounded
+`pg` pool per process, console-only logging) are deliberate for this scale, not oversights
 — see `architecture.md` §15–16 for the full list of accepted simplifications. Don't
 "fix" these without understanding this is the intended deployment shape.
 
 ## Stack
 
 Next.js 15 (App Router, Turbopack) + React 19, Prisma 7 with the
-`@prisma/adapter-better-sqlite3` driver adapter (not the classic engine), SQLite,
+`@prisma/adapter-pg` driver adapter (not the classic engine), PostgreSQL 17,
 custom HMAC-signed cookie auth (no NextAuth/Clerk/etc.), TanStack Query v5 + TanStack
 Table v8, react-hook-form + Zod v4, shadcn/Radix UI components, FullCalendar,
 `@yudiel/react-qr-scanner` + `react-qr-code`.

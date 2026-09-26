@@ -41,7 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
-prisma/migrations/migration_lock.toml
-prisma/dev.db
-prisma/*.db
-dev.db
+
+# Local SQLite scratch artifacts only (retention copies, never a runtime
+# database — PostgreSQL is the only provider). Kept out of version control.
+*.db
+*.db-journal

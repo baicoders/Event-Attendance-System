@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { StudentFormValues } from "@/globals/schemas/studentSchema";
+import { takeRosterExclusiveLock } from "./pgLocks";
 import { flattenStudentGroups } from "./students";
 import { studentEditVersion } from "./studentDetail";
 import { hasAmbiguousStudentGroups } from "./studentGroupReview";
@@ -9,6 +10,8 @@ export type StudentEditRequest = { expectedVersion: string; student: StudentForm
 
 export async function updateStudentDetail(db: PrismaClient, id: string, request: StudentEditRequest) {
   return db.$transaction(async tx => {
+    // Single-student roster edit freezes eligibility (exclusive form).
+    await takeRosterExclusiveLock(tx);
     if (request.principalId) {
       const principal = await tx.user.findUnique({ where: { id: request.principalId }, select: { status: true } });
       if (principal?.status !== "ACTIVE") return { kind: "forbidden" as const };

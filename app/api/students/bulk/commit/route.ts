@@ -14,6 +14,7 @@ import {
 } from "@/globals/utils/studentBulk";
 import { reviewFingerprint } from "@/globals/utils/studentContentVersion";
 import { projectStudentContent, contentVersion } from "@/globals/utils/studentContentVersion";
+import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 
 const COMMIT_TIMEOUT_MS = 30_000;
 const COMMIT_MAX_WAIT_MS = 10_000;
@@ -45,6 +46,8 @@ export async function POST(req: Request) {
     try {
       const result = await prisma.$transaction(
         async (tx) => {
+          // Bulk membership replacement freezes eligibility (exclusive form).
+          await takeRosterExclusiveLock(tx);
           const target = await tx.group.findUnique({
             where: { id: token.targetId },
             select: { id: true, slug: true, name: true, category: true },

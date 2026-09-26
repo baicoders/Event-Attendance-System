@@ -1,6 +1,6 @@
 /** Disposable bulk-actions API fixture. Run after `pnpm build` with `node scripts/test-student-bulk.mjs`. */
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -9,12 +9,16 @@ import { setTimeout as delay } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
 import { createHmac } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { createDisposableDatabase } from "./pg-test-db.mjs";
 
+const disposable = await createDisposableDatabase("test");
+const dbUrl = disposable.url;
+const pool = new Pool({ connectionString: dbUrl, max: 8 });
 const scratch = mkdtempSync(join(tmpdir(), "student-bulk-"));
-const dbUrl = `file:${join(scratch, "bulk.db")}`;
 const AUTH_SECRET = "student-bulk-disposable-test-secret-123";
-const env = { ...process.env, DATABASE_URL: dbUrl, AUTH_SECRET, NODE_ENV: "production" };
+const env = { ...process.env, DATABASE_URL: dbUrl, DIRECT_URL: dbUrl, AUTH_SECRET, NODE_ENV: "production" };
 let server;
 let prisma;
 let prisma2;
@@ -145,9 +149,8 @@ async function browserCheck(cookie) {
 }
 
 try {
-  execFileSync("npx", ["prisma", "migrate", "deploy"], { env, stdio: "pipe" });
-  prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: dbUrl }) });
-  prisma2 = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: dbUrl }) });
+  prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+  prisma2 = new PrismaClient({ adapter: new PrismaPg(pool) });
 
   await prisma.user.createMany({
     data: [
@@ -428,6 +431,8 @@ try {
   }
   await prisma?.$disconnect();
   await prisma2?.$disconnect();
+  await pool.end();
+  await disposable.cleanup();
   await delay(500);
   try {
     rmSync(scratch, { recursive: true, force: true });

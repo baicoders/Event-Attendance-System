@@ -9,7 +9,7 @@ time-out tracking.
 ## Stack
 
 - Next.js (App Router) + TypeScript
-- Prisma ORM over SQLite (`better-sqlite3` driver adapter)
+- Prisma ORM over PostgreSQL 17 (`@prisma/adapter-pg` + `pg`, one bounded pool per process)
 - TanStack Query + Table, shadcn/ui, FullCalendar
 
 ## Setup
@@ -18,23 +18,28 @@ time-out tracking.
 # 1. Install dependencies (pnpm via corepack)
 corepack pnpm install
 
-# 2. Environment - create .env in the project root:
-#    DATABASE_URL="file:./dev.db"
+# 2. Start PostgreSQL 17 (Docker) or point at any PostgreSQL 17 (UTF-8, UTC):
+docker compose up -d db
+
+# 3. Environment - copy .env.example to .env and set values:
+#    DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5433/event_attendance_dev"
+#    DIRECT_URL="postgresql://postgres:postgres@127.0.0.1:5433/event_attendance_dev"
+#    TEST_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5433/postgres"
 #    AUTH_SECRET="<random string, 16+ chars - sign-in cookies are HMAC-signed with this>"
 #    Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-# 3. Create the database
+# 4. Create the database
 corepack pnpm db:migrate    # or: pnpm db:push for a quick sync
 
-# 4. (Optional) Seed sample data - WIPES all tables
+# 5. (Optional) Seed sample data - WIPES all tables
 corepack pnpm db:seed
 
-# 5. Run
+# 6. Run
 corepack pnpm dev
 ```
 
-The app refuses to boot without `DATABASE_URL`, and refuses to boot in
-production without a real `AUTH_SECRET`.
+The app refuses to boot without PostgreSQL `DATABASE_URL`/`DIRECT_URL`, and refuses to boot in
+production without a real `AUTH_SECRET`. SQLite/file: URLs are refused everywhere.
 
 ## Seeded test accounts
 
@@ -76,8 +81,9 @@ Plus sample students, events, and attendance records.
 
 ## Deployment notes
 
-- Set `DATABASE_URL` and a strong `AUTH_SECRET`; run `prisma migrate deploy`.
-- The SQLite file is the single source of truth - back it up.
+- Set PostgreSQL `DATABASE_URL` (runtime/pooled role) + `DIRECT_URL` (migration/direct role) and a strong `AUTH_SECRET`; run `prisma migrate deploy` (never `migrate dev`/`db push`/`migrate reset` against staging/production).
+- PostgreSQL is the single source of truth - verify `pg_dump`/`pg_restore` into a separate rehearsal database before cutover. The old SQLite history is archived under `prisma/migrations-sqlite-archive/` (forensic only, never replayed).
+- Data initialization is one explicit mode: FRESH_START (empty target + approved roster import) or PRESERVE_SOURCE (frozen source, validated transfer, reconciled counts/hashes). Never delete the source artifact by assumption; never migrate demo/faker data or known passwords.
 - Rate limiting is in-memory (single instance); use a shared store if you
   ever scale horizontally.
 - Password recovery is admin-assisted: Settings → Users → Reset password

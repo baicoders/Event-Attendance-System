@@ -101,7 +101,7 @@ export async function resetUserPasswordApi(
 
 export type SystemInfo = {
   nodeEnv: string;
-  databaseFile: string;
+  database: { database: string; serverVersion: string };
   authSecret: {
     configured: boolean;
     meetsMinLength: boolean;

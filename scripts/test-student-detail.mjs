@@ -1,17 +1,21 @@
 /** Disposable production API/browser fixture. Run after build. */
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { createDisposableDatabase } from "./pg-test-db.mjs";
 
+const disposable = await createDisposableDatabase("test");
+const dbUrl = disposable.url;
+const pool = new Pool({ connectionString: dbUrl, max: 8 });
 const scratch = mkdtempSync(join(tmpdir(), "student-detail-"));
-const dbUrl = `file:${join(scratch, "detail.db")}`;
-const env = { ...process.env, DATABASE_URL: dbUrl, AUTH_SECRET: "student-detail-disposable-secret", NODE_ENV: "production" };
+const env = { ...process.env, DATABASE_URL: dbUrl, DIRECT_URL: dbUrl, AUTH_SECRET: "student-detail-disposable-secret", NODE_ENV: "production" };
 const port = await new Promise(resolve => { const server = createServer(); server.listen(0, "127.0.0.1", () => { const value = server.address().port; server.close(() => resolve(value)); }); });
 const origin = `http://127.0.0.1:${port}`;
 let server;
@@ -134,8 +138,7 @@ async function browserCheck(cookie) {
 }
 
 try {
-  execFileSync("pnpm", ["exec", "prisma", "migrate", "deploy"], { env, stdio: "pipe" });
-  db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: dbUrl }) });
+  db = new PrismaClient({ adapter: new PrismaPg(pool) });
   await db.user.create({ data: { id: "admin", name: "Admin", email: "admin@example.test", password: "fixture-password-123", role: "ADMIN", status: "ACTIVE" } });
   await db.user.create({ data: { id: "inactive", name: "Inactive", email: "inactive@example.test", password: "fixture-password-123", role: "ORGANIZER", status: "ACTIVE" } });
   for (const [id, name, slug, category] of [["sec", "Section A", "sec-a", "SECTION"], ["sec-b", "Section B", "sec-b", "SECTION"], ["house", "Azul", "azul", "HOUSE"], ["dept", "Computer Studies", "cs", "DEPARTMENT"], ["program", "BSIT", "bsit", "PROGRAM"]])
@@ -200,6 +203,8 @@ try {
   if (server?.pid) { try { process.kill(-server.pid, "SIGTERM"); } catch {} }
   if (chrome?.pid) { try { process.kill(-chrome.pid, "SIGTERM"); } catch {} }
   await db?.$disconnect();
+  await pool.end();
+  await disposable.cleanup();
   await delay(500);
   rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }

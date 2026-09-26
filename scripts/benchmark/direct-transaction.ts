@@ -3,21 +3,22 @@
  *
  * Replicates exactly what app/api/bulk-import/students/route.ts does (the array
  * form of `prisma.$transaction([...upserts])` with `groups.set/connect`) against
- * a real SQLite file, with query logging and a stopwatch, so we can answer the
+ * a real PostgreSQL database, with query logging and a stopwatch, so we can answer the
  * two questions the issue hinges on:
  *
  *   1. How many SQL statements does a full-size roster actually generate?
- *   2. Does the 5s default transaction timeout actually fire for the
- *      synchronous better-sqlite3 adapter, or does the batch run to completion?
+ *   2. Does the configured transaction timeout actually fire for the
+ *      pooled pg adapter, or does the batch run to completion?
  *
  * Usage (run from repo root, against a scratch DB):
- *   DATABASE_URL="file:./prisma/benchmark.db" npx tsx scripts/benchmark/direct-transaction.ts
+ *   DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/test_benchmark" npx tsx scripts/benchmark/direct-transaction.ts
  *
  * The DB it writes to must already contain the seeded group vocabulary (run the
- * normal seed once on a scratch file first). It does not create or delete groups.
+ * normal seed once on a scratch database first). It does not create or delete groups.
  */
 import { Prisma, PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -50,7 +51,8 @@ const FIELD_CATEGORY = {
   strand: "STRAND",
 } as const;
 
-const adapter = new PrismaBetterSqlite3({ url: DB_URL });
+const pool = new Pool({ connectionString: DB_URL, max: 10 });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({
   adapter,
   log: ["query"],
@@ -119,7 +121,7 @@ async function main() {
 
   const total = await prisma.student.count();
   const uniqueIds = await prisma.student.findMany({ select: { id: true } });
-  const joinCount = await prisma.$queryRaw<{ n: number }[]>(
+  const joinCount = await prisma.$queryRaw<{ n: bigint }[]>(
     Prisma.sql`SELECT COUNT(*) AS n FROM "_GroupToStudent"`,
   );
 
@@ -133,6 +135,7 @@ async function main() {
   console.log(`Outcome: SUCCESS (reached here, so no timeout rolled the batch back)`);
 
   await prisma.$disconnect();
+  await pool.end();
 }
 
 const t0 = performance.now();
@@ -145,4 +148,5 @@ main().catch(async (e) => {
   );
   process.exitCode = 1;
   await prisma.$disconnect();
+  await pool.end();
 });

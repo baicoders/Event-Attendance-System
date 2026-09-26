@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword } from "@/globals/utils/password";
 import {
   applyAdminPasswordReset,
   generateTemporaryPassword,
+  lockUserRowsForUpdate,
 } from "@/globals/utils/credentials";
 import { rateLimit } from "@/globals/utils/rateLimit";
 
@@ -129,32 +130,37 @@ export async function PATCH(
     // Hash outside the write so the conditional update below stays short.
     const tempHash = await hashPassword(temporaryPassword);
 
-    // Recheck the actor inside the short write window: role/status/flag and
-    // generation must still hold, or there is no target write.
-    const freshAdmin = await prisma.user.findUnique({
-      where: { id: admin.id },
-      select: {
-        role: true,
-        status: true,
-        mustChangePassword: true,
-        credentialVersion: true,
-      },
-    });
+    // Guarded PostgreSQL reset: lock admin + target rows FOR UPDATE in
+    // deterministic order, recheck current administrator authorization inside
+    // the same boundary, then run the conditional reset + winning-generation
+    // reread on that same transaction connection.
+    const updated = await prisma.$transaction(async (tx) => {
+      await lockUserRowsForUpdate(tx, [admin.id, target.id]);
+      const freshAdmin = await tx.user.findUnique({
+        where: { id: admin.id },
+        select: {
+          role: true,
+          status: true,
+          mustChangePassword: true,
+          credentialVersion: true,
+        },
+      });
 
-    if (
-      !freshAdmin ||
-      freshAdmin.role !== "ADMIN" ||
-      freshAdmin.status !== "ACTIVE" ||
-      freshAdmin.mustChangePassword ||
-      freshAdmin.credentialVersion !== admin.credentialVersion
-    ) {
-      throw new AuthError("Forbidden", 403, "FORBIDDEN");
-    }
+      if (
+        !freshAdmin ||
+        freshAdmin.role !== "ADMIN" ||
+        freshAdmin.status !== "ACTIVE" ||
+        freshAdmin.mustChangePassword ||
+        freshAdmin.credentialVersion !== admin.credentialVersion
+      ) {
+        throw new AuthError("Forbidden", 403, "FORBIDDEN");
+      }
 
-    const updated = await applyAdminPasswordReset(prisma, {
-      targetId: target.id,
-      expectedCredentialVersion: target.credentialVersion,
-      tempPasswordHash: tempHash,
+      return applyAdminPasswordReset(tx, {
+        targetId: target.id,
+        expectedCredentialVersion: target.credentialVersion,
+        tempPasswordHash: tempHash,
+      });
     });
 
     if (!updated) {

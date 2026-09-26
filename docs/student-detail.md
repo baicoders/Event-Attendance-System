@@ -29,4 +29,4 @@ The existing POST upsert stays available to roster/import callers. PATCH protect
 
 ## Verification
 
-Run `DATABASE_URL=file:/tmp/student-detail-test.db node --import tsx --test globals/utils/studentDetail.test.ts globals/utils/studentEdit.test.ts` for content and real-adapter transaction tests. After `pnpm build`, run `node scripts/test-student-detail.mjs --browser` for disposable production API and Chrome checks. The fixture creates its own temporary SQLite database and removes it afterward.
+Run `TEST_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5433/postgres" node --import tsx --test globals/utils/studentDetail.test.ts globals/utils/studentEdit.test.ts` for content and real-adapter transaction tests. After `pnpm build`, run `node scripts/test-student-detail.mjs --browser` for disposable production API and Chrome checks. The fixture provisions its own disposable PostgreSQL database (real migrations + production adapter) and drops it afterward.

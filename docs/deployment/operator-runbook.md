@@ -22,16 +22,69 @@ pnpm db:studio        # opens http://localhost:5555
 ## 1. Back up the database
 
 **Do this before anything else in this document, and every few hours during the
-event.** Everything is in one SQLite file.
+event.** The system of record is the PostgreSQL database `DATABASE_URL` points
+at — not a file on the laptop. Back it up with `pg_dump`, using the
+administrative connection string (`DIRECT_URL` when set, otherwise
+`DATABASE_URL`). These are standard PostgreSQL tools and work the same whether
+the database is self-hosted or managed.
 
 ```bash
-# With the server stopped, or at a quiet moment:
-cp prisma/dev.db "backups/dev-$(date +%Y%m%d-%H%M).db"
+mkdir -p backups
+pg_dump --format=custom --file="backups/eas-$(date +%Y%m%d-%H%M).dump" "$DIRECT_URL"
 ```
 
-To restore: stop the server, copy a backup back over `prisma/dev.db`, restart.
+`pg_dump` reads consistently without stopping the server, but prefer a quiet
+moment anyway.
 
 There is no in-app equivalent. This one is always manual.
+
+### Restore — into a rehearsal database, never over the live one
+
+Never restore a dump over the live event database during the event. Prove a
+backup works by restoring it into a separate database:
+
+```bash
+# 1. Create an empty rehearsal database on the same server
+psql "$DIRECT_URL" -c "CREATE DATABASE eas_rehearsal;"
+
+# 2. Restore into it: the same connection string with only
+#    the database name changed to eas_rehearsal
+pg_restore --dbname="<DIRECT_URL-with-eas_rehearsal>" "backups/eas-<timestamp>.dump"
+
+# 3. Compare row counts against the live database
+psql "<DIRECT_URL-with-eas_rehearsal>" -c 'SELECT (SELECT COUNT(*) FROM "Student") AS students, (SELECT COUNT(*) FROM "Record") AS records, (SELECT COUNT(*) FROM "Event") AS events;'
+```
+
+Only promote a rehearsal database to live outside event hours, with the server
+stopped, after taking a fresh `pg_dump` of the live database first. Drop the
+rehearsal database when done (`DROP DATABASE eas_rehearsal;`).
+
+### Before reopening service: verify, rotate, smoke-check
+
+1. **Role** — confirm which role the app connects as and that it reaches the
+   expected database:
+
+   ```bash
+   psql "$DATABASE_URL" -c "SELECT current_user, current_database();"
+   ```
+
+   The runtime role must not be a superuser and must differ from the
+   migration/owner role behind `DIRECT_URL`. Migrations must never run through
+   a transaction pooler — `DIRECT_URL` is always the direct endpoint.
+2. **TLS** — if the database is reached over a network (another host or a
+   managed service), the connection string must verify certificates
+   (`sslmode=verify-full`). Never accept `sslmode=disable` to "fix" a
+   connection failure. Connections to the local machine do not need TLS.
+3. **Pool** — the app opens up to 8 connections per process. Confirm the
+   database (or pooler, if one sits in front of it) allows at least that many
+   for the runtime role.
+4. **Session secret** — if a restored backup reinstates old credentials, or the
+   secret may have leaked, set a new `AUTH_SECRET` (≥16 random characters) and
+   restart. Every session cookie is invalidated; everyone signs in again.
+5. **Smoke checks** — Settings → System shows the expected database name and
+   PostgreSQL version and reports `AUTH_SECRET` as configured; sign in as an
+   admin and as an organizer; open the attendance page for an approved event
+   and confirm records load.
 
 ---
 
@@ -155,7 +208,7 @@ Most often `AUTH_SECRET` is unset in a production build. The error message says
 "database", but the cause is configuration.
 
 1. Check `Settings → System` if you can still reach it — it reports whether
-   `AUTH_SECRET` is set and long enough, and which database file is in use.
+   `AUTH_SECRET` is set and long enough, and which database is in use.
 2. Otherwise, in `.env`:
 
    ```
