@@ -34,7 +34,9 @@ export const useCreateRecord = (_eventId: string) => {
     /** Re-sync server state after success */
     onSuccess: (data, input) => {
       const eventId = input.eventId;
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.reviewPrefix(eventId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.historyPrefix(eventId, data.studentId) });
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({
@@ -85,72 +87,9 @@ export const useUpdateAttendanceRecord = (eventId: string) => {
     /** Re-sync server state after success */
     onSuccess: (data) => {
       const affectedEventId = data.eventId;
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
-      // Prefix invalidation so BOTH the live present-only table and the
-      // includeAbsent report variant refresh (not just the exact false key).
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.records.fromEventPrefix(affectedEventId),
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.records.fromEventForStudent(affectedEventId, data.studentId),
-        exact: true,
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.events.statsFromEvent(affectedEventId),
-        exact: true,
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.events.progressPrefix(affectedEventId) });
-    },
-  });
-};
-
-/**
- * Deletes a single attendance record.
- *
- * Uses optimistic removal so the row disappears instantly.
- */
-export const useDeleteRecord = (eventId: string) => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => {
-      return fetchApi<Record>(`/api/records/${id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-      });
-    },
-
-    onMutate: async (recordId) => {
-      const key = queryKeys.records.fromEvent(eventId);
-
-      await queryClient.cancelQueries({ queryKey: key });
-
-      const previousRecords =
-        queryClient.getQueryData<StudentAttendanceRecord[]>(key);
-
-      // Optimistically remove record from cache
-      if (previousRecords) {
-        queryClient.setQueryData(
-          key,
-          previousRecords.filter((record) => record.id !== recordId),
-        );
-      }
-
-      return { previousRecords };
-    },
-
-    onError: (_err, _vars, context) => {
-      const key = queryKeys.records.fromEvent(eventId);
-      if (context?.previousRecords) {
-        queryClient.setQueryData(key, context.previousRecords);
-      }
-    },
-
-    onSuccess: (data) => {
-      const affectedEventId = data.eventId;
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.reviewPrefix(affectedEventId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.historyPrefix(affectedEventId, data.studentId) });
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({

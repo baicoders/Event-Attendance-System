@@ -16,7 +16,7 @@ parentPort?.on("message", async (request: {
     if (request.kind === "guarded") {
       await recordAttendance(db, {
         eventId: request.eventId, studentId: request.studentId, method: "SCANNED", expectedMode: "TIME_IN",
-      }, { id: request.userId, role: "ORGANIZER" });
+      }, { id: request.userId, role: "ORGANIZER", credentialVersion: 0 });
     } else {
       // Proxy for the pre-guard route's read/read/create path on a fresh,
       // approved ALL event with distinct eligible students.

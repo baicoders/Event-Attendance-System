@@ -21,6 +21,7 @@ model Event {
   // Relations
   includedGroups Group[]  @relation("EventGroups")
   records        Record[]
+  attendanceChanges AttendanceChange[]
 
   createdById     String?
   createdBy       User?     @relation("EventCreator", fields: [createdById], references: [id])
@@ -50,6 +51,7 @@ model Student {
   // Relations: Students can belong to multiple groups (House, Strand, etc.)
   groups  Group[]
   records Record[]
+  attendanceChanges AttendanceChange[]
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -69,8 +71,9 @@ model Record {
   studentId String
   student   Student          @relation(fields: [studentId], references: [id])
   method    AttendanceMethod
-  timein    DateTime? @db.Timestamptz(3)
-  timeout   DateTime? @db.Timestamptz(3)
+  timein    DateTime?        @db.Timestamptz(3)
+  timeout   DateTime?        @db.Timestamptz(3)
+  revision  Int              @default(0)
 
   // Audit trail: who created the record and who last touched it
   recordedById     String?
@@ -82,6 +85,35 @@ model Record {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([eventId, studentId])
+}
+
+model AttendanceChange {
+  id             BigInt   @id @default(autoincrement())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  recordId       String
+  action         AttendanceChangeAction
+  actorId        String?
+  actorName      String?
+  eventTitle     String
+  studentLabel   String
+  reason         String?
+  before         Json?    @db.JsonB
+  after          Json?    @db.JsonB
+  commandId      String?
+  commandHash    String?
+  sourceChangeId BigInt?
+  sourceChange   AttendanceChange? @relation("RestoredFromVoid", fields: [sourceChangeId], references: [id], onDelete: Restrict)
+  restorations   AttendanceChange[] @relation("RestoredFromVoid")
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([actorId, commandId])
+  @@index([eventId, studentId, id])
+  @@index([eventId, id])
+  @@index([studentId, id])
+  @@index([recordId])
 }
 
 model User {
@@ -145,6 +177,15 @@ enum EventStatus {
 enum AttendanceMethod {
   MANUAL
   SCANNED
+}
+
+enum AttendanceChangeAction {
+  CREATE
+  TIME_IN
+  TIME_OUT
+  CORRECT
+  VOID
+  RESTORE
 }
 
 enum YearLevel {

@@ -77,6 +77,7 @@ async function main() {
 
   console.log("Seeding database...");
 
+  await prisma.attendanceChange.deleteMany();
   await prisma.record.deleteMany();
   await prisma.event.deleteMany();
   await prisma.student.deleteMany();

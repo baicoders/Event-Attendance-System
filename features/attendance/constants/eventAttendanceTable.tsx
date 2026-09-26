@@ -1,10 +1,7 @@
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { StudentAttendanceRecord } from "@/globals/types/students";
 import { Button } from "@/globals/components/shad-cn/button";
-import {
-  useDeleteRecord,
-  useUpdateAttendanceRecord,
-} from "@/globals/hooks/useRecords";
+import { useUpdateAttendanceRecord } from "@/globals/hooks/useRecords";
 import {
   toastDanger,
   toastSuccess,
@@ -12,8 +9,8 @@ import {
 } from "@/globals/components/shared/toasts";
 import { ArrowUpDown } from "lucide-react";
 import { ATTENDANCE_STATUS_ICONS } from "@/features/attendance/constants/attendanceStatus";
-import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 import { Group } from "@prisma/client";
+import Link from "next/link";
 
 function ActionsCell({
   row,
@@ -23,11 +20,8 @@ function ActionsCell({
   canManage: boolean;
 }) {
   const { id: recordId, eventId, studentId } = row.original;
-  const { mutateAsync: deleteRecord, isPending: isDeleting } =
-    useDeleteRecord(eventId);
   const { mutateAsync: recordAttendance, isPending: isUpdating } =
     useUpdateAttendanceRecord(eventId);
-  const confirm = useConfirm();
 
   const handleRecordAttendance = async () => {
     try {
@@ -38,31 +32,12 @@ function ActionsCell({
       } else {
         toastWarning("Attendance was already completed for this student.");
       }
-    } catch (error) {
+    } catch {
       toastDanger(`Failed to update: ${studentId}`);
     }
   };
 
-  const handleDelete = async () => {
-    if (!recordId) return;
-
-    const confirmed = await confirm({
-      title: "Mark as absent?",
-      description:
-        "This removes the student record from this event. This is an irreversable action.",
-    });
-
-    if (!confirmed) return;
-
-    try {
-      await deleteRecord(recordId);
-      toastSuccess("Record removed");
-    } catch (error) {
-      toastDanger(`Failed to delete: ${studentId}`);
-    }
-  };
-
-  const isLoading = isDeleting || isUpdating;
+  const isLoading = isUpdating;
 
   // Deleting a record requires event ownership (server-enforced); recording
   // attendance does not. Hide the delete control when the user can't manage.
@@ -75,18 +50,6 @@ function ActionsCell({
       disabled: isLoading,
       title: "Record attendance",
     },
-    ...(canManage
-      ? [
-          {
-            id: "absent",
-            icon: ATTENDANCE_STATUS_ICONS.absent,
-            color: "text-red-400",
-            handler: handleDelete,
-            disabled: isLoading || !recordId,
-            title: "Mark as Absent (Delete Record)",
-          },
-        ]
-      : []),
   ];
 
   return (
@@ -104,6 +67,12 @@ function ActionsCell({
           <Icon className={`w-5 h-5 ${color}`} />
         </button>
       ))}
+      {canManage && recordId && <Link
+        href={`/attendance/corrections?eventId=${encodeURIComponent(eventId)}&studentId=${encodeURIComponent(studentId)}`}
+        title="Review or correct attendance"
+        className="rounded-md px-2 py-1 text-sm font-medium text-slate-700 underline hover:text-slate-950">
+        Review
+      </Link>}
     </div>
   );
 }

@@ -89,7 +89,7 @@ export async function DELETE(
     const blocked = await prisma.$transaction(async (tx) => {
       await takeRosterExclusiveLock(tx);
       const attendanceCount = await tx.record.count({ where: { studentId: id } });
-      if (attendanceCount > 0) return true;
+      if (attendanceCount > 0 || await tx.attendanceChange.count({ where: { studentId: id } })) return true;
       await tx.student.delete({ where: { id } });
       return false;
     });

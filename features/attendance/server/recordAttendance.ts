@@ -5,6 +5,7 @@ import {
   takeRosterSharedLock,
 } from "@/globals/utils/pgLocks";
 import { isRetryableTransactionError } from "@/globals/utils/prismaError";
+import { appendAttendanceChange } from "./attendanceChange";
 
 export type AttendanceMode = "TIME_IN" | "TIME_OUT";
 
@@ -15,7 +16,7 @@ export type RecordAttendanceInput = {
   expectedMode?: AttendanceMode;
 };
 
-type Actor = { id: string; role: "ADMIN" | "ORGANIZER" };
+type Actor = { id: string; role: "ADMIN" | "ORGANIZER"; credentialVersion: number };
 
 export class RecordingError extends Error {
   constructor(message: string, public status: number, public code: string) {
@@ -58,6 +59,11 @@ export async function recordAttendance(
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       return await db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} FOR SHARE`;
+        const freshActor = await tx.user.findUnique({ where: { id: actor.id }, select: { id: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
+        if (!freshActor || freshActor.status !== "ACTIVE" || freshActor.mustChangePassword || freshActor.credentialVersion !== actor.credentialVersion) {
+          throw new RecordingError("Unauthorized", 401, "UNAUTHORIZED");
+        }
         await takeRosterSharedLock(tx);
         // Quoted fixed identifiers + parameterized value; re-reads below are
         // authoritative after the lock is held.
@@ -67,7 +73,7 @@ export async function recordAttendance(
           include: { includedGroups: true },
         });
         if (!event) throw new RecordingError("Cannot create record with no event attached.", 404, "EVENT_NOT_FOUND");
-        if (actor.role !== "ADMIN" && event.createdById !== actor.id && event.status !== "APPROVED") {
+        if (freshActor.role !== "ADMIN" && event.createdById !== actor.id && event.status !== "APPROVED") {
           throw new RecordingError("Forbidden", 403, "FORBIDDEN");
         }
         if (event.status !== "APPROVED") throw new RecordingError("Invalid event status", 409, "INVALID_STATUS");
@@ -92,29 +98,33 @@ export async function recordAttendance(
         if (operation === "TIME_OUT") {
           if (!existing) {
             const record = await tx.record.create({
-              data: { eventId, studentId, method, timeout: now, recordedById: actor.id },
+              data: { eventId, studentId, method, timeout: now, recordedById: actor.id, revision: 1 },
             });
+            await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "CREATE", actorId: actor.id, before: null, after: record });
             return { record, changed: true, operation, created: true };
           }
           const changed = !existing.timeout && (await tx.record.updateMany({
-            where: { id: existing.id, timeout: null },
-            data: { timeout: now, lastModifiedById: actor.id },
+            where: { id: existing.id, revision: existing.revision, timeout: null },
+            data: { timeout: now, lastModifiedById: actor.id, revision: { increment: 1 } },
           })).count > 0;
           const record = await tx.record.findUniqueOrThrow({ where: { id: existing.id } });
+          if (changed) await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "TIME_OUT", actorId: actor.id, before: existing, after: record });
           return { record, changed: !!changed, operation, created: false };
         }
 
         if (!existing) {
           const record = await tx.record.create({
-            data: { eventId, studentId, method, timein: now, recordedById: actor.id },
+            data: { eventId, studentId, method, timein: now, recordedById: actor.id, revision: 1 },
           });
+          await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "CREATE", actorId: actor.id, before: null, after: record });
           return { record, changed: true, operation, created: true };
         }
         const changed = !existing.timein && (await tx.record.updateMany({
-          where: { id: existing.id, timein: null },
-          data: { timein: now, lastModifiedById: actor.id },
+          where: { id: existing.id, revision: existing.revision, timein: null },
+          data: { timein: now, lastModifiedById: actor.id, revision: { increment: 1 } },
         })).count > 0;
         const record = await tx.record.findUniqueOrThrow({ where: { id: existing.id } });
+        if (changed) await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "TIME_IN", actorId: actor.id, before: existing, after: record });
         return { record, changed: !!changed, operation, created: false };
       }, { maxWait: 1500, timeout: 4000 });
     } catch (error) {
