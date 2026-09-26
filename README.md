@@ -59,8 +59,8 @@ Plus sample students, events, and attendance records.
   defined once in `globals/constants/groups.ts` - forms, event scoping,
   and the seed all derive from it. Section names live on student rows.
 - **Scan rules**: one scan each for time-in and time-out (first wins);
-  time-out requires a prior time-in; events toggle between time-in and
-  time-out recording modes.
+  time-out can be recorded without time-in, leaving time-in empty. Events
+  toggle between time-in and time-out recording modes.
 
 ## Scripts
 
@@ -71,6 +71,8 @@ Plus sample students, events, and attendance records.
 | `pnpm db:generate` | Regenerate the Prisma client |
 | `pnpm db:seed` | Reset and seed the database (destructive) |
 | `pnpm db:studio` | Browse the database |
+| `pnpm account:recover -- --email <email>` | Local no-admin password recovery (interactive, host only) |
+| `pnpm test:account-recovery` | Credential-version unit tests + disposable HTTP/concurrency fixture |
 
 ## Deployment notes
 
@@ -78,5 +80,12 @@ Plus sample students, events, and attendance records.
 - The SQLite file is the single source of truth - back it up.
 - Rate limiting is in-memory (single instance); use a shared store if you
   ever scale horizontally.
-- No password-reset flow exists yet; an admin must edit the database to
-  recover an account.
+- Password recovery is admin-assisted: Settings → Users → Reset password
+  (admin reauth + reviewed revision, one-time temporary password, forced
+  replacement, old sessions revoked). No email or public reset endpoint.
+- Deploying this revokes every existing session cookie once (new credential
+  version field): everyone signs in again. Deploy outside attendance capture.
+- Restoring a database backup restores old credentials/versions too: rotate
+  `AUTH_SECRET` and force sign-in before reopening service. Rolling back to a
+  build that ignores credential versions would revive old cookies — rotate the
+  secret before running such an older build.

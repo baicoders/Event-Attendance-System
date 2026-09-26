@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Record, NewRecord } from "@/globals/types/records";
+import { Record, CreateRecordInput, RecordWireResult } from "@/globals/types/records";
 import { StudentAttendanceRecord } from "@/globals/types/students";
 import { fetchApi } from "@/globals/utils/api";
 import { queryKeys } from "@/globals/utils/queryKeys";
@@ -10,14 +10,15 @@ import { queryKeys } from "@/globals/utils/queryKeys";
  * Uses optimistic updates to immediately reflect the new record in the UI
  * before the server confirms the change.
  */
-export const useCreateRecord = (eventId: string) => {
+export const useCreateRecord = (_eventId: string) => {
+  void _eventId;
   const queryClient = useQueryClient();
 
   return useMutation({
     // `changed` is false when the scan was a no-op (already timed in/out), so
     // the caller can avoid falsely reporting a fresh record.
-    mutationFn: (record: NewRecord) => {
-      return fetchApi<Record & { changed: boolean }>("/api/records", {
+    mutationFn: (record: CreateRecordInput) => {
+      return fetchApi<RecordWireResult>("/api/records", {
         method: "POST",
         body: JSON.stringify(record),
         headers: { "Content-Type": "application/json" },
@@ -31,7 +32,9 @@ export const useCreateRecord = (eventId: string) => {
     // below refetches immediately, and the live table also polls.
 
     /** Re-sync server state after success */
-    onSuccess: (data) => {
+    onSuccess: (data, input) => {
+      const eventId = input.eventId;
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({
@@ -48,7 +51,9 @@ export const useCreateRecord = (eventId: string) => {
         queryKey: queryKeys.events.statsFromEvent(eventId),
         exact: true,
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.progressPrefix(eventId) });
     },
+    retry: false,
   });
 };
 
@@ -57,6 +62,7 @@ export const useCreateRecord = (eventId: string) => {
  * depending on the event's mode).
  */
 export const useUpdateAttendanceRecord = (eventId: string) => {
+  void eventId;
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -78,21 +84,24 @@ export const useUpdateAttendanceRecord = (eventId: string) => {
 
     /** Re-sync server state after success */
     onSuccess: (data) => {
+      const affectedEventId = data.eventId;
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({
-        queryKey: queryKeys.records.fromEventPrefix(eventId),
+        queryKey: queryKeys.records.fromEventPrefix(affectedEventId),
       });
 
       queryClient.invalidateQueries({
-        queryKey: queryKeys.records.fromEventForStudent(eventId, data.studentId),
+        queryKey: queryKeys.records.fromEventForStudent(affectedEventId, data.studentId),
         exact: true,
       });
 
       queryClient.invalidateQueries({
-        queryKey: queryKeys.events.statsFromEvent(eventId),
+        queryKey: queryKeys.events.statsFromEvent(affectedEventId),
         exact: true,
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.progressPrefix(affectedEventId) });
     },
   });
 };
@@ -140,21 +149,24 @@ export const useDeleteRecord = (eventId: string) => {
     },
 
     onSuccess: (data) => {
+      const affectedEventId = data.eventId;
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({
-        queryKey: queryKeys.records.fromEventPrefix(eventId),
+        queryKey: queryKeys.records.fromEventPrefix(affectedEventId),
       });
 
       queryClient.invalidateQueries({
-        queryKey: queryKeys.records.fromEventForStudent(eventId, data.studentId),
+        queryKey: queryKeys.records.fromEventForStudent(affectedEventId, data.studentId),
         exact: true,
       });
 
       queryClient.invalidateQueries({
-        queryKey: queryKeys.events.statsFromEvent(eventId),
+        queryKey: queryKeys.events.statsFromEvent(affectedEventId),
         exact: true,
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.progressPrefix(affectedEventId) });
     },
   });
 };
@@ -171,15 +183,15 @@ export const useDeleteRecord = (eventId: string) => {
  */
 export const useAllRecordsFromEvent = (
   eventId?: string,
-  { live = false, includeAbsent = false }: { live?: boolean; includeAbsent?: boolean } = {},
+  { live = false, includeAbsent = false, onlyNeedsReview = false }: { live?: boolean; includeAbsent?: boolean; onlyNeedsReview?: boolean } = {},
 ) => {
   return useQuery({
-    queryKey: queryKeys.records.fromEvent(eventId!, includeAbsent),
+    queryKey: queryKeys.records.fromEvent(eventId!, includeAbsent, onlyNeedsReview),
     enabled: !!eventId,
     queryFn: async () => {
       if (!eventId) return null;
 
-      const suffix = includeAbsent ? "?includeAbsent=true" : "";
+      const suffix = includeAbsent ? "?includeAbsent=true" : onlyNeedsReview ? "?onlyNeedsReview=true" : "";
       return fetchApi<StudentAttendanceRecord[]>(
         `/api/events/${eventId}/records${suffix}`,
       );
@@ -202,16 +214,16 @@ export const useAllRecordsFromEvent = (
 export const useRecordOfStudentInEvent = (
   eventId?: string,
   studentId?: string,
+  { live = false, active = true }: { live?: boolean; active?: boolean } = {},
 ) => {
   return useQuery({
     queryKey: queryKeys.records.fromEventForStudent(eventId!, studentId!),
-    enabled: !!eventId && !!studentId,
-    queryFn: async () => {
+    enabled: !!eventId && !!studentId && active,
+    queryFn: async ({ signal }) => {
       if (!eventId || !studentId) return null;
-
-      return fetchApi<Record>(
-        `/api/records?eventId=${eventId}&studentId=${studentId}`,
-      );
+      const params = new URLSearchParams({ eventId, studentId });
+      return fetchApi<Record>(`/api/records?${params}`, { signal });
     },
+    ...(live ? { staleTime: 5_000, refetchInterval: 8_000, refetchIntervalInBackground: false } : {}),
   });
 };

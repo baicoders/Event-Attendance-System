@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { fetchApi } from "@/globals/utils/api";
 import { toastDanger } from "@/globals/components/shared/toasts";
+import { escapeCsvFormulas } from "@/globals/utils/csvExport";
 
 type UseDataExportParams<T, TRow extends object = Record<string, unknown>> = {
   /** API endpoint to fetch export data from */
@@ -27,21 +28,6 @@ type UseDataExportResult = {
  * Prevents CSV formula injection: values starting with = + - @ (or tab/CR)
  * would execute as formulas when the file is opened in Excel/Sheets.
  */
-function escapeCsvFormulas<T>(rows: T[]): T[] {
-  const dangerous = /^[=+\-@\t\r]/;
-  return rows.map((row) => {
-    if (!row || typeof row !== "object") return row;
-    const safe: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(row)) {
-      safe[key] =
-        typeof value === "string" && dangerous.test(value)
-          ? `'${value}`
-          : value;
-    }
-    return safe as T;
-  });
-}
-
 function downloadFile(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

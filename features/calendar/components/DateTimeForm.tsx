@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 
 type Props = {
   label: string;
-  date: Date;
+  date?: Date;
   onDateTimeChange: (date: Date) => void;
   allDay: boolean;
 };
@@ -23,6 +23,8 @@ type Time = {
   second: number;
   period: "AM" | "PM";
 };
+
+const DEFAULT_TIME: Time = { hour: 9, minute: 0, second: 0, period: "AM" };
 
 /**
  * Helper to combine date and time into a single Date object
@@ -66,19 +68,20 @@ const DateTimeForm = ({
   allDay,
 }: Props) => {
   const [open, setOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(date);
-  const [selectedTime, setSelectedTime] = useState<Time>(getTimeFromDate(date));
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(date);
+  const [selectedTime, setSelectedTime] = useState<Time>(date ? getTimeFromDate(date) : DEFAULT_TIME);
 
   useEffect(() => {
     setSelectedDate(date);
-    setSelectedTime(getTimeFromDate(date));
+    setSelectedTime(date ? getTimeFromDate(date) : DEFAULT_TIME);
   }, [date]);
 
-  const fullDateTime = buildDateTime(selectedDate, selectedTime, allDay);
-  const formattedDateTime = format(
-    fullDateTime,
-    allDay ? "EEE, MMM d, yyyy" : "EEE, MMM d, yyyy h:mm a"
-  );
+  const fullDateTime = selectedDate
+    ? buildDateTime(selectedDate, selectedTime, allDay)
+    : undefined;
+  const formattedDateTime = fullDateTime
+    ? format(fullDateTime, allDay ? "EEE, MMM d, yyyy" : "EEE, MMM d, yyyy h:mm a")
+    : "Choose date";
 
   return (
     <Collapsible
@@ -120,7 +123,7 @@ const DateTimeForm = ({
             <p className="text-xs text-slate-500 sm:justify-self-end">
               All-day events use 12:00 AM.
             </p>
-          ) : (
+          ) : selectedDate ? (
             <TimeSelector
               time={selectedTime}
               onChange={(time) => {
@@ -129,7 +132,7 @@ const DateTimeForm = ({
               }}
               disabled={false}
             />
-          )}
+          ) : null}
         </div>
       </CollapsibleContent>
     </Collapsible>

@@ -24,6 +24,7 @@ const useToggleTimeoutMode = () => {
         queryKey: queryKeys.events.withId(eventId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.events.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
     },
   });
 };

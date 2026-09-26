@@ -73,8 +73,12 @@ export const useManageGroups = () => {
  */
 const useInvalidateGroups = () => {
   const queryClient = useQueryClient();
-  return () =>
+  return () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.groups.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.audience.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.events.progressAll() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
+  };
 };
 
 export const useCreateGroup = () => {
@@ -130,8 +134,11 @@ export const useDeleteGroup = () => {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.audience.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.events.progressAll() });
       // Deleting a group rewrites its students' memberships either way.
       queryClient.invalidateQueries({ queryKey: queryKeys.students.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
     },
   });
 };

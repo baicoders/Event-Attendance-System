@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   CalendarDays,
@@ -10,7 +11,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { focusRing } from "@/globals/constants/designTokens";
 import { cn } from "@/globals/libs/shad-cn";
+
+const darkFocusRing = cn(
+  focusRing,
+  "focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+);
 
 type NavigationItem = {
   text: string;
@@ -31,11 +38,13 @@ const navigationItems: NavigationItem[] = [
  * and indigo active treatment as the desktop `Sidebar`; the Attendance tab —
  * the primary operator screen — is raised like a shutter button. */
 const MobileBottomNav = () => {
-  const router = useRouter();
   const pathname = usePathname();
 
-  const isRouteActive = (route: string) =>
-    pathname === route || pathname.startsWith(`${route}/`);
+  const currentRoute = (route: string): "page" | "location" | undefined => {
+    if (pathname === route) return "page";
+    if (pathname.startsWith(`${route}/`)) return "location";
+    return undefined;
+  };
 
   return (
     <nav
@@ -45,56 +54,60 @@ const MobileBottomNav = () => {
       <div className="mx-auto grid h-16 max-w-md grid-cols-5 items-center px-1">
         {navigationItems.map((item) => {
           const Icon = item.icon;
-          const active = isRouteActive(item.route);
-          const onClick = () => {
-            if (!active) router.push(item.route);
-          };
+          const current = currentRoute(item.route);
+          const active = Boolean(current);
 
           if (item.emphasized) {
             return (
               <div key={item.route} className="flex flex-col items-center justify-center">
-                <button
-                  type="button"
-                  onClick={onClick}
-                  aria-label={item.text}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "-mt-8 flex size-14 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0b4dff_0%,#6d28d9_100%)] text-white shadow-[0_10px_25px_rgba(37,99,235,0.45)] ring-4 ring-slate-950 transition-transform active:scale-95",
-                    active && "ring-white/30"
-                  )}
+                <Link
+                  href={item.route}
+                  aria-current={current}
+                  className="group flex flex-col items-center justify-center rounded-xl focus-visible:outline-none"
                 >
-                  <Icon className="size-6" />
-                </button>
-                <span
-                  className={cn(
-                    "mt-1 text-[10px] font-medium leading-none",
-                    active ? "text-white" : "text-slate-400"
-                  )}
-                >
-                  {item.text}
-                </span>
+                  <span
+                    className={cn(
+                      "-mt-8 flex size-14 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0b4dff_0%,#6d28d9_100%)] text-white shadow-[0_10px_25px_rgba(37,99,235,0.45)] ring-4 ring-slate-950 transition-transform group-active:scale-95 group-focus-visible:ring-white",
+                      active && "ring-white/30"
+                    )}
+                  >
+                    <Icon aria-hidden="true" className="size-6" />
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-1 text-[10px] font-medium leading-none",
+                      active ? "text-white" : "text-slate-400"
+                    )}
+                  >
+                    {item.text}
+                  </span>
+                </Link>
               </div>
             );
           }
 
           return (
-            <button
+            <Link
               key={item.route}
-              type="button"
-              onClick={onClick}
-              aria-label={item.text}
-              aria-current={active ? "page" : undefined}
-              className="flex flex-col items-center justify-center gap-1 py-1"
+              href={item.route}
+              aria-current={current}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 rounded-xl py-1",
+                darkFocusRing
+              )}
             >
-              <div
+              <span
                 className={cn(
                   "flex items-center justify-center rounded-lg px-3 py-1 transition-colors",
                   active &&
                     "bg-[linear-gradient(90deg,rgba(11,77,255,0.36)_0%,rgba(109,40,217,0.34)_100%)]"
                 )}
               >
-                <Icon className={cn("size-5", active ? "text-white" : "text-slate-400")} />
-              </div>
+                <Icon
+                  aria-hidden="true"
+                  className={cn("size-5", active ? "text-white" : "text-slate-400")}
+                />
+              </span>
               <span
                 className={cn(
                   "text-[10px] font-medium leading-none",
@@ -103,7 +116,7 @@ const MobileBottomNav = () => {
               >
                 {item.text}
               </span>
-            </button>
+            </Link>
           );
         })}
       </div>

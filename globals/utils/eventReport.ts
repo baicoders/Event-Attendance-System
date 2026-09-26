@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { Group, Record as AttendanceRecord, Student } from "@prisma/client";
 import { prisma } from "@/globals/libs/prisma";
 import {
   ARRIVAL_BUCKET_MINUTES,
@@ -21,6 +22,9 @@ import {
 } from "@/globals/utils/attendance";
 import { buildEventStudentFilter } from "@/globals/utils/buildEventStudentFilter";
 import { fullName } from "@/globals/utils/formatting";
+import { assertActiveUser, assertEventVisibility, assertPasswordChangeCompleted, AuthError, type AuthSession } from "@/globals/utils/auth";
+import { bucketForStudent, GROUP_DIMENSIONS, summarizeGroups } from "@/globals/utils/reportGroups";
+import { REPORT_TIME_ZONE } from "@/globals/utils/reportTime";
 
 /**
  * The single source of truth for one event's attendance report.
@@ -40,9 +44,6 @@ import { fullName } from "@/globals/utils/formatting";
  * @see docs/plans/reports-overhaul.md
  */
 
-/** Section label used when a student belongs to no `SECTION` group. */
-export const UNGROUPED_SECTION = "Ungrouped";
-
 /**
  * The `include` that produces a {@link ReportEvent}.
  *
@@ -54,6 +55,50 @@ export const REPORT_EVENT_INCLUDE = {
   includedGroups: true,
   createdBy: { select: { id: true, name: true } },
 } as const;
+
+type ReportStudent = Student & { groups: Group[] };
+export type EventReportSnapshot = {
+  event: ReportEvent;
+  students: ReportStudent[];
+  records: AttendanceRecord[];
+  evaluatedAt: string;
+};
+
+export class ReportAudienceTooLargeError extends Error {}
+
+/** Capture event visibility, current audience and records in one SQLite read transaction. */
+export async function loadAuthorizedEventReportSnapshot(
+  eventId: string,
+  user: AuthSession,
+  maxStudents?: number,
+): Promise<EventReportSnapshot | null> {
+  return prisma.$transaction(async (tx) => {
+    const currentUser = await tx.user.findUnique({ where: { id: user.id }, select: { id: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
+    if (!currentUser) throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
+    if (currentUser.credentialVersion !== user.credentialVersion) throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
+    const viewer = { ...user, ...currentUser };
+    assertActiveUser(viewer);
+    assertPasswordChangeCompleted(viewer);
+    const event = await tx.event.findUnique({ where: { id: eventId }, include: REPORT_EVENT_INCLUDE });
+    if (!event) return null;
+    assertEventVisibility(event, viewer);
+    const eligibleFilter = buildEventStudentFilter(event);
+    if (maxStudents !== undefined && await tx.student.count({ where: eligibleFilter }) > maxStudents) {
+      throw new ReportAudienceTooLargeError("Event audience exceeds the export limit.");
+    }
+    const students = await tx.student.findMany({
+      where: eligibleFilter,
+      include: { groups: true },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { middleName: "asc" }, { id: "asc" }],
+      take: maxStudents === undefined ? undefined : maxStudents + 1,
+    });
+    if (maxStudents !== undefined && students.length > maxStudents) throw new ReportAudienceTooLargeError("Event audience exceeds the export limit.");
+    const records = await tx.record.findMany({
+      where: { eventId, student: eligibleFilter },
+    });
+    return { event, students, records, evaluatedAt: new Date().toISOString() };
+  });
+}
 
 const BUCKET_MS = ARRIVAL_BUCKET_MINUTES * 60_000;
 
@@ -100,31 +145,9 @@ function buildArrivals(timeins: Date[]): ArrivalBucket[] {
   return filled;
 }
 
-/**
- * Builds the complete report for one event.
- *
- * The caller is responsible for authorization — fetch the event, run
- * `assertEventVisibility(event, user)`, then call this.
- */
-export async function buildEventReport(
-  event: ReportEvent,
-): Promise<EventReport> {
-  const eligibleFilter = buildEventStudentFilter(event);
-
-  // Records are scoped to currently-eligible students, preserving the invariant
-  // that present can never exceed eligible and that the rows always agree with
-  // the totals (`domain-model.md` rule 5). A record whose student left the
-  // event's scope still exists in the database but is deliberately invisible here.
-  const [students, records] = await Promise.all([
-    prisma.student.findMany({
-      where: eligibleFilter,
-      include: { groups: true },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    }),
-    prisma.record.findMany({
-      where: { eventId: event.id, student: eligibleFilter },
-    }),
-  ]);
+/** Build a complete report from one previously authorized transaction snapshot. */
+export function buildEventReport(snapshot: EventReportSnapshot): EventReport {
+  const { event, students, records, evaluatedAt } = snapshot;
 
   const recordByStudent = new Map(records.map((r) => [r.studentId, r] as const));
   const expectsTimeout = computeExpectsTimeout(event, records);
@@ -142,13 +165,18 @@ export async function buildEventReport(
 
   const sections = new Map<string, SectionBreakdown>();
   const timeins: Date[] = [];
+  const groupedEntries: { student: ReportStudent; outcome: ReportRow["outcome"] }[] = [];
 
   const rows: ReportRow[] = students.map((student) => {
     const record = recordByStudent.get(student.id);
     const outcome = deriveOutcome(record, event);
     const noTimeout = hasNoTimeout(record, expectsTimeout);
-    const sectionName =
-      student.groups.find((group) => group.category === "SECTION")?.name ?? null;
+    const sectionBucket = bucketForStudent(student, "SECTION");
+    const sectionName = sectionBucket.key === "none" ? null : sectionBucket.label;
+    const reviewFlags: string[] = [];
+    if (record && !record.timein) reviewFlags.push("MISSING_TIME_IN");
+    if (record?.timein && record.timeout && record.timeout < record.timein) reviewFlags.push("INVALID_TIME_ORDER");
+    groupedEntries.push({ student, outcome });
 
     if (outcome === "PRESENT") totals.present += 1;
     if (outcome === "LATE") totals.late += 1;
@@ -160,9 +188,10 @@ export async function buildEventReport(
     if (record?.method === "MANUAL") totals.manual += 1;
     if (record?.timein) timeins.push(record.timein);
 
-    const key = sectionName ?? UNGROUPED_SECTION;
+    const key = sectionBucket.key;
     const bucket = sections.get(key) ?? {
-      name: key,
+      key,
+      name: sectionBucket.label,
       eligible: 0,
       present: 0,
       late: 0,
@@ -175,6 +204,7 @@ export async function buildEventReport(
     sections.set(key, bucket);
 
     return {
+      recordId: record?.id ?? null,
       studentId: student.id,
       fullName: fullName(
         student.firstName,
@@ -185,28 +215,35 @@ export async function buildEventReport(
       schoolLevel: student.schoolLevel,
       yearLevel: student.yearLevel,
       section: sectionName,
+      sectionKey: key,
       timein: record?.timein ? record.timein.toISOString() : null,
       timeout: record?.timeout ? record.timeout.toISOString() : null,
       method: record?.method ?? null,
       outcome,
       noTimeout,
+      reviewFlags,
     };
   });
 
-  // "Ungrouped" sorts last so it reads as a remainder rather than a section.
+  // Synthetic buckets sort last, even if a real section shares their label.
   const bySection = [...sections.values()].sort((a, b) => {
-    if (a.name === UNGROUPED_SECTION) return 1;
-    if (b.name === UNGROUPED_SECTION) return -1;
-    return a.name.localeCompare(b.name);
+    const order = (key: string) => key === "none" ? 1 : key === "multiple" ? 2 : 0;
+    return order(a.key) - order(b.key) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key);
   });
 
+  const byGroup = Object.fromEntries(GROUP_DIMENSIONS.map((dimension) => [dimension, summarizeGroups(groupedEntries, dimension)])) as EventReport["byGroup"];
+
   return {
+    evaluatedAt,
+    timeZone: REPORT_TIME_ZONE,
+    populationBasis: "CURRENT_ROSTER",
     event,
     expectsTimeout,
     totals,
     rate: attendanceRate(totals.attended, totals.eligible),
     arrivals: buildArrivals(timeins),
     bySection,
+    byGroup,
     rows,
   };
 }

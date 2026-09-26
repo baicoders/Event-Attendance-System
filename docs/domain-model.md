@@ -212,6 +212,8 @@ Indexes: `[status]`, `[createdById]`, `[status, start]` (the composite serves th
 Two consequences worth remembering:
 
 - The scoped categories are **OR**, not AND. An event scoped to two houses invites both.
+- `COLLEGE` and `SHS` require no group selection. Their school-level predicate is
+  shared by audience preview, attendance recording, student lookup, stats, and reports.
 - **`YEAR` events match zero students.** Nothing ever connects a student to a `YEAR`
   group — year level is the `Student.yearLevel` enum column. The seed creates `YEAR`
   `Group` rows, so the category is selectable in the drawer, but the join never exists.

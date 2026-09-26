@@ -20,6 +20,8 @@ export type AuthUser = {
   rejectionReason?: string | null;
   /** True while an admin-issued temporary password is still in place. */
   mustChangePassword?: boolean;
+  /** Mirrors the server's credential generation; never sent anywhere. */
+  credentialVersion?: number;
 };
 
 type LoginResult =
@@ -117,6 +119,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refresh = async () => {
     setUser(await fetchSession());
   };
+
+  // A version-revoked cookie (401 UNAUTHORIZED) or a newly restricted session
+  // (403 PASSWORD_CHANGE_REQUIRED) must hide protected views and re-read the
+  // session — without navigating away from a pending operation as though it
+  // failed before commit. fetchApi broadcasts these; login-form 401s never do.
+  useEffect(() => {
+    const onInvalid = () => {
+      void refresh();
+    };
+    window.addEventListener("auth:session-invalid", onInvalid);
+    return () => window.removeEventListener("auth:session-invalid", onInvalid);
+  }, []);
 
   const value = useMemo(
     () => ({

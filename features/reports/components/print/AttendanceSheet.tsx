@@ -6,8 +6,7 @@ import {
   ATTENDANCE_OUTCOME_LABEL,
   formatAttendanceRate,
 } from "@/globals/utils/attendance";
-import { UNGROUPED_SECTION } from "@/globals/utils/eventReport";
-import { readableDate } from "@/globals/utils/formatting";
+import { formatReportDateTime, formatReportEventDate } from "@/globals/utils/reportTime";
 import { capitalizeLabel } from "@/globals/utils/text";
 
 export type SheetOptions = {
@@ -21,13 +20,7 @@ type AttendanceSheetProps = {
   options: SheetOptions;
 };
 
-const time = (value: string | null) =>
-  value
-    ? new Date(value).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "—";
+const time = (value: string | null) => value ? formatReportDateTime(value).slice(5, 16) : "—";
 
 /**
  * Column widths, as percentages summing to 100.
@@ -139,18 +132,21 @@ export default function AttendanceSheet({
   const rows = options.includeAbsentees
     ? report.rows
     : report.rows.filter((row) => row.outcome !== "ABSENT");
+  const sectionLabelCounts = new Map<string, number>();
+  for (const section of report.bySection) sectionLabelCounts.set(section.name, (sectionLabelCounts.get(section.name) ?? 0) + 1);
 
   // Preserve the report's ordering inside each section rather than re-sorting.
   const groups = options.groupBySection
     ? report.bySection
         .map((section) => ({
-          title: section.name,
+          title: (sectionLabelCounts.get(section.name) ?? 0) > 1 ? `${section.name} (${section.key})` : section.name,
+          key: section.key,
           rows: rows.filter(
-            (row) => (row.section ?? UNGROUPED_SECTION) === section.name,
+            (row) => row.sectionKey === section.key,
           ),
         }))
         .filter((group) => group.rows.length > 0)
-    : [{ title: "", rows }];
+    : [{ title: "", key: "all", rows }];
 
   let runningIndex = 0;
 
@@ -185,11 +181,11 @@ export default function AttendanceSheet({
         <dl className="grid grid-cols-2 gap-x-8 gap-y-1">
           <div className="flex gap-2">
             <dt className="font-semibold">Date &amp; time:</dt>
-            <dd>{readableDate(event.start)}</dd>
+            <dd>{formatReportEventDate(event.start, event.allDay)}{event.allDay ? " · All day" : " Asia/Manila"}</dd>
           </div>
           <div className="flex gap-2">
             <dt className="font-semibold">Ends:</dt>
-            <dd>{readableDate(event.end)}</dd>
+            <dd>{formatReportEventDate(event.end, event.allDay)}{event.allDay ? " · All day" : " Asia/Manila"}</dd>
           </div>
           {event.location ? (
             <div className="flex gap-2">
@@ -214,6 +210,7 @@ export default function AttendanceSheet({
             </div>
           ) : null}
         </dl>
+        {event.status !== "APPROVED" ? <p className="mt-2 font-bold">PROVISIONAL — EVENT NOT APPROVED</p> : null}
       </section>
 
       {/* ================= Summary ================= */}
@@ -267,7 +264,7 @@ export default function AttendanceSheet({
 
           return (
             <section
-              key={group.title || "all"}
+              key={group.key}
               // The first group continues from the summary on page 1; every
               // later one starts its own sheet, whatever blank space that leaves
               // behind.
@@ -320,7 +317,7 @@ export default function AttendanceSheet({
 
       {/* ================= Footer ================= */}
       <footer className="mt-8 border-t border-gray-400 pt-2 text-[10px] text-gray-600">
-        <p>Generated {readableDate(new Date())}.</p>
+        <p>Prepared {formatReportDateTime(report.evaluatedAt)} Asia/Manila (UTC+08:00).</p>
         {/*
           Eligibility is recomputed from the current roster on every read, so two
           printings of the same event can legitimately differ. Saying so on the

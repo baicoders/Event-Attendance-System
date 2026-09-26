@@ -1,19 +1,24 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Student } from "@/globals/types/students";
 import { formatSection, normalizeName } from "@/globals/utils/formatting";
-import { Delete, Edit, QrCode } from "lucide-react";
+import { Delete, Edit, QrCode, History } from "lucide-react";
 import { Checkbox } from "@/globals/components/shad-cn/checkbox";
+import Link from "next/link";
 
 type ColumnArgs = {
   onEdit: (student: Student) => void;
   onDelete: (id: string) => void;
   onViewQR: (student: Student) => void;
+  onHistory: (student: Student) => void;
+  profileHref: (student: Student) => string;
 };
 
 export const getStudentColumns = ({
   onEdit,
   onDelete,
   onViewQR,
+  onHistory,
+  profileHref,
 }: ColumnArgs): ColumnDef<Student>[] => [
   {
     id: "select",
@@ -31,8 +36,8 @@ export const getStudentColumns = ({
   {
     accessorKey: "id",
     header: () => <div className="text-center">Student ID</div>,
-    cell: ({ getValue }) => (
-      <div className="text-center">{getValue() as string}</div>
+    cell: ({ row }) => (
+      <div className="text-center"><Link className="text-indigo-700 underline underline-offset-2" href={profileHref(row.original)}>{row.original.id}</Link></div>
     ),
   },
   {
@@ -133,6 +138,9 @@ export const getStudentColumns = ({
         <div className="flex items-center justify-center gap-2 md:gap-3">
           <button type="button" aria-label={`View QR for ${student.id}`} title="View QR" className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-indigo-700 transition hover:bg-indigo-100 md:px-2 md:text-xs" onClick={() => onViewQR(student)}>
             <QrCode className="size-3.5" strokeWidth={1.6} /> <span>QR</span>
+          </button>
+          <button type="button" aria-label={`Attendance history for ${student.id}`} title="Attendance history" className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-[0.65rem] font-semibold text-indigo-700 transition hover:bg-indigo-100" onClick={() => onHistory(student)}>
+            <History className="size-3.5" strokeWidth={1.6} /> <span>History</span>
           </button>
           <button
             type="button"

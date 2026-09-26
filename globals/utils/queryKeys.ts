@@ -7,6 +7,12 @@ type EventStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
  * Prevents inconsistent cache keys and makes cache invalidation predictable.
  */
 export const queryKeys = {
+  audience: {
+    all: () => ["audience"] as const,
+    count: (scope: string, eventId?: string) => ["audience", "count", scope, eventId ?? "new"] as const,
+    roster: (scope: string, search: string, page: number, eventId?: string) =>
+      ["audience", "roster", scope, search, page, eventId ?? "new"] as const,
+  },
   events: {
     all: () => ["events"] as const,
     list: (scope: EventScope = "visible", status?: EventStatus) =>
@@ -14,12 +20,17 @@ export const queryKeys = {
     allApproved: () => ["events", "approved"] as const,
     withId: (eventId: string) => ["events", "byId", eventId] as const,
     statsFromEvent: (eventId: string) => ["events", "stats", eventId] as const,
+    progressAll: () => ["events", "progress"] as const,
+    progressPrefix: (eventId: string) => ["events", "progress", eventId] as const,
+    progress: (eventId: string, viewerId: string, query: string) =>
+      ["events", "progress", eventId, viewerId, query] as const,
   },
   students: {
     all: () => ["students"] as const,
     stats: () => ["students", "stats"] as const,
     sections: () => ["students", "sections"] as const,
     withId: (studentId: string) => ["students", "byId", studentId] as const,
+    detail: (principalId: string, studentId: string) => ["students", "detail", principalId, studentId] as const,
     fromEvent: (eventId: string, query = "") =>
       ["students", "fromEvent", eventId, query] as const,
     fromEventWithId: (eventId: string, studentId: string) =>
@@ -28,8 +39,8 @@ export const queryKeys = {
   records: {
     all: () => ["records"] as const,
     withId: (id: string) => ["records", "byId", id] as const,
-    fromEvent: (eventId: string, includeAbsent = false) =>
-      ["records", "fromEvent", eventId, includeAbsent] as const,
+    fromEvent: (eventId: string, includeAbsent = false, onlyNeedsReview = false) =>
+      ["records", "fromEvent", eventId, includeAbsent, onlyNeedsReview] as const,
     // Prefix (omits the includeAbsent flag) so invalidation covers BOTH the
     // present-only live table and the includeAbsent report variants.
     fromEventPrefix: (eventId: string) =>
@@ -41,6 +52,9 @@ export const queryKeys = {
   },
   reports: {
     all: () => ["reports"] as const,
+    studentHistoryPrefix: () => ["reports", "studentHistory"] as const,
+    studentHistory: (principalId: string, studentId: string, params: string) =>
+      ["reports", "studentHistory", principalId, studentId, params] as const,
     /** One event's full report (`GET /api/reports/events/[eventId]`). */
     event: (eventId: string) => ["reports", "event", eventId] as const,
     /**

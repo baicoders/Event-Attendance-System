@@ -8,6 +8,7 @@ import type {
 } from "@prisma/client";
 
 import type { AttendanceOutcome } from "@/globals/utils/attendance";
+import type { GroupDimension, GroupSummary } from "@/globals/utils/reportGroups";
 
 /**
  * Report payload shapes, shared by the server builders and the client hooks.
@@ -50,18 +51,21 @@ export type ReportEventAPI = Omit<
 
 /** One eligible student's line in the report. Identical on both sides. */
 export type ReportRow = {
+  recordId: string | null;
   studentId: string;
   fullName: string;
   schoolLevel: SchoolLevel;
   yearLevel: YearLevel;
   /** `SECTION` group name, or null when the student has none. */
   section: string | null;
+  sectionKey: string;
   timein: string | null;
   timeout: string | null;
   /** Null for absent students — no record means no method. */
   method: AttendanceMethod | null;
   outcome: AttendanceOutcome;
   noTimeout: boolean;
+  reviewFlags: string[];
 };
 
 export type ReportTotals = {
@@ -81,6 +85,7 @@ export type ReportTotals = {
 };
 
 export type SectionBreakdown = {
+  key: string;
   name: string;
   eligible: number;
   present: number;
@@ -95,6 +100,9 @@ export type ArrivalBucket = {
 };
 
 export type EventReport = {
+  evaluatedAt: string;
+  timeZone: "Asia/Manila";
+  populationBasis: "CURRENT_ROSTER";
   event: ReportEvent;
   /** Whether this event actually collected time-outs. */
   expectsTimeout: boolean;
@@ -103,6 +111,7 @@ export type EventReport = {
   rate: number | null;
   arrivals: ArrivalBucket[];
   bySection: SectionBreakdown[];
+  byGroup: Record<GroupDimension, GroupSummary[]>;
   rows: ReportRow[];
 };
 

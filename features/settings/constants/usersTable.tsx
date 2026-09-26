@@ -11,11 +11,14 @@ type Actions = {
   onResetPassword: (user: ManagedUser) => void;
   /** Id of the row currently being reset, so only that button shows progress. */
   processingId: string | null;
+  /** While a reset is pending or an issuance awaits dismissal, all rows lock. */
+  resetDisabled?: boolean;
 };
 
 export const getUserColumns = ({
   onResetPassword,
   processingId,
+  resetDisabled = false,
 }: Actions): ColumnDef<ManagedUser>[] => [
   {
     accessorKey: "name",
@@ -75,7 +78,7 @@ export const getUserColumns = ({
           type="button"
           size="sm"
           variant="outline"
-          disabled={processingId === row.original.id}
+          disabled={resetDisabled || processingId === row.original.id}
           onClick={() => onResetPassword(row.original)}
         >
           <KeyRound className="size-4" />

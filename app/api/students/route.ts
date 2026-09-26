@@ -3,7 +3,7 @@ import { prisma } from "@/globals/libs/prisma";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { err, ok } from "@/globals/utils/api";
-import { requireAuth } from "@/globals/utils/auth";
+import { assertEventVisibility, requireAuth } from "@/globals/utils/auth";
 import { buildStudentQuery } from "@/globals/utils/queryBuilder";
 import { studentSchema } from "@/globals/schemas/studentSchema";
 import { respondWithError } from "@/globals/utils/httpError";
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 const querySchema = z.object({
   // Single fetch params
   studentId: z.string().optional(),
-  eventId: z.string().optional(),
+  eventId: z.string().trim().min(1).optional(),
 
   // Bulk filter params
   category: z.enum(["SHS", "COLLEGE", "HOUSE", "ALL"]).optional(),
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Roster reads carry student PII, so they are authenticated too.
-    await requireAuth();
+    const user = await requireAuth();
     const result = querySchema.parse(Object.fromEntries(searchParams));
 
     const { studentId, eventId, ...filters } = result;
@@ -133,6 +133,7 @@ export async function GET(request: NextRequest) {
         if (!event) {
           return NextResponse.json(err("Event not found"), { status: 404 });
         }
+        assertEventVisibility(event, user);
         eventFilter = buildEventStudentFilter(event);
       }
 
@@ -168,6 +169,7 @@ export async function GET(request: NextRequest) {
       if (!event) {
         return NextResponse.json(err("Event not found"), { status: 404 });
       }
+      assertEventVisibility(event, user);
 
       where = { ...where, ...buildEventStudentFilter(event) };
     }

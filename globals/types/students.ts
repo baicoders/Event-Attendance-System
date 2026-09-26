@@ -15,6 +15,9 @@ export type StudentDTO = Omit<Student, "createdAt" | "updatedAt"> & {
   updatedAt: string;
 };
 
+export type StudentDetailDTO = StudentDTO & { editVersion: string; changed?: boolean };
+export type StudentDetail = Student & { editVersion: string; changed?: boolean };
+
 // Prisma fields are camelCase; the old snake_case omit silently kept
 // createdAt/updatedAt on NewStudent.
 export type NewStudent = Omit<Student, "id" | "createdAt" | "updatedAt">;

@@ -4,7 +4,7 @@ import { LATE_GRACE_MINUTES } from "@/globals/constants/attendance";
  * Derived attendance status.
  *
  * Nothing here is stored. `Record` has no status column and gains none — this is
- * computed from `Record.timein` against `Event.start`. Kept free of `server-only`
+ * computed from `Record.timein`, `Record.timeout`, and `Event.start`. Kept free of `server-only`
  * so the API routes, the print server component, and the client table all reach
  * the same verdict from the same code.
  *
@@ -43,11 +43,9 @@ const toDate = (value: Date | string): Date =>
 /**
  * Present, late, or absent for one eligible student.
  *
- * - **ABSENT** — no record, or a record with no `timein`. Absence has no row, so
- *   "no record" is the normal absent case; the `timein`-less record is defensive
- *   (the API enforces time-out-requires-time-in, but nothing in the schema does).
+ * - **ABSENT** — no recorded time-in, including a time-out-only row.
  * - **LATE** — timed in more than {@link LATE_GRACE_MINUTES} after `event.start`.
- * - **PRESENT** — timed in within the grace period, or any time before `start`.
+ * - **PRESENT** — timed in within the grace period or any time before `start`.
  *
  * **All-day events are never late.** Their `start` is normalized to midnight, so
  * comparing against it would flag every single attendee. For those, the outcome is
@@ -57,12 +55,17 @@ export function deriveOutcome(
   record: OutcomeRecord | null | undefined,
   event: OutcomeEvent,
 ): AttendanceOutcome {
-  if (!record?.timein) return "ABSENT";
+  if (!hasRecordedTimeIn(record)) return "ABSENT";
   if (event.allDay) return "PRESENT";
 
   const cutoff = toDate(event.start).getTime() + LATE_GRACE_MINUTES * 60_000;
 
   return toDate(record.timein).getTime() > cutoff ? "LATE" : "PRESENT";
+}
+
+/** A time-out alone is not evidence of recorded check-in. */
+export function hasRecordedTimeIn<T extends OutcomeRecord>(record: T | null | undefined): record is T & { timein: Date | string } {
+  return record?.timein != null;
 }
 
 /**

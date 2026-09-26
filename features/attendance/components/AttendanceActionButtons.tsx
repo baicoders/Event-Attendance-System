@@ -23,6 +23,8 @@ type Props = {
   hasTimeOut?: boolean;
   /** Whether the user may delete records (event owner or admin). */
   canManage?: boolean;
+  onRecord?: () => void;
+  operationBusy?: boolean;
 };
 
 const AttendanceActionButtons = ({
@@ -33,6 +35,8 @@ const AttendanceActionButtons = ({
   hasTimeIn = false,
   hasTimeOut = false,
   canManage = false,
+  onRecord,
+  operationBusy = false,
 }: Props) => {
   // The "present" action records a time-in normally and a time-out while the
   // event is in timeout mode, so its label must reflect the current mode.
@@ -73,6 +77,10 @@ const AttendanceActionButtons = ({
 
   const handleAction = async (action: "present" | "absent") => {
     if (action === "present") {
+      if (onRecord) {
+        onRecord();
+        return;
+      }
       try {
         const result = await createRecord({
           eventId,
@@ -87,7 +95,8 @@ const AttendanceActionButtons = ({
               : "Attendance was already recorded.",
           );
         } else if (isTimeout) {
-          toastSuccess("Time-out recorded");
+          if (!result.timein) toastWarning("Time-out recorded; no time-in is recorded for this student.");
+          else toastSuccess("Time-out recorded");
         } else if (!recordId) {
           toastSuccess("Student marked as present");
         } else {
@@ -126,14 +135,13 @@ const AttendanceActionButtons = ({
       {actionButtons.map(({ action, icon: Icon, label, title, color }) => {
         // Disable rules:
         // - "absent": nothing to delete when there's no record.
-        // - "present" in timeout mode: can't time out without a time-in, and
-        //   can't time out again once already done.
+        // - "present" in timeout mode: can't time out again once already done.
         // - "present" in normal mode: already timed in, nothing left to do.
         const presentDisabled =
           action === "present" &&
-          (isTimeout ? !hasTimeIn || hasTimeOut : hasTimeIn);
+          (isTimeout ? hasTimeOut : hasTimeIn);
         const isDisabled =
-          isLoading || (action === "absent" && !recordId) || presentDisabled;
+          isLoading || operationBusy || (action === "absent" && !recordId) || presentDisabled;
 
         return (
           <Button

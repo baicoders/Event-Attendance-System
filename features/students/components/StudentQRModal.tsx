@@ -15,12 +15,14 @@ type StudentQrModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   student: Student | undefined;
+  showGroupDetail?: boolean;
 };
 
 export function StudentQrModal({
   open,
   onOpenChange,
   student,
+  showGroupDetail = true,
 }: StudentQrModalProps) {
   if (!student) return null;
 
@@ -34,7 +36,7 @@ export function StudentQrModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mx-auto w-full max-w-64 py-4"><StudentQRCard student={student} /></div>
+        <div className="mx-auto w-full max-w-64 py-4"><StudentQRCard student={student} showGroupDetail={showGroupDetail} /></div>
       </DialogContent>
     </Dialog>
   );

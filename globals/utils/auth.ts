@@ -26,9 +26,22 @@ const authSessionSchema = z.object({
   // Optional so sessions signed before this field existed still verify;
   // an absent value reads as "no forced change pending".
   mustChangePassword: z.boolean().optional(),
+  // Required: cookies signed before credential versioning existed fail
+  // verification here and must sign in again. Never default a missing
+  // version to zero — that would revive revoked cookies.
+  credentialVersion: z.number().int().nonnegative(),
 });
 
 export type AuthSession = z.infer<typeof authSessionSchema>;
+
+export type RequireAuthOptions = {
+  /**
+   * When true, a valid ACTIVE session with `mustChangePassword` is allowed
+   * through. Server-only opt-in for the own-password-change handler — never
+   * accept this from HTTP parameters.
+   */
+  allowForcedPasswordChange?: boolean;
+};
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -141,7 +154,12 @@ export async function getAuthSession(): Promise<AuthSession | null> {
 
 /**
  * Cookie session revalidated against the database - the authoritative name,
- * role, and status. Returns null when the user no longer exists.
+ * role, status, forced-change flag, and credential version. Returns null when
+ * the user no longer exists or the cookie's credential generation no longer
+ * matches (password was reset/replaced/recovered since the cookie was signed).
+ * A forced-change session is still returned here so the shell, session
+ * endpoint, and change-password route can recognize it; use `requireAuth()`
+ * (or `assertPasswordChangeCompleted`) to gate business routes.
  */
 export async function getFreshAuthSession(): Promise<AuthSession | null> {
   const session = await getAuthSession();
@@ -159,21 +177,53 @@ export async function getFreshAuthSession(): Promise<AuthSession | null> {
       status: true,
       rejectionReason: true,
       mustChangePassword: true,
+      credentialVersion: true,
     },
   });
 
-  return user ?? null;
+  if (!user) {
+    return null;
+  }
+
+  // Version rejection is separate from usability rejection: a stale cookie
+  // becomes "no session" (sign-in prompt), while a current-version
+  // forced-change session stays recognizable until the password is replaced.
+  if (user.credentialVersion !== session.credentialVersion) {
+    return null;
+  }
+
+  return user;
 }
 
-export async function requireAuth(): Promise<AuthSession> {
+/**
+ * Usable-account decision shared by API routes and server-rendered pages so
+ * they cannot diverge. Throws 403 PASSWORD_CHANGE_REQUIRED for a valid
+ * forced-change session.
+ */
+export function assertPasswordChangeCompleted(user: AuthSession) {
+  if (user.mustChangePassword) {
+    throw new AuthError(
+      "Password change required before using the application.",
+      403,
+      "PASSWORD_CHANGE_REQUIRED",
+    );
+  }
+}
+
+export async function requireAuth(
+  options?: RequireAuthOptions,
+): Promise<AuthSession> {
   // Revalidate against the database on every protected request so
-  // demotions, rejections, and deletions take effect immediately instead
-  // of at cookie expiry.
+  // demotions, rejections, deletions, and credential changes take effect
+  // immediately instead of at cookie expiry.
   const user = await getFreshAuthSession();
   if (!user) {
     throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
   }
   assertActiveUser(user);
+  if (!options?.allowForcedPasswordChange) {
+    assertPasswordChangeCompleted(user);
+  }
   return user;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Controller, type FieldErrors } from "react-hook-form";
+import { Controller } from "react-hook-form";
 import {
   Drawer,
   DrawerContent,
@@ -32,6 +32,7 @@ import {
 import { EVENT_CHOICES } from "@/features/calendar/constants/categoryGroups"; // Keep just the categories here
 import { Event, EventForm } from "@/globals/types/events";
 import EventActionButtons from "./EventActionButtons";
+import EventAudiencePreview from "./EventAudiencePreview";
 import {
   formatEventPayload,
   hasEventAudienceChanged,
@@ -40,12 +41,14 @@ import {
 import { useFetchGroupsByCategory } from "@/globals/hooks/useGroups";
 import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 import { ApiError } from "@/globals/utils/api";
+import { Button } from "@/globals/components/shad-cn/button";
 
 type EventDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
   initialData?: Partial<Event>;
   mode: "create" | "edit";
+  onDuplicate?: (id: string) => void;
 };
 
 export default function EventDrawer({
@@ -53,6 +56,7 @@ export default function EventDrawer({
   onClose,
   initialData,
   mode,
+  onDuplicate,
 }: EventDrawerProps) {
   const isEdit = mode === "edit";
   const { user } = useAuth();
@@ -78,6 +82,7 @@ export default function EventDrawer({
   } = useEventForm(initialData);
 
   const category = watch("category");
+  const includedGroups = watch("includedGroups");
   const allDay = watch("allDay");
 
   // FETCH DYNAMIC GROUPS based on selected category
@@ -267,6 +272,17 @@ export default function EventDrawer({
             <DrawerTitle className="text-2xl font-bold">
               {isEdit ? "Edit Event" : "Create Event"}
             </DrawerTitle>
+            {isEdit && initialData?.id && onDuplicate && (
+              <Button type="button" variant="outline" className="self-start"
+                onClick={() => {
+                  const sourceId = initialData?.id;
+                  if (!sourceId) return;
+                  handleDrawerClose();
+                  onDuplicate(sourceId);
+                }}>
+                Duplicate event
+              </Button>
+            )}
             {isReadOnlyApprovedView ? (
               <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-center text-sm text-indigo-700">
                 Approved event (view only). Only the event creator or an admin
@@ -360,6 +376,15 @@ export default function EventDrawer({
                     </p>
                   )}
                 </div>
+              )}
+
+              {!isReadOnlyView && (
+                <EventAudiencePreview
+                  category={category}
+                  includedGroups={includedGroups}
+                  eventId={isEdit ? initialData?.id : undefined}
+                  enabled={isOpen}
+                />
               )}
 
               {/* Schedule Block - full width; Start/End sit side by side once

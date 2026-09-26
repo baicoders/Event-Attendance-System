@@ -12,7 +12,8 @@ const sectionOf = (groups: Group[]): Group | null =>
   groups.find((g) => g.category === "SECTION") ?? null;
 
 // Fetch attendance for an event.
-// - default: students who have a record (present rows), for the live table.
+// - default: records with a time-in, for the live table.
+// - ?onlyNeedsReview=true: eligible records missing a time-in, for recovery.
 // - ?includeAbsent=true: every currently-eligible student with present/absent
 //   status, so a report's rows and its present/absent totals always agree
 //   (both derived from the same current-eligibility set).
@@ -37,13 +38,19 @@ export async function GET(
 
     const includeAbsent =
       new URL(req.url).searchParams.get("includeAbsent") === "true";
+    const onlyNeedsReview =
+      new URL(req.url).searchParams.get("onlyNeedsReview") === "true";
+    if (includeAbsent && onlyNeedsReview) {
+      return NextResponse.json(err("Choose either the eligible roster or records needing review."), { status: 400 });
+    }
 
     // Scope records to currently-eligible students so the present rows match
     // the header/summary stats (which also count present among current
     // eligibility). A student who became inactive or left the event's group
     // drops from both, keeping counts and visible rows consistent.
     const recordsWithStudent = await prisma.record.findMany({
-      where: { eventId, student: buildEventStudentFilter(event) },
+      where: { eventId, student: buildEventStudentFilter(event),
+        ...(onlyNeedsReview ? { timein: null } : !includeAbsent ? { timein: { not: null } } : {}) },
       include: { student: { include: { groups: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -60,7 +67,7 @@ export async function GET(
           section: sectionOf(s.groups),
           timein: r.timein ? r.timein.toISOString() : null,
           timeout: r.timeout ? r.timeout.toISOString() : null,
-          status: "present",
+          status: r.timein ? "present" : "absent",
         };
       });
 
@@ -68,7 +75,7 @@ export async function GET(
     }
 
     // Report view: start from every currently-eligible student and mark each
-    // present (has record) or absent (none). Records for students who are no
+    // present (has time-in) or absent (no time-in). Records for students who are no
     // longer eligible are intentionally excluded so rows match the stats.
     const recordByStudent = new Map(
       recordsWithStudent.map((r) => [r.studentId, r] as const),
@@ -91,7 +98,7 @@ export async function GET(
         section: sectionOf(s.groups),
         timein: record?.timein ? record.timein.toISOString() : null,
         timeout: record?.timeout ? record.timeout.toISOString() : null,
-        status: record ? "present" : "absent",
+        status: record?.timein ? "present" : "absent",
       };
     });
 

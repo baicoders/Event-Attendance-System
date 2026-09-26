@@ -718,12 +718,16 @@ Edit `prisma/seed.ts` and run `pnpm db:seed`. Know before you touch this file:
   with the same `studentSchema` used for single-student creation, plus the shared
   `validateStudentGroupSlugs` group-integrity check, before writing anything.
 - **Export**: `globals/hooks/useDataExport.ts`, a generic `{ apiUrl, filename }` hook
-  used wherever CSV export exists. It lazy-imports `react-papaparse`'s `jsonToCSV` (kept
-  out of the main bundle) and runs every row through `escapeCsvFormulas()` first — this
-  is a deliberate security measure, not incidental: it prefixes any cell value starting
-  with `= + - @` (or a tab/CR) with a `'` so it can't execute as a spreadsheet formula
-  when opened in Excel/Sheets. **Keep this if you add a new export path** — don't build
-  a second CSV export that skips it.
+  used by unrelated array endpoints. It lazy-imports `react-papaparse` and uses
+  `globals/utils/csvExport.ts` to neutralize formula-leading final cells.
+- **Event export**: `GET /api/reports/events/[eventId]/export` accepts one fixed preset
+  (`full`, `absent`, `late`, `times`, or `groups`). The export picker validates the
+  versioned object response before preview or download, then serializes the same
+  prepared rows through `csvExport.ts`. The shared serializer quotes commas, quotes,
+  and line breaks and neutralizes formula markers behind leading whitespace. CSV
+  preserves Student ID bytes; spreadsheet users must import that column as text to
+  prevent automatic numeric conversion. There is no ZIP, workbook, or stored snapshot.
+  Export requests reject audiences over 10,000 and JSON/CSV output over 10 MiB.
 
 ---
 
@@ -754,16 +758,19 @@ Edit `prisma/seed.ts` and run `pnpm db:seed`. Know before you touch this file:
 
 ## How do I build a printable report?
 
-**One builder feeds both the screen and the paper.**
-`globals/utils/eventReport.ts` (`server-only`) exports `buildEventReport(event)`,
-which runs the eligibility query, derives every student's outcome, and returns the
-totals, section breakdown, arrival buckets, and rows. Its two consumers are:
+**One captured evaluation feeds screen, export, and paper.**
+`globals/utils/eventReport.ts` (`server-only`) loads the authorized event, eligible
+students, and current records in one read transaction. `buildEventReport(snapshot)`
+then derives outcomes, totals, section/group breakdowns, arrival buckets, and rows
+without another database read. Its consumers are:
 
 1. **On-screen** — `GET /api/reports/events/[eventId]` →
    `features/reports/hooks/useEventReport.ts` → `app/(main)/reports/events/[id]/page.tsx`.
-2. **Print** — `app/(print)/reports/events/[id]/print/page.tsx`, a **server
-   component**, calls `buildEventReport` directly and renders
-   `features/reports/components/print/AttendanceSheet.tsx`.
+2. **Export** — the fixed-preset export API prepares one dataset per request; the
+   picker keeps it in dialog memory until refresh, selection change, or close.
+3. **Print** — `app/(print)/reports/events/[id]/print/page.tsx`, a **server
+   component**, renders the attendance sheet by default or the group summary with
+   `view=summary` and `groupBy`.
 
 This replaced an arrangement where the print page queried Prisma and recomputed
 eligibility and stats itself. That was previously flagged here as the single most
@@ -783,8 +790,8 @@ preview and delayed first paint.
 
 Because `(main)`'s gate is a client component and never protected a direct request
 to a server route anyway, print pages **authenticate on the server themselves** —
-`getFreshAuthSession()` plus an inline visibility check mirroring
-`assertEventVisibility`. Keep that if you add another printable page.
+`getFreshAuthSession()` and the transaction-aware report loader enforce event
+visibility. Keep that if you add another printable page.
 
 ### Print styling
 
@@ -808,7 +815,10 @@ The sheet's options (include absentees, group by section, signature column) live
 **URL search params**, read by the server page from `searchParams`. That keeps the
 page a server component — no report logic ships to the browser — and makes a
 configuration a shareable link. The only client component is
-`PrintOptionsBar`, which is `.no-print`.
+`PrintOptionsBar`, which is `.no-print`. `view=summary` selects the roster-free
+summary and `groupBy` chooses one of the six stable group dimensions. Each print
+request prepares its own current-roster evaluation, labelled with its Asia/Manila
+preparation time; it need not match a CSV prepared earlier.
 
 ---
 

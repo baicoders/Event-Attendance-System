@@ -27,6 +27,9 @@ export async function GET() {
         status: true,
         rejectionReason: true,
         mustChangePassword: true,
+        // Exposed so the reset dialog can send a fresh target revision as its
+        // precondition. It does not authorize any action by itself.
+        credentialVersion: true,
         createdAt: true,
       },
     });

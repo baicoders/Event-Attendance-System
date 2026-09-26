@@ -88,22 +88,31 @@ front and prevents the import failure entirely.
 
 ## 3. Reset a forgotten password
 
-**Normally: Settings → Users → Reset password.** The admin is shown a temporary
-password to read out; the user is forced to choose their own at next sign-in.
+**Normally: Settings → Users → Reset password.** The admin reviews the target
+(name and email, role/status labels, current revision), enters their own
+password, confirms, and is shown a one-time temporary password to hand over.
+The old password and existing sign-ins stop working at commit; the user must
+pick their own password before reaching any app data or report. If the reset
+response is lost, the value cannot be recovered — confirm a **new** reset,
+which invalidates the first one.
 
-### Via Prisma Studio (fallback — no admin can sign in)
+Resetting your own row is rejected: use the Change password form instead, so
+the only active admin session is never invalidated mid-delivery. Resetting a
+pending/rejected account does not approve it — login still requires approval.
 
-1. `pnpm db:studio` → **User** → find the row by email.
-2. Type a plain password straight into the `password` field — for example
-   `TempPass123` — and save.
-3. Tell them to sign in with it.
+### Local fallback — no admin can sign in
 
-This works because the login route accepts a plaintext value and silently
-replaces it with a proper hash on the first successful sign-in. It is
-self-healing; you do not need to hash anything yourself.
+Run with the application and other database writers stopped, after a backup
+(§1). Never type a password into the database directly.
 
-Optionally also set `mustChangePassword` to `true`, which forces them to pick
-their own password before they reach the app.
+```bash
+pnpm account:recover -- --email maria@example.edu
+```
+
+Type the target email when asked. The command prints a generated temporary
+password once — hand it over, then have the holder pick their own at sign-in.
+Role and status are never changed. Restoring a backup later restores old
+credentials too: rotate `AUTH_SECRET` before reopening service.
 
 ---
 

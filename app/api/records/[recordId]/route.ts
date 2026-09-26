@@ -78,20 +78,12 @@ export async function PATCH(
 
     const recordedAt = new Date();
 
-    // Scan rules: exactly one scan each for time-in and time-out, and a
-    // time-out is only possible after a time-in. Writes are conditional
+    // Scan rules: exactly one scan each for time-in and time-out. Writes are conditional
     // (compare-and-set) so concurrent requests cannot overwrite the first.
     // `changed` distinguishes a real update from a repeat action, so the table
     // doesn't falsely report "Attendance updated" on a no-op.
     let changed = false;
     if (record.event.isTimeout) {
-      if (!record.timein) {
-        return NextResponse.json(
-          err("Student has not timed in for this event.", "NO_TIME_IN"),
-          { status: 409 }
-        );
-      }
-
       if (!record.timeout) {
         const res = await prisma.record.updateMany({
           where: { id: record.id, timeout: null },

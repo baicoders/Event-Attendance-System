@@ -14,4 +14,15 @@ export type NewRecord = Omit<
   | "lastModifiedById"
 >
 
+// expectedMode is a transport precondition, not a Record column.
+export type CreateRecordInput = NewRecord & { expectedMode?: "TIME_IN" | "TIME_OUT" };
+export type RecordWireResult = Omit<Record, "timein" | "timeout" | "createdAt" | "updatedAt"> & {
+  timein: string | null;
+  timeout: string | null;
+  createdAt: string;
+  updatedAt: string;
+  changed: boolean;
+  operation: "TIME_IN" | "TIME_OUT";
+};
+
 export type AttendanceStatus = "absent" | "present";

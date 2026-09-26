@@ -12,6 +12,9 @@ import { useDeleteStudent, useSaveStudent } from "@/globals/hooks/useStudents";
 import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 import { StudentListCategory } from "../types";
 import { StudentQrModal } from "./StudentQRModal";
+import { StudentAttendanceHistorySheet } from "./StudentAttendanceHistorySheet";
+import { useSearchParams } from "next/navigation";
+import { safeStudentReturnHref } from "@/globals/utils/studentReturn";
 
 interface StudentListClientProps {
   category: StudentListCategory;
@@ -36,6 +39,9 @@ const StudentListClient = ({
   const [isStudentFormOpen, setIsStudentFormOpen] = useState(false);
   const [isStudentCodeOpen, setIsStudentCodeOpen] = useState(false);
   const [qrStudent, setQrStudent] = useState<Student>();
+  const [historyStudentId, setHistoryStudentId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const returnTo = safeStudentReturnHref(`/students/student-list?${searchParams.toString()}`);
 
   const { mutateAsync: saveStudent } = useSaveStudent();
   const { mutateAsync: deleteStudent } = useDeleteStudent();
@@ -101,8 +107,10 @@ const StudentListClient = ({
         onEdit: handleEdit,
         onDelete: handleDelete,
         onViewQR: handleViewQR,
+        onHistory: (student: Student) => setHistoryStudentId(student.id),
+        profileHref: (student: Student) => `/students/${encodeURIComponent(student.id)}?returnTo=${encodeURIComponent(returnTo)}`,
       }),
-    [handleEdit, handleDelete, handleViewQR],
+    [handleEdit, handleDelete, handleViewQR, returnTo],
   );
 
   return (
@@ -133,6 +141,8 @@ const StudentListClient = ({
         open={isStudentCodeOpen && !!qrStudent}
         student={qrStudent}
       />
+      <StudentAttendanceHistorySheet studentId={historyStudentId} open={!!historyStudentId}
+        onOpenChange={open => { if (!open) setHistoryStudentId(null); }} />
     </div>
   );
 };

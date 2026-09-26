@@ -16,7 +16,7 @@ import {
 import { Event } from "@/globals/types/events";
 import TurnOnTimeoutMode from "@/features/attendance/components/TurnOnTimeoutMode";
 import Link from "next/link";
-import { MdReport } from "react-icons/md";
+import { MdInsights } from "react-icons/md";
 import { IoDocument } from "react-icons/io5";
 import { useAuth } from "@/globals/contexts/AuthContext";
 import PageHeader from "@/globals/components/shared/PageHeader";
@@ -126,11 +126,21 @@ const AttendancePageHeader: React.FC<Props> = ({
               </ButtonWithIcon>
             )}
 
-            {/* Export is not implemented yet - disabled rather than shown as a
-                working control (see deferred export PR). */}
-            <ButtonWithIcon icon={PiExport} disabled title="Export coming soon">
-              Export
-            </ButtonWithIcon>
+            {selectedEvent?.id ? (
+              <Link href={`/attendance/progress?eventId=${encodeURIComponent(selectedEvent.id)}`}>
+                <ButtonWithIcon variant="ghost" icon={MdInsights}>View progress</ButtonWithIcon>
+              </Link>
+            ) : (
+              <ButtonWithIcon variant="ghost" icon={MdInsights} disabled>View progress</ButtonWithIcon>
+            )}
+
+            {selectedEvent?.id ? (
+              <Link href={`/reports/events/${selectedEvent.id}?export=1`} target="_blank" rel="noopener noreferrer">
+                <ButtonWithIcon icon={PiExport}>Export</ButtonWithIcon>
+              </Link>
+            ) : (
+              <ButtonWithIcon icon={PiExport} disabled>Export</ButtonWithIcon>
+            )}
           </>
         }
       />

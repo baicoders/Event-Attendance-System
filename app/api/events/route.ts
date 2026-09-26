@@ -194,6 +194,7 @@ export async function POST(req: Request) {
           connect: baseData.includedGroups.map((g) => ({ id: g })),
         },
       },
+      include: { includedGroups: true },
     });
 
     return NextResponse.json(ok(created), { status: 201 });

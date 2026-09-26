@@ -27,19 +27,26 @@ type ScannerProps = {
   isPending?: boolean;
   /** The event scans are currently being recorded against, if any. */
   eventId?: string;
+  mode?: "TIME_IN" | "TIME_OUT";
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onManualEntry?: () => void;
+  pausedMessage?: string;
+  large?: boolean;
 };
 
 /**
  * Camera off state
  */
-const CameraOffState = ({ onOpen }: { onOpen: () => void }) => (
+const CameraOffState = ({ onOpen, disabled = false, pausedMessage }: { onOpen: () => void; disabled?: boolean; pausedMessage?: string }) => (
   <div className="flex flex-col items-center justify-center px-4 py-6 sm:py-8">
     <IoCameraOutline className="size-16 text-slate-400 mb-4 sm:size-24 sm:mb-6 md:size-28" />
     <p className="text-base font-medium text-slate-600 mb-4 text-center sm:text-lg sm:mb-6">
-      Turn on camera to start attendance
+      {disabled ? pausedMessage || "Scanning paused until this result is reviewed" : "Turn on camera to start attendance"}
     </p>
     <Button
       onClick={onOpen}
+      disabled={disabled}
       size="lg"
       className="text-sm px-6 py-4 sm:text-base sm:px-8 sm:py-6"
     >
@@ -51,13 +58,31 @@ const CameraOffState = ({ onOpen }: { onOpen: () => void }) => (
 /**
  * Scanner component for QR code and barcode scanning
  */
-const Scanner = ({ onRead, isPending = false, eventId }: ScannerProps) => {
-  const [cameraOpen, setCameraOpen] = useState(false);
+const Scanner = ({ onRead, isPending = false, eventId, mode, isOpen, onOpenChange, onManualEntry, pausedMessage, large = false }: ScannerProps) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const cameraOpen = isOpen ?? internalOpen;
+  const setCameraOpen = (open: boolean) => {
+    if (open) setCameraError(null);
+    onOpenChange?.(open);
+    if (isOpen === undefined) setInternalOpen(open);
+  };
+
+  const handleCameraError = (error: unknown) => {
+    const name = error instanceof Error ? error.name : "";
+    setCameraError(name === "NotAllowedError" || name === "PermissionDeniedError"
+      ? "Camera permission denied. Allow camera access in your browser, then retry."
+      : name === "NotFoundError" || name === "DevicesNotFoundError"
+      ? "No camera was found on this device."
+      : "Camera unavailable. Close it and try again, or use manual entry.");
+    setCameraOpen(false);
+  };
 
   return (
     <div
       className={cn(
         surface.card,
+        large ? "flex h-[420px] flex-col items-center justify-center overflow-hidden p-4 sm:h-[540px]" :
         "flex h-[380px] flex-col items-center justify-center overflow-hidden p-4 sm:h-[440px]"
       )}
     >
@@ -67,9 +92,15 @@ const Scanner = ({ onRead, isPending = false, eventId }: ScannerProps) => {
           isPending={isPending}
           onClose={() => setCameraOpen(false)}
           eventId={eventId}
+          mode={mode}
+          onError={handleCameraError}
         />
       ) : (
-        <CameraOffState onOpen={() => setCameraOpen(true)} />
+        <div className="text-center">
+          {cameraError && <p role="alert" className="mb-3 text-sm font-medium text-rose-700">{cameraError}</p>}
+          <CameraOffState onOpen={() => setCameraOpen(true)} disabled={isPending} pausedMessage={pausedMessage} />
+          {cameraError && onManualEntry && <Button type="button" variant="outline" onClick={onManualEntry}>Manual entry</Button>}
+        </div>
       )}
     </div>
   );
