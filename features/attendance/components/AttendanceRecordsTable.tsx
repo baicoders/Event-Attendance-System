@@ -8,6 +8,7 @@ import DataTable from "@/globals/components/shared/dataTable/DataTable";
 import { Button } from "@/globals/components/shad-cn/button";
 import { DataTableErrorState } from "@/globals/components/shared/dataTable/DataTableStates";
 import { useAuth } from "@/globals/contexts/AuthContext";
+import Link from "next/link";
 
 type Props = {
   selectedEvent: Event | null;
@@ -50,10 +51,15 @@ const AttendanceRecordsTable = ({ selectedEvent }: Props) => {
         />
       }
       title={onlyNeedsReview ? "Records needing review" : "Attendance Records"}
-      toolbarTrailing={<Button type="button" variant="outline" size="sm" aria-pressed={onlyNeedsReview}
-        onClick={() => setOnlyNeedsReview((value) => !value)}>
-        {onlyNeedsReview ? "Show checked-in records" : "Review records without time-in"}
-      </Button>}
+      toolbarTrailing={<>
+        <Button type="button" variant="outline" size="sm" aria-pressed={onlyNeedsReview}
+          onClick={() => setOnlyNeedsReview((value) => !value)}>
+          {onlyNeedsReview ? "Show checked-in records" : "Review records without time-in"}
+        </Button>
+        {canManage && <Button asChild variant="outline" size="sm">
+          <Link href={`/attendance/corrections?eventId=${encodeURIComponent(selectedEvent.id)}`}>Review &amp; correct records</Link>
+        </Button>}
+      </>}
       // Switching events swaps the rows without unmounting; restart at page 1 so
       // live polling of the previous event's page doesn't linger.
       resetKey={`${selectedEvent.id}:${onlyNeedsReview}`}

@@ -23,6 +23,7 @@ type Props = {
   onFocusSearch?: () => void;
   onReturnToScanner?: () => void;
   inSheet?: boolean;
+  floatingResults?: boolean;
   result?: Attempt | null;
   onAcknowledge?: () => void;
 };
@@ -36,7 +37,7 @@ function identity(student: Student) {
 
 export default function ManualAttendanceSection({ selectedEvent, displayedStudent, onSelect, onRecord,
   operationBusy = false, active = true, focusRequest, onFocusSearch, onReturnToScanner,
-  inSheet = false, result, onAcknowledge }: Props) {
+  inSheet = false, floatingResults = false, result, onAcknowledge }: Props) {
   const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(10);
@@ -153,10 +154,13 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
     {!roster.isError && roster.data?.length === 0 && <p className="mt-3 text-sm">No students are eligible for this event.</p>}
     {query.trim().length >= 2 && !resultsOpen && <p className="mt-3 text-sm text-slate-600">Results closed. Focus search to show them again.</p>}
     {query.trim().length < 2 ? <p className="mt-3 text-sm text-slate-600">Enter two or more characters to find a student.</p> : resultsOpen &&
-      roster.data && <>
+      roster.data && <div className="relative">
         <p className="mt-3 text-sm" aria-live="polite">{matches.length} matching students{matches.length > 50 ? " · Narrow the search to see beyond 50" : ""}</p>
         {matches.length === 0 && <p className="mt-2 text-sm">No matching students in this event.</p>}
-        <ul className="mt-2 divide-y rounded-md border">
+        {matches.length > 0 && <div className={floatingResults
+          ? "absolute left-0 right-0 top-full z-10 mt-2 max-h-[60vh] overflow-y-auto rounded-lg border bg-white shadow-xl"
+          : ""}>
+        <ul className={floatingResults ? "divide-y" : "mt-2 divide-y rounded-md border"}>
           {matches.slice(0, visible).map(({ student, displayName }, index) => {
             const rowRecord = recordsByStudent.get(student.id) ?? null;
             const rowState = manualRecordState(true, eventRecords.isPending && !eventRecords.data, eventRecords.isError, rowRecord);
@@ -168,15 +172,16 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
                 mode === "TIME_OUT" && rowRecord.timeout ? "Timed out " + new Date(rowRecord.timeout).toLocaleTimeString() :
                 mode === "TIME_OUT" && !rowRecord.timein ? "No time-in recorded" : ""}</p>}</div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Button ref={index === 0 ? firstDetailRef : undefined} type="button" size="sm" variant="outline" onClick={() => onSelect(student)}
+              <Button ref={index === 0 ? firstDetailRef : undefined} type="button" size="sm" variant="outline" onClick={() => { if (floatingResults) setResultsOpen(false); onSelect(student); }}
                 aria-label={"View details for " + displayName + ", " + student.id}>View details</Button>
-              <Button type="button" size="sm" disabled={!onRecord || operationBusy || detailActionDisabled(mode, rowState)} onClick={() => onRecord?.(student)}
+              <Button type="button" size="sm" disabled={!onRecord || operationBusy || detailActionDisabled(mode, rowState)} onClick={() => { if (floatingResults) setResultsOpen(false); onRecord?.(student); }}
                 aria-label={rowLabel + " for " + displayName + ", " + student.id}>{rowLabel}</Button>
             </div>
           </li>; })}
         </ul>
-        {visible < Math.min(matches.length, 50) && <Button type="button" className="mt-3" variant="outline" onClick={() => setVisible((count) => Math.min(count + 10, 50))}>Show more</Button>}
-      </>}
+        {visible < Math.min(matches.length, 50) && <Button type="button" className={floatingResults ? "m-3" : "mt-3"} variant="outline" onClick={() => setVisible((count) => Math.min(count + 10, 50))}>Show more</Button>}
+        </div>}
+      </div>}
     {displayedStudent && <div className="mt-5 rounded-lg border bg-slate-50 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2"><div>
         <h3 className="font-semibold">{[displayedStudent.firstName, displayedStudent.middleName, displayedStudent.lastName].filter(Boolean).join(" ")}</h3>

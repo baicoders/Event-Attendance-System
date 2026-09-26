@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Scanner from "@/features/attendance/components/Scanner";
 import ManualAttendanceSection from "@/features/attendance/components/ManualAttendanceSection";
 import { useAttendanceOperation } from "@/features/attendance/hooks/useAttendanceOperation";
@@ -9,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/globals/utils/queryKeys";
 import type { Event } from "@/globals/types/events";
 import type { Student } from "@/globals/types/students";
+import { Button } from "@/globals/components/shad-cn/button";
 
 export default function AttendanceSection({ selectedEvent }: { selectedEvent: Event | null }) {
   const { user } = useAuth();
@@ -45,10 +47,15 @@ export default function AttendanceSection({ selectedEvent }: { selectedEvent: Ev
 
   return <div className="grid w-full gap-3 lg:grid-cols-[1fr_1.2fr]">
     <div ref={scannerRef} className="order-2 space-y-3 lg:order-1">
-      <Scanner onRead={(studentId) => { if (!manualActive) void submit({ studentId, method: "SCANNED" }); }}
-        isPending={busy || manualActive} eventId={selectedEvent.id} mode={mode}
-        isOpen={cameraOpen} onOpenChange={setCameraOpen} onManualEntry={openManual}
-        pausedMessage={manualActive ? "Scanning paused during manual entry" : undefined} />
+      <div className="relative">
+        <Scanner onRead={(studentId) => { if (!manualActive) void submit({ studentId, method: "SCANNED" }); }}
+          isPending={busy || manualActive} eventId={selectedEvent.id} mode={mode}
+          isOpen={cameraOpen} onOpenChange={setCameraOpen} onManualEntry={openManual}
+          pausedMessage={manualActive ? "Scanning paused during manual entry" : undefined} />
+        {!cameraOpen && <Button asChild variant="outline" size="sm" className="absolute right-4 top-4 z-10 bg-white">
+          <Link href={`/attendance/operator?eventId=${encodeURIComponent(selectedEvent.id)}`}>Open operator mode</Link>
+        </Button>}
+      </div>
       {state.lastResult?.method === "SCANNED" && <div className="rounded-xl border bg-white p-4" aria-live="polite">
         <p className="font-semibold">{state.lastResult.outcome.replaceAll("_", " ")}</p>
         <p className="text-sm">{state.lastResult.name || "Student"} · {state.lastResult.studentId}</p>
@@ -57,8 +64,9 @@ export default function AttendanceSection({ selectedEvent }: { selectedEvent: Ev
         {state.phase === "AWAITING_ACKNOWLEDGEMENT" && <button type="button" className="mt-2 underline" onClick={acknowledge}>Acknowledge result</button>}
       </div>}
     </div>
-    <div className="order-1 lg:order-2"><ManualAttendanceSection key={selectedEvent.id + ":" + (user?.id ?? "")}
+    <div className="order-1 min-w-0 lg:order-2"><ManualAttendanceSection key={selectedEvent.id + ":" + (user?.id ?? "")}
       selectedEvent={selectedEvent} displayedStudent={displayedStudent}
+      floatingResults
       onSelect={(student) => setSelection(student && user ? { student, eventId: selectedEvent.id, viewerId: user.id } : null)}
       onRecord={(student) => { void submit({ studentId: student.id, method: "MANUAL", student: {
         id: student.id, name: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "),

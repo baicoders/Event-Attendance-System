@@ -202,6 +202,7 @@ function OperatorPageInner() {
   const result = state.lastResult;
   const manualSection = <ManualAttendanceSection key={selectedEvent.id + ":" + (user?.id ?? "")}
     selectedEvent={selectedEvent} displayedStudent={selectedStudent} active={manualOpen} inSheet={!desktopLayout}
+    floatingResults={desktopLayout}
     onSelect={(student) => setSelection(student && user ? { student, eventId: selectedEvent.id, viewerId: user.id } : null)}
     onRecord={recordManual} operationBusy={!captureAllowed}
     focusRequest={manualFocusRequest} onReturnToScanner={() => closeManual(false)}
