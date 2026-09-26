@@ -7,6 +7,12 @@ type EventStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
  * Prevents inconsistent cache keys and makes cache invalidation predictable.
  */
 export const queryKeys = {
+  attendance: {
+    reviewPrefix: (eventId: string) => ["attendance", "review", eventId] as const,
+    review: (eventId: string, viewerId: string, params: string) => ["attendance", "review", eventId, viewerId, params] as const,
+    historyPrefix: (eventId: string, studentId: string) => ["attendance", "history", eventId, studentId] as const,
+    history: (eventId: string, studentId: string, viewerId: string, beforeId?: number) => ["attendance", "history", eventId, studentId, viewerId, beforeId ?? "latest"] as const,
+  },
   audience: {
     all: () => ["audience"] as const,
     count: (scope: string, eventId?: string) => ["audience", "count", scope, eventId ?? "new"] as const,

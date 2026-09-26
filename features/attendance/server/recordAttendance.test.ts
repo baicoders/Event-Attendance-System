@@ -39,25 +39,36 @@ after(async () => { await disconnect?.(); await disposable?.cleanup(); });
 test("expected mode selects only a matching time-in and preserves first writer", async () => {
   const { recordAttendance } = await import("./recordAttendance");
   const input = { eventId, studentId, method: "SCANNED" as const, expectedMode: "TIME_IN" as const };
-  const user = { id: userId, role: "ORGANIZER" as const };
+  const user = { id: userId, role: "ORGANIZER" as const, credentialVersion: 0 };
   const first = await recordAttendance(db, input, user);
   assert.equal(first.operation, "TIME_IN");
   assert.equal(first.changed, true);
   assert.equal(first.created, true);
   assert.ok(first.record.timein);
   assert.equal(first.record.recordedById, userId);
+  assert.equal(first.record.revision, 1);
+  const changes = await db.attendanceChange.findMany({ where: { eventId, studentId } });
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].action, "CREATE");
+  assert.equal(changes[0].recordId, first.record.id);
+  const jsonNulls = await db.$queryRaw<Array<{ absent_before: boolean; null_timeout: boolean }>>`
+    SELECT "before" IS NULL AS absent_before, ("after"->'timeout') = 'null'::jsonb AS null_timeout
+    FROM "AttendanceChange" WHERE id = ${changes[0].id}`;
+  assert.deepEqual(jsonNulls[0], { absent_before: true, null_timeout: true });
   const again = await recordAttendance(db, input, user);
   assert.equal(again.changed, false);
   assert.equal(again.created, false);
   assert.equal(again.record.timein?.toISOString(), first.record.timein?.toISOString());
   assert.equal(again.record.method, "SCANNED");
+  assert.equal(again.record.revision, 1);
+  assert.equal(await db.attendanceChange.count({ where: { eventId, studentId } }), 1);
 });
 
 test("a stale time-in request cannot write after global mode changes", async () => {
   const { recordAttendance, RecordingError } = await import("./recordAttendance");
   await db.event.update({ where: { id: eventId }, data: { isTimeout: true } });
   await assert.rejects(
-    recordAttendance(db, { eventId, studentId, method: "MANUAL", expectedMode: "TIME_IN" }, { id: userId, role: "ORGANIZER" }),
+    recordAttendance(db, { eventId, studentId, method: "MANUAL", expectedMode: "TIME_IN" }, { id: userId, role: "ORGANIZER", credentialVersion: 0 }),
     (error: unknown) => error instanceof RecordingError && error.code === "EVENT_MODE_CHANGED",
   );
   const current = await db.record.findUniqueOrThrow({ where: { eventId_studentId: { eventId, studentId } } });
@@ -70,8 +81,8 @@ test("time-out without time-in creates a record with null time-in and preserves 
     id: "00000987654", firstName: "Maria", lastName: "Santos", schoolLevel: "COLLEGE", yearLevel: "YEAR_1",
   } });
   const timeoutOnlyInput = { eventId, studentId: other.id, method: "SCANNED" as const, expectedMode: "TIME_OUT" as const };
-  const timeoutOnly = await recordAttendance(db, timeoutOnlyInput, { id: userId, role: "ORGANIZER" });
-  const timeoutOnlyAgain = await recordAttendance(db, timeoutOnlyInput, { id: userId, role: "ORGANIZER" });
+  const timeoutOnly = await recordAttendance(db, timeoutOnlyInput, { id: userId, role: "ORGANIZER", credentialVersion: 0 });
+  const timeoutOnlyAgain = await recordAttendance(db, timeoutOnlyInput, { id: userId, role: "ORGANIZER", credentialVersion: 0 });
   assert.equal(timeoutOnly.created, true);
   assert.equal(timeoutOnly.changed, true);
   assert.equal(timeoutOnly.record.timein, null);
@@ -81,7 +92,7 @@ test("time-out without time-in creates a record with null time-in and preserves 
   assert.equal(timeoutOnlyAgain.record.timein, null);
   assert.equal(timeoutOnlyAgain.record.timeout?.toISOString(), timeoutOnly.record.timeout?.toISOString());
   const input = { eventId, studentId, method: "MANUAL" as const, expectedMode: "TIME_OUT" as const };
-  const user = { id: userId, role: "ORGANIZER" as const };
+  const user = { id: userId, role: "ORGANIZER" as const, credentialVersion: 0 };
   const first = await recordAttendance(db, input, user);
   const again = await recordAttendance(db, input, user);
   assert.equal(first.changed, true);
@@ -101,7 +112,7 @@ test("independent PostgreSQL clients never commit the opposite mode during a swi
         start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
       } });
       const [scan] = await Promise.allSettled([
-        recordAttendance(db, { eventId: currentEvent.id, studentId, method: "SCANNED", expectedMode: "TIME_IN" }, { id: userId, role: "ORGANIZER" }),
+        recordAttendance(db, { eventId: currentEvent.id, studentId, method: "SCANNED", expectedMode: "TIME_IN" }, { id: userId, role: "ORGANIZER", credentialVersion: 0 }),
         second.db.event.update({ where: { id: currentEvent.id }, data: { isTimeout: true } }),
       ]);
       const persisted = await db.record.findUnique({ where: { eventId_studentId: { eventId: currentEvent.id, studentId } } });
@@ -124,7 +135,7 @@ test("a time-out racing a switch back to time-in preserves the prior time-in", a
       title: "Reverse race", category: "ALL", status: "APPROVED", createdById: userId,
       start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
     } });
-    const owner = { id: userId, role: "ORGANIZER" as const };
+    const owner = { id: userId, role: "ORGANIZER" as const, credentialVersion: 0 };
     const before = await recordAttendance(db,
       { eventId: event.id, studentId, method: "SCANNED", expectedMode: "TIME_IN" }, owner);
     await db.event.update({ where: { id: event.id }, data: { isTimeout: true } });
@@ -157,12 +168,12 @@ test("five concurrent requests preserve one record and write-once timestamps", a
       start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
     } });
     const timeins = await Promise.allSettled(clients.map((client) => recordAttendance(client,
-      { eventId: event.id, studentId, method: "SCANNED", expectedMode: "TIME_IN" }, { id: userId, role: "ORGANIZER" })));
+      { eventId: event.id, studentId, method: "SCANNED", expectedMode: "TIME_IN" }, { id: userId, role: "ORGANIZER", credentialVersion: 0 })));
     assert.ok(timeins.some((result) => result.status === "fulfilled"));
     const before = await db.record.findUniqueOrThrow({ where: { eventId_studentId: { eventId: event.id, studentId } } });
     await db.event.update({ where: { id: event.id }, data: { isTimeout: true } });
     const timeouts = await Promise.allSettled(clients.map((client) => recordAttendance(client,
-      { eventId: event.id, studentId, method: "MANUAL", expectedMode: "TIME_OUT" }, { id: userId, role: "ORGANIZER" })));
+      { eventId: event.id, studentId, method: "MANUAL", expectedMode: "TIME_OUT" }, { id: userId, role: "ORGANIZER", credentialVersion: 0 })));
     assert.ok(timeouts.some((result) => result.status === "fulfilled"));
     const after = await db.record.findMany({ where: { eventId: event.id, studentId } });
     assert.equal(after.length, 1);
@@ -189,7 +200,7 @@ test("different students scanning the same event proceed concurrently", async ()
     const b = await db.student.create({ data: {
       id: "00000110022", firstName: "Pair", lastName: "B", schoolLevel: "COLLEGE", yearLevel: "YEAR_1",
     } });
-    const owner = { id: userId, role: "ORGANIZER" as const };
+    const owner = { id: userId, role: "ORGANIZER" as const, credentialVersion: 0 };
     const [ra, rb] = await Promise.all([
       recordAttendance(db, { eventId: event.id, studentId: a.id, method: "SCANNED" }, owner),
       recordAttendance(second.db, { eventId: event.id, studentId: b.id, method: "SCANNED" }, owner),
@@ -202,7 +213,7 @@ test("different students scanning the same event proceed concurrently", async ()
 
 test("legacy requests follow server mode, while authorization and eligibility still deny writes", async () => {
   const { recordAttendance, RecordingError } = await import("./recordAttendance");
-  const owner = { id: userId, role: "ORGANIZER" as const };
+  const owner = { id: userId, role: "ORGANIZER" as const, credentialVersion: 0 };
   const event = await db.event.create({ data: {
     title: "Legacy", category: "ALL", status: "APPROVED", createdById: userId,
     start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
@@ -218,7 +229,8 @@ test("legacy requests follow server mode, while authorization and eligibility st
   } });
   await assert.rejects(recordAttendance(db, { ...legacy, eventId: draft.id }, owner),
     (error: unknown) => error instanceof RecordingError && error.code === "INVALID_STATUS");
-  await assert.rejects(recordAttendance(db, { ...legacy, eventId: draft.id }, { id: "another-organizer", role: "ORGANIZER" }),
+  const otherOrganizer = await db.user.create({ data: { name: "Other organizer", email: "other-organizer@example.test", password: "test", status: "ACTIVE" } });
+  await assert.rejects(recordAttendance(db, { ...legacy, eventId: draft.id }, { id: otherOrganizer.id, role: "ORGANIZER", credentialVersion: 0 }),
     (error: unknown) => error instanceof RecordingError && error.code === "FORBIDDEN");
   const scoped = await db.event.create({ data: {
     title: "Other group", category: "HOUSE", status: "APPROVED", createdById: userId,
@@ -227,4 +239,54 @@ test("legacy requests follow server mode, while authorization and eligibility st
   await assert.rejects(recordAttendance(db, { ...legacy, eventId: scoped.id }, owner),
     (error: unknown) => error instanceof RecordingError && error.code === "STUDENT_UNAVAILABLE");
   assert.equal(await db.record.count({ where: { eventId: scoped.id } }), 0);
+});
+
+test("record-id fill preserves the legacy row and appends one change", async () => {
+  const { fillRecordById } = await import("./fillRecordById");
+  const event = await db.event.create({ data: { title: "Legacy fill", category: "ALL", status: "APPROVED", createdById: userId,
+    start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z") } });
+  const legacy = await db.record.create({ data: { eventId: event.id, studentId, method: "MANUAL" } });
+  const first = await fillRecordById(db, legacy.id, { id: userId, credentialVersion: 0 });
+  const again = await fillRecordById(db, legacy.id, { id: userId, credentialVersion: 0 });
+  assert.equal(first.changed, true);
+  assert.equal(again.changed, false);
+  assert.equal(first.record.revision, 1);
+  assert.equal(again.record.revision, 1);
+  assert.equal(await db.attendanceChange.count({ where: { recordId: legacy.id } }), 1);
+});
+
+test("legacy fill rejects a record outside the event's current audience", async () => {
+  const { fillRecordById } = await import("./fillRecordById");
+  const { RecordingError } = await import("./recordAttendance");
+  const event = await db.event.create({ data: { title: "Scoped fill", category: "HOUSE", status: "APPROVED", createdById: userId,
+    start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z") } });
+  const legacy = await db.record.create({ data: { eventId: event.id, studentId, method: "MANUAL" } });
+  await assert.rejects(fillRecordById(db, legacy.id, { id: userId, credentialVersion: 0 }),
+    (error: unknown) => error instanceof RecordingError && error.code === "STUDENT_UNAVAILABLE");
+  assert.equal((await db.record.findUniqueOrThrow({ where: { id: legacy.id } })).revision, 0);
+  assert.equal(await db.attendanceChange.count({ where: { recordId: legacy.id } }), 0);
+});
+
+test("stale credential generation cannot record or fill after a password reset", async () => {
+  const { recordAttendance, RecordingError } = await import("./recordAttendance");
+  const { fillRecordById } = await import("./fillRecordById");
+  const user = await db.user.create({ data: { name: "Reset", email: "reset-operator@example.test", password: "test", status: "ACTIVE", credentialVersion: 1 } });
+  const event = await db.event.create({ data: { title: "Reset test", category: "ALL", status: "APPROVED", createdById: userId,
+    start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z") } });
+  const legacy = await db.record.create({ data: { eventId: event.id, studentId, method: "MANUAL" } });
+  await assert.rejects(recordAttendance(db, { eventId: event.id, studentId, method: "SCANNED" },
+    { id: user.id, role: "ORGANIZER", credentialVersion: 0 }),
+    (error: unknown) => error instanceof RecordingError && error.code === "UNAUTHORIZED");
+  await assert.rejects(fillRecordById(db, legacy.id, { id: user.id, credentialVersion: 0 }),
+    (error: unknown) => error instanceof RecordingError && error.code === "UNAUTHORIZED");
+  assert.equal(await db.attendanceChange.count({ where: { recordId: legacy.id } }), 0);
+});
+
+test("recording rejects a user revoked after session validation", async () => {
+  const { recordAttendance, RecordingError } = await import("./recordAttendance");
+  const revoked = await db.user.create({ data: { name: "Revoked", email: "revoked@example.test", password: "test", status: "REJECTED" } });
+  const event = await db.event.create({ data: { title: "Revocation", category: "ALL", status: "APPROVED", start: new Date(), end: new Date(), createdById: userId } });
+  await assert.rejects(recordAttendance(db, { eventId: event.id, studentId, method: "SCANNED" }, { id: revoked.id, role: "ADMIN", credentialVersion: 0 }),
+    (error: unknown) => error instanceof RecordingError && error.code === "UNAUTHORIZED");
+  assert.equal(await db.record.count({ where: { eventId: event.id } }), 0);
 });

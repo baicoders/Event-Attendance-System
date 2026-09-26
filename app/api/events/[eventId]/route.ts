@@ -305,7 +305,7 @@ export async function DELETE(
       if (!fresh) return "missing" as const;
       assertEventOwnership(fresh, user);
       const attendanceCount = await tx.record.count({ where: { eventId: fresh.id } });
-      if (attendanceCount > 0) return "blocked" as const;
+      if (attendanceCount > 0 || await tx.attendanceChange.count({ where: { eventId: fresh.id } })) return "blocked" as const;
       await tx.event.delete({ where: { id: eventId } });
       return "deleted" as const;
     });

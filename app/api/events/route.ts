@@ -251,7 +251,7 @@ export async function DELETE(req: Request) {
         where: { eventId: fresh.id },
       });
 
-      if (attendanceCount > 0) return "blocked" as const;
+      if (attendanceCount > 0 || await tx.attendanceChange.count({ where: { eventId: fresh.id } })) return "blocked" as const;
 
       await tx.event.delete({ where: { id } });
       return "deleted" as const;

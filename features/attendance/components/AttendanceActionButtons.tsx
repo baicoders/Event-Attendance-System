@@ -1,15 +1,11 @@
-import {
-  toastDanger,
-  toastSuccess,
-  toastWarning,
-} from "@/globals/components/shared/toasts";
-import { useDeleteRecord, useCreateRecord } from "@/globals/hooks/useRecords";
+import { toastSuccess, toastWarning } from "@/globals/components/shared/toasts";
+import { useCreateRecord } from "@/globals/hooks/useRecords";
 import { NewRecord } from "@/globals/types/records";
 import React from "react";
 import { IconType } from "react-icons/lib";
 import { ATTENDANCE_STATUS_ICONS } from "@/features/attendance/constants/attendanceStatus";
 import { Button } from "@/globals/components/shad-cn/button";
-import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
+import { useRouter } from "next/navigation";
 
 type Props = {
   eventId: string;
@@ -42,7 +38,7 @@ const AttendanceActionButtons = ({
   // event is in timeout mode, so its label must reflect the current mode.
   // Deleting (Absent) requires event ownership, matching the records table.
   const actionButtons: {
-    action: "present" | "absent";
+    action: "present" | "review";
     icon: IconType;
     label: string;
     title: string;
@@ -58,10 +54,10 @@ const AttendanceActionButtons = ({
     ...(canManage
       ? [
           {
-            action: "absent" as const,
+            action: "review" as const,
             icon: ATTENDANCE_STATUS_ICONS.absent,
-            label: "Absent",
-            title: "Mark as Absent (Delete Record)",
+            label: "Review",
+            title: "Review or correct attendance",
             color: "text-red-400",
           },
         ]
@@ -69,13 +65,11 @@ const AttendanceActionButtons = ({
   ];
   const { mutateAsync: createRecord, isPending: isCreating } =
     useCreateRecord(eventId);
-  const { mutateAsync: deleteRecord, isPending: isDeleting } =
-    useDeleteRecord(eventId);
-  const confirm = useConfirm();
+  const router = useRouter();
 
-  const isLoading = isCreating || isDeleting;
+  const isLoading = isCreating;
 
-  const handleAction = async (action: "present" | "absent") => {
+  const handleAction = async (action: "present" | "review") => {
     if (action === "present") {
       if (onRecord) {
         onRecord();
@@ -108,25 +102,7 @@ const AttendanceActionButtons = ({
         );
       }
     } else {
-      // Absent action = Delete
-      if (!recordId) return; // Already absent
-
-      const confirmed = await confirm({
-        title: "Mark as absent?",
-        description:
-          "This removes the student record from this event. This is an irreversable action.",
-      });
-
-      if (!confirmed) return;
-
-      try {
-        await deleteRecord(recordId);
-        toastSuccess("Attendance record removed");
-      } catch (error) {
-        toastDanger(
-          `Failed to delete: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
-      }
+      if (recordId) router.push(`/attendance/corrections?eventId=${encodeURIComponent(eventId)}&studentId=${encodeURIComponent(studentId)}`);
     }
   };
 
@@ -134,14 +110,14 @@ const AttendanceActionButtons = ({
     <div className="flex flex-col gap-2 justify-center items-center">
       {actionButtons.map(({ action, icon: Icon, label, title, color }) => {
         // Disable rules:
-        // - "absent": nothing to delete when there's no record.
+        // - "review": nothing to review when there's no record.
         // - "present" in timeout mode: can't time out again once already done.
         // - "present" in normal mode: already timed in, nothing left to do.
         const presentDisabled =
           action === "present" &&
           (isTimeout ? hasTimeOut : hasTimeIn);
         const isDisabled =
-          isLoading || operationBusy || (action === "absent" && !recordId) || presentDisabled;
+          isLoading || operationBusy || (action === "review" && !recordId) || presentDisabled;
 
         return (
           <Button

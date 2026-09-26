@@ -17,6 +17,11 @@ pnpm db:studio        # opens http://localhost:5555
 > guarded against `NODE_ENV=production`, but that guard is the only thing
 > standing between a mistyped command and losing the week's attendance.
 
+For attendance corrections, use **Attendance → Review / correct attendance**.
+It records a reason and durable before/after history. Direct edits to `Record`
+in Prisma Studio bypass that history; use them only as reviewed incident recovery
+with writers stopped. See [attendance correction release notes](attendance-corrections.md).
+
 ---
 
 ## 1. Back up the database

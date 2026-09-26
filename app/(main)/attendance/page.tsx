@@ -8,6 +8,7 @@ import AttendanceSection from "@/features/attendance/components/AttendanceSectio
 import AttendanceRecordsTable from "@/features/attendance/components/AttendanceRecordsTable";
 import { useAttendanceEventContext } from "@/features/attendance/hooks/useAttendanceEventContext";
 import { page } from "@/globals/constants/designTokens";
+import { useAuth } from "@/globals/contexts/AuthContext";
 
 const RestoringState = () => (
   <div className="flex flex-1 items-center justify-center rounded-lg border p-8 text-gray-500 shadow-sm">
@@ -18,6 +19,8 @@ const RestoringState = () => (
 
 const AttendancePageInner = () => {
   const { selectedEvent, isRestoring, selectEventId } = useAttendanceEventContext(true);
+  const { user } = useAuth();
+  const canManage = !!selectedEvent && (user?.role === "ADMIN" || selectedEvent.createdById === user?.id);
 
   return (
     <section className={`${page.surface} min-h-svh`}>
@@ -28,6 +31,10 @@ const AttendancePageInner = () => {
         />
         {selectedEvent && (
           <div className="mb-4 flex justify-end">
+            {canManage && <Link className="mr-3 rounded-lg border border-slate-300 px-5 py-3 font-semibold text-slate-800 hover:bg-slate-100"
+              href={`/attendance/corrections?eventId=${encodeURIComponent(selectedEvent.id)}`}>
+              Review / correct attendance
+            </Link>}
             <Link className="rounded-lg bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-700" href={`/attendance/operator?eventId=${encodeURIComponent(selectedEvent.id)}`}>
               Open operator mode
             </Link>

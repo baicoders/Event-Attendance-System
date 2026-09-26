@@ -12,6 +12,7 @@ export type NewRecord = Omit<
   | "timeout"
   | "recordedById"
   | "lastModifiedById"
+  | "revision"
 >
 
 // expectedMode is a transport precondition, not a Record column.

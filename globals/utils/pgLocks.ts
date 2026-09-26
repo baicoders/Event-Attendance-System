@@ -10,13 +10,12 @@ import { createHash } from "node:crypto";
  *   so pooled connections cannot retain a lock after commit/rollback.
  *
  * Namespaces:
- * - `roster:shared` / `roster:exclusive` — freezes eligibility across a write.
- *   Attendance/event writes take the shared form; roster edits, imports, group
- *   membership replacement/deletion and lifecycle writes take the exclusive form.
+ * - One `roster` key — shared locks freeze eligibility for attendance/event
+ *   writes while roster edits, imports, group membership changes and lifecycle
+ *   writes take the exclusive form on that same key.
  * - `record:<eventId>:<studentId>` — exclusive per attendance pair, including
  *   when no Record exists yet.
- * - `command:<id>` — durable replay identity for future correction/receipt
- *   commands (#48/#86/#87); reserved here, not yet issued.
+ * - `command:<id>` — durable replay identity for correction/receipt commands.
  */
 
 function key64(namespace: string, ...parts: string[]): bigint {
@@ -37,8 +36,9 @@ function key64(namespace: string, ...parts: string[]): bigint {
   return key & mask;
 }
 
-export const ROSTER_SHARED_KEY = key64("eas", "roster", "shared");
-export const ROSTER_EXCLUSIVE_KEY = key64("eas", "roster", "exclusive");
+// Shared and exclusive lockers must use the same key to conflict correctly.
+export const ROSTER_SHARED_KEY = key64("eas", "roster");
+export const ROSTER_EXCLUSIVE_KEY = ROSTER_SHARED_KEY;
 
 export function recordPairKey(eventId: string, studentId: string): bigint {
   return key64("eas", "record", eventId, studentId);
@@ -53,9 +53,9 @@ export type AdvisoryTx = {
   $executeRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
 };
 
-/** `SELECT pg_advisory_xact_lock($1)` — shared roster-state freeze. */
+/** Shared roster-state freeze; simultaneous attendance pairs may proceed. */
 export async function takeRosterSharedLock(tx: AdvisoryTx): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ROSTER_SHARED_KEY})`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(${ROSTER_SHARED_KEY})`;
 }
 
 /** Exclusive roster lock for imports/group replacement/deletion/lifecycle. */
