@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 
 import {
@@ -24,6 +24,13 @@ type Props = {
 /** Shows a freshly issued temporary password. It is not retrievable again. */
 const TempPasswordDialog = ({ result, onClose }: Props) => {
   const [hasCopied, setHasCopied] = useState(false);
+  const issuance = result?.temporaryPassword;
+
+  // Reset the copied indicator per issuance — a reopened dialog must never
+  // show a stale "copied" state from a previous credential.
+  useEffect(() => {
+    setHasCopied(false);
+  }, [issuance]);
 
   if (!result) return null;
 
@@ -47,19 +54,20 @@ const TempPasswordDialog = ({ result, onClose }: Props) => {
         <DialogHeader>
           <DialogTitle>Temporary password for {result.name}</DialogTitle>
           <DialogDescription>
-            Give this to {result.email}. They will be asked to choose their own
-            password the next time they sign in.
+            {result.email} — give this directly to the verified account holder.
+            Only password replacement is allowed until they choose their own.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-2">
-          <code className="flex-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-lg tracking-wider text-slate-900">
+          <code className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-lg tracking-wider break-all text-slate-900 select-all">
             {result.temporaryPassword}
           </code>
           <Button
             type="button"
             variant="outline"
             size="icon"
+            className="shrink-0"
             aria-label="Copy temporary password"
             onClick={handleCopy}
           >
@@ -73,8 +81,9 @@ const TempPasswordDialog = ({ result, onClose }: Props) => {
 
         <Alert>
           <AlertDescription>
-            This is the only time it is shown. If it is lost, reset the password
-            again.
+            This is the only time it is shown. Closing this panel hides the
+            value. A new reset replaces it — if it is lost, reset again with a
+            fresh confirmation.
           </AlertDescription>
         </Alert>
 

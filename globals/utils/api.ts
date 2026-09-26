@@ -23,12 +23,27 @@ export function err(message: string, code?: string): ApiResponse<never> {
 }
 
 /**
+ * Broadcast when a response proves the held session is no longer usable:
+ * version-revoked (401 UNAUTHORIZED) or restricted
+ * (403 PASSWORD_CHANGE_REQUIRED). Listeners (AuthContext, query cache) hide
+ * protected views and refresh instead of treating it as a generic failure.
+ * Login-form 401s carry no UNAUTHORIZED code and never fire this.
+ */
+function notifySessionInvalid(status: number, code?: string) {
+  if (typeof window === "undefined") return;
+  if (code !== "UNAUTHORIZED" && code !== "PASSWORD_CHANGE_REQUIRED") return;
+  window.dispatchEvent(
+    new CustomEvent("auth:session-invalid", { detail: { status, code } }),
+  );
+}
+
+/**
  * Fetch wrapper that converts non-ok or application errors into thrown ApiError,
  * and returns the data typed as T.
  */
 export async function fetchApi<T>(
   input: RequestInfo,
-  init?: RequestInit
+  init?: RequestInit,
 ): Promise<T> {
   // 1. Perform the HTTP request
   const res = await fetch(input, init);
@@ -50,6 +65,7 @@ export async function fetchApi<T>(
   // 3. Handle HTTP-level errors (404, 500, etc.)
   if (!res.ok) {
     if (json && !json.success) {
+      notifySessionInvalid(res.status, json.code);
       throw new ApiError(json.message, res.status, json.code);
     }
 
@@ -58,6 +74,7 @@ export async function fetchApi<T>(
 
   // 4. Handle application-level errors
   if (!json.success) {
+    notifySessionInvalid(res.status, json.code);
     throw new ApiError(json.message, res.status, json.code);
   }
 

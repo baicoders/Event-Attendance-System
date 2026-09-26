@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import DataTable from "@/globals/components/shared/dataTable/DataTable";
 import {
@@ -11,13 +12,16 @@ import StatusBadge from "@/globals/components/shared/StatusBadge";
 import { type as typeToken } from "@/globals/constants/designTokens";
 import { toastDanger, toastSuccess } from "@/globals/components/shared/toasts";
 import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
+import { ApiError } from "@/globals/utils/api";
+import { queryKeys } from "@/globals/utils/queryKeys";
 import {
   ManagedUser,
   TemporaryPasswordResult,
-  useResetUserPassword,
+  resetUserPasswordApi,
   useUsers,
 } from "@/globals/hooks/useAdmin";
 import { getUserColumns } from "../constants/usersTable";
+import ResetPasswordDialog from "./ResetPasswordDialog";
 import TempPasswordDialog from "./TempPasswordDialog";
 
 /**
@@ -26,41 +30,132 @@ import TempPasswordDialog from "./TempPasswordDialog";
  */
 const UsersSection = () => {
   const { data: users, isLoading, isError } = useUsers();
-  const { mutateAsync: resetPassword } = useResetUserPassword();
+  const queryClient = useQueryClient();
   const confirm = useConfirm();
 
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [target, setTarget] = useState<ManagedUser | null>(null);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
   const [issued, setIssued] = useState<TemporaryPasswordResult | null>(null);
 
   const rows = useMemo(() => users ?? [], [users]);
   const activeCount = rows.filter((user) => user.status === "ACTIVE").length;
 
-  const handleResetPassword = async (user: ManagedUser) => {
+  // An issuance is bound to its target: switching accounts, signing out, or a
+  // revoked/restricted session hides the value instead of showing it against
+  // the wrong row.
+  useEffect(() => {
+    const onInvalid = () => {
+      setIssued(null);
+      setTarget(null);
+      setAdminPassword("");
+    };
+    window.addEventListener("auth:session-invalid", onInvalid);
+    return () => window.removeEventListener("auth:session-invalid", onInvalid);
+  }, []);
+
+  // While a reset is pending or an issuance awaits dismissal, no competing
+  // reset may start — a second reset would silently replace the undelivered
+  // credential.
+  const busy = isResetting || issued !== null || target !== null;
+  const processingId = isResetting ? target?.id ?? null : null;
+
+  const openReset = (user: ManagedUser) => {
+    if (busy) return;
+    setIssued(null);
+    setAdminPassword("");
+    // Snapshot the reviewed revision at open; the confirmed request sends it
+    // back as its precondition.
+    setTarget(user);
+  };
+
+  const closeReset = () => {
+    if (isResetting) return;
+    setTarget(null);
+    setAdminPassword("");
+  };
+
+  const handleConfirmReset = async () => {
+    if (!target || adminPassword.length === 0 || isResetting) return;
+
+    // The password field lives in the small form above; the existing
+    // confirmation primitive takes the final consequential decision without
+    // ever carrying a credential in its description.
     const confirmed = await confirm({
-      title: `Reset ${user.name}'s password?`,
+      title: `Reset ${target.name}'s password?`,
       description:
         "Their current password stops working immediately. You will be shown a temporary password to give them, once.",
     });
     if (!confirmed) return;
 
-    setProcessingId(user.id);
+    const { id, name, credentialVersion } = target;
+    setIsResetting(true);
     try {
-      setIssued(await resetPassword(user.id));
-      toastSuccess("Password reset", `${user.name} needs the new password.`);
+      const result = await resetUserPasswordApi(id, {
+        adminPassword,
+        expectedCredentialVersion: credentialVersion,
+      });
+      setIssued(result);
+      setTarget(null);
+      setAdminPassword("");
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.all() });
+      toastSuccess("Password reset", `${name} needs the new password.`);
     } catch (error) {
+      // Always discard what was typed; never toast a credential.
+      setAdminPassword("");
+      if (error instanceof ApiError && error.code === "USE_CHANGE_PASSWORD") {
+        setTarget(null);
+        toastDanger(
+          "Use Change password",
+          "Use the Change password form for your own account instead.",
+        );
+        return;
+      }
+      if (error instanceof ApiError && error.code === "CREDENTIALS_CHANGED") {
+        setTarget(null);
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.all() });
+        toastDanger(
+          "User changed",
+          "Reload the directory and confirm again with a fresh review.",
+        );
+        return;
+      }
+      if (error instanceof ApiError && error.code === "INVALID_CREDENTIALS") {
+        // Wrong admin password: preserve the target/context, ask again.
+        toastDanger("Couldn't reset password", error.message || undefined);
+        return;
+      }
+      if (error instanceof ApiError) {
+        // Typed rejection (validation, rate limit, forbidden): keep the
+        // target so a deliberate retry is possible, but require a fresh
+        // password entry and another confirmation.
+        toastDanger(
+          "Couldn't reset password",
+          error.message || undefined,
+        );
+        return;
+      }
+      // The response was lost: the plaintext cannot be recovered and the
+      // target must not be labelled unchanged. A new, explicitly confirmed
+      // reset is the recovery action.
       toastDanger(
-        "Couldn't reset password",
-        error instanceof Error ? error.message : undefined,
+        "Outcome unknown",
+        "The outcome could not be confirmed. If the user cannot sign in with either password, confirm a new reset.",
       );
     } finally {
-      setProcessingId(null);
+      setIsResetting(false);
     }
   };
 
   const columns = useMemo(
-    () => getUserColumns({ onResetPassword: handleResetPassword, processingId }),
+    () =>
+      getUserColumns({
+        onResetPassword: openReset,
+        processingId,
+        resetDisabled: busy,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [processingId],
+    [processingId, busy],
   );
 
   return (
@@ -93,6 +188,15 @@ const UsersSection = () => {
           />
         }
         emptyState={<DataTableEmptyState title="No users yet" />}
+      />
+
+      <ResetPasswordDialog
+        target={target}
+        adminPassword={adminPassword}
+        onAdminPasswordChange={setAdminPassword}
+        isResetting={isResetting}
+        onCancel={closeReset}
+        onSubmit={handleConfirmReset}
       />
 
       <TempPasswordDialog result={issued} onClose={() => setIssued(null)} />

@@ -1,24 +1,21 @@
-import { randomInt } from "crypto";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
 import { respondWithError } from "@/globals/utils/httpError";
-import { requireAuth, requireRole } from "@/globals/utils/auth";
-import { hashPassword } from "@/globals/utils/password";
+import { AuthError, requireAuth, requireRole } from "@/globals/utils/auth";
+import { hashPassword, verifyPassword } from "@/globals/utils/password";
+import {
+  applyAdminPasswordReset,
+  generateTemporaryPassword,
+} from "@/globals/utils/credentials";
+import { rateLimit } from "@/globals/utils/rateLimit";
 
-// No 0/O/1/l/I - the password gets read aloud or copied off a screen during an
-// event, and an ambiguous character there costs more than the lost entropy.
-const ALPHABET = "abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789";
-const TEMP_PASSWORD_LENGTH = 12;
-
-function generateTemporaryPassword(): string {
-  let password = "";
-  for (let i = 0; i < TEMP_PASSWORD_LENGTH; i++) {
-    password += ALPHABET[randomInt(ALPHABET.length)];
-  }
-  return password;
-}
+const resetSchema = z.object({
+  adminPassword: z.string().min(1, "Admin password is required"),
+  expectedCredentialVersion: z.number().int().nonnegative(),
+});
 
 /**
  * PATCH /api/admin/users/[userId]/password
@@ -26,48 +23,161 @@ function generateTemporaryPassword(): string {
  * Admin-issued password recovery: the server generates a temporary password,
  * returns it exactly once, and flags the account so the user must replace it
  * before reaching the app. The admin never chooses the password, and it is
- * stored hashed - the legacy plaintext-then-rehash path is a runbook fallback,
- * not something to write new code against.
+ * stored hashed.
+ *
+ * Safety contract: usable-admin authorization + current-password reauth +
+ * fresh target-revision precondition. Self-targeting is rejected so the only
+ * active admin session is never invalidated mid-delivery.
  */
 export async function PATCH(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ userId: string }> },
 ) {
   try {
+    // Default gate: must be a current-version, ACTIVE, non-forced-change
+    // account before role is even considered.
     const admin = await requireAuth();
     requireRole(admin, "ADMIN");
 
     const { userId } = await params;
+    const { adminPassword, expectedCredentialVersion } = resetSchema.parse(
+      await req.json(),
+    );
 
-    const target = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true },
-    });
+    if (admin.id === userId) {
+      return NextResponse.json(
+        err(
+          "Use Change password for your own account instead of a reset.",
+          "USE_CHANGE_PASSWORD",
+        ),
+        { status: 409, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    // Bounded by actor/target, not one school-wide bucket.
+    if (!rateLimit(`adminReset:${admin.id}:${userId}`, 10, 5 * 60_000)) {
+      return NextResponse.json(
+        err("Too many reset attempts. Try again in a few minutes."),
+        { status: 429, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    const [adminSnapshot, target] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: admin.id },
+        select: {
+          id: true,
+          password: true,
+          credentialVersion: true,
+          role: true,
+          status: true,
+          mustChangePassword: true,
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          credentialVersion: true,
+        },
+      }),
+    ]);
+
+    if (!adminSnapshot) {
+      throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
+    }
+
+    if (adminSnapshot.credentialVersion !== admin.credentialVersion) {
+      throw new AuthError(
+        "Session expired. Sign in again.",
+        401,
+        "UNAUTHORIZED",
+      );
+    }
+
+    if (!(await verifyPassword(adminPassword, adminSnapshot.password))) {
+      return NextResponse.json(
+        err("Admin password is incorrect.", "INVALID_CREDENTIALS"),
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+    }
 
     if (!target) {
       return NextResponse.json(err("User not found.", "NOT_FOUND"), {
         status: 404,
+        headers: { "Cache-Control": "no-store" },
       });
     }
 
-    const temporaryPassword = generateTemporaryPassword();
+    // The reviewed revision must still match — a stale retry never overwrites
+    // a password chosen in the meantime.
+    if (target.credentialVersion !== expectedCredentialVersion) {
+      return NextResponse.json(
+        err(
+          "User changed since you reviewed them. Reload and confirm again.",
+          "CREDENTIALS_CHANGED",
+        ),
+        { status: 409, headers: { "Cache-Control": "no-store" } },
+      );
+    }
 
-    await prisma.user.update({
-      where: { id: target.id },
-      data: {
-        password: await hashPassword(temporaryPassword),
+    const temporaryPassword = generateTemporaryPassword();
+    // Hash outside the write so the conditional update below stays short.
+    const tempHash = await hashPassword(temporaryPassword);
+
+    // Recheck the actor inside the short write window: role/status/flag and
+    // generation must still hold, or there is no target write.
+    const freshAdmin = await prisma.user.findUnique({
+      where: { id: admin.id },
+      select: {
+        role: true,
+        status: true,
         mustChangePassword: true,
+        credentialVersion: true,
       },
     });
 
+    if (
+      !freshAdmin ||
+      freshAdmin.role !== "ADMIN" ||
+      freshAdmin.status !== "ACTIVE" ||
+      freshAdmin.mustChangePassword ||
+      freshAdmin.credentialVersion !== admin.credentialVersion
+    ) {
+      throw new AuthError("Forbidden", 403, "FORBIDDEN");
+    }
+
+    const updated = await applyAdminPasswordReset(prisma, {
+      targetId: target.id,
+      expectedCredentialVersion: target.credentialVersion,
+      tempPasswordHash: tempHash,
+    });
+
+    if (!updated) {
+      // A competing reset/replacement won between review and write. The first
+      // displayed secret is not silently replaced.
+      return NextResponse.json(
+        err(
+          "User changed since you reviewed them. Reload and confirm again.",
+          "CREDENTIALS_CHANGED",
+        ),
+        { status: 409, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
     return NextResponse.json(
       ok({
-        id: target.id,
-        name: target.name,
-        email: target.email,
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
         temporaryPassword,
+        credentialVersion: updated.credentialVersion,
       }),
-      { status: 200 },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     return respondWithError(error);

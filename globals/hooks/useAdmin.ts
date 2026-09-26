@@ -49,6 +49,8 @@ export type ManagedUser = {
   status: "PENDING" | "ACTIVE" | "REJECTED";
   rejectionReason: string | null;
   mustChangePassword: boolean;
+  /** Reviewed revision the reset dialog sends as its precondition. */
+  credentialVersion: number;
   createdAt: string;
 };
 
@@ -66,22 +68,36 @@ export type TemporaryPasswordResult = {
   email: string;
   /** Shown once and never retrievable again. */
   temporaryPassword: string;
+  /** The committed generation the new cookie (target's next sign-in) carries. */
+  credentialVersion: number;
 };
 
-export const useResetUserPassword = () => {
-  const queryClient = useQueryClient();
+export type ResetPasswordArgs = {
+  /** The acting admin's current password (reauth, never logged or toasted). */
+  adminPassword: string;
+  /** Target revision reviewed in the directory before confirmation. */
+  expectedCredentialVersion: number;
+};
 
-  return useMutation({
-    mutationFn: (userId: string) =>
-      fetchApi<TemporaryPasswordResult>(
-        `/api/admin/users/${userId}/password`,
-        { method: "PATCH" },
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.all() });
+/**
+ * Imperative reset request — deliberately NOT a `useMutation`. A shared
+ * mutation cache would retain the one-time secret and both password arguments
+ * in history; callers hold busy/result in component-local state instead and
+ * clear the displayed value on close, target change, or auth failure.
+ */
+export async function resetUserPasswordApi(
+  userId: string,
+  args: ResetPasswordArgs,
+): Promise<TemporaryPasswordResult> {
+  return fetchApi<TemporaryPasswordResult>(
+    `/api/admin/users/${userId}/password`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(args),
     },
-  });
-};
+  );
+}
 
 export type SystemInfo = {
   nodeEnv: string;

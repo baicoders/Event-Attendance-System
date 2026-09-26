@@ -40,12 +40,19 @@ export default async function PrintPage({
   if (!user || user.status !== "ACTIVE") {
     redirect("/login");
   }
+  // A valid forced-change session cannot read PII: send it to the existing
+  // main-shell gate (which renders the replacement form), not a login loop.
+  if (user.mustChangePassword) {
+    redirect("/");
+  }
 
   let snapshot;
   try {
     snapshot = await loadAuthorizedEventReportSnapshot(eventId, user);
   } catch (error) {
     if (!(error instanceof AuthError)) throw error;
+    if (error.code === "PASSWORD_CHANGE_REQUIRED") redirect("/");
+    if (error.code === "UNAUTHORIZED") redirect("/login");
     return <div className="p-8 text-center text-gray-600">You do not have access to this report.</div>;
   }
   if (!snapshot) {
