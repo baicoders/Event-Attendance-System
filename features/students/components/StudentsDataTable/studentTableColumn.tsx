@@ -3,12 +3,14 @@ import { Student } from "@/globals/types/students";
 import { formatSection, normalizeName } from "@/globals/utils/formatting";
 import { Delete, Edit, QrCode, History } from "lucide-react";
 import { Checkbox } from "@/globals/components/shad-cn/checkbox";
+import Link from "next/link";
 
 type ColumnArgs = {
   onEdit: (student: Student) => void;
   onDelete: (id: string) => void;
   onViewQR: (student: Student) => void;
   onHistory: (student: Student) => void;
+  profileHref: (student: Student) => string;
 };
 
 export const getStudentColumns = ({
@@ -16,6 +18,7 @@ export const getStudentColumns = ({
   onDelete,
   onViewQR,
   onHistory,
+  profileHref,
 }: ColumnArgs): ColumnDef<Student>[] => [
   {
     id: "select",
@@ -33,8 +36,8 @@ export const getStudentColumns = ({
   {
     accessorKey: "id",
     header: () => <div className="text-center">Student ID</div>,
-    cell: ({ getValue }) => (
-      <div className="text-center">{getValue() as string}</div>
+    cell: ({ row }) => (
+      <div className="text-center"><Link className="text-indigo-700 underline underline-offset-2" href={profileHref(row.original)}>{row.original.id}</Link></div>
     ),
   },
   {

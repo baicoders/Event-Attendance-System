@@ -5,7 +5,7 @@ import SectionHeading from "./SectionHeading";
 import { StudentFormValues } from "@/globals/schemas/studentSchema";
 import { Option } from "@/globals/types/primitives";
 import { SchoolLevel, YearLevel } from "@prisma/client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 const SCHOOL_LEVELS = [
   { label: "College", value: "COLLEGE" },
@@ -34,11 +34,14 @@ const AcademicSection = () => {
   } = useFormContext<StudentFormValues>();
 
   const schoolLevel = watch("schoolLevel");
+  const previousSchoolLevel = useRef(schoolLevel);
   const yearLevelOptions = YEAR_LEVELS_BY_SCHOOL_TYPE[schoolLevel ?? "COLLEGE"];
 
   useEffect(() => {
-    // Only reset if the user has actually interacted with the form
-    // to prevent wiping data on mount during "Edit Mode"
+    // Opening this step after a name edit must preserve the existing year.
+    // Clear incompatible fields only when the operator changes school level.
+    if (previousSchoolLevel.current === schoolLevel) return;
+    previousSchoolLevel.current = schoolLevel;
     if (!isDirty) return;
 
     if (schoolLevel === "COLLEGE") {

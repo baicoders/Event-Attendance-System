@@ -1,4 +1,5 @@
 import { prisma } from "@/globals/libs/prisma";
+import type { Prisma } from "@prisma/client";
 
 export type StudentGroupFields = {
   section?: string | null;
@@ -42,6 +43,7 @@ const normalizeSlug = (value: string) => value.trim().toLowerCase();
  */
 export async function validateStudentGroupSlugs(
   students: StudentGroupFields[],
+  reader: Pick<Prisma.TransactionClient, "group"> = prisma,
 ): Promise<GroupResolution> {
   // Keyed by the raw value so callers can keep looking groups up by whatever
   // the form or the CSV actually contained.
@@ -57,7 +59,7 @@ export async function validateStudentGroupSlugs(
 
   if (referenced.size === 0) return { ok: true, slugToId: new Map() };
 
-  const groups = await prisma.group.findMany({
+  const groups = await reader.group.findMany({
     where: { slug: { in: [...referenced].map(normalizeSlug) } },
     select: { id: true, slug: true, category: true },
   });
