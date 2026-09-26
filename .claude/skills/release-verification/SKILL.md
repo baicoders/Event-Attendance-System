@@ -41,7 +41,7 @@ the ones marked LIKELY (runtime-dependent), actually reproducing the fix:
 |---|---|---|
 | SEC-01 | `Secure` cookie flag drops sessions on LAN HTTP in production builds | `globals/utils/auth.ts` |
 | SEC-02 | QR camera requires a secure context, unavailable on LAN HTTP | `features/attendance/components/ScannerCamera.tsx` |
-| DATA-01 | Bulk import transaction has no timeout override, likely fails at 2,000+ rows | `app/api/bulk-import/students/route.ts` |
+| DATA-01 | ~~Bulk import transaction has no timeout override, likely fails at 2,000+ rows~~ **RESOLVED** — interactive form with explicit `timeout: 120s`/`maxWait: 30s` + exclusive roster lock | `app/api/bulk-import/students/route.ts` |
 | DATA-02 | No way to add a missing `Group` without a destructive reseed | `prisma/seed.ts`, `app/api/groups/` |
 
 Full context, fix directions, and the four P1 "should-fix" items are in
@@ -59,15 +59,15 @@ scoped, considered fix direction; don't invent an alternative without a reason.
    for attendance: a duplicate scan; for a form: the validation-failure path).
 3. For anything server-side touching authorization, Prisma, or the bulk-import path:
    re-check against the `auth-and-authorization` / `prisma-and-database` skills for
-   invariants that must hold (compare-and-set writes, the four auth primitives,
-   `@@unique([eventId, studentId])`).
+   invariants that must hold (guarded-write protocol with advisory + row locks,
+   the four auth primitives, `@@unique([eventId, studentId])`).
 4. If the change is meant to resolve a tracked finding, the finding's ID should be
    referenced in your summary to the user so it's traceable back to
    `docs/audit/findings.md`.
 
 ## The deployment context that should shape every "is this good enough" judgment
 
-Single laptop, single SQLite file, LAN-only, 2–5 concurrent users, 2,000+ students,
+Single laptop, single PostgreSQL 17 database, LAN-only, 2–5 concurrent users, 2,000+ students,
 one-week beta window, operators who did not build this system and may not have the
 developer available during the event. A fix that's "good enough for this beta" and a
 fix that's "architecturally correct long-term" are sometimes different scopes — when

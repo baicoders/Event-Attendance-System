@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import pg from "pg";

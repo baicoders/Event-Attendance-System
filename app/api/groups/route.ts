@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 import { Prisma, SchoolLevel, YearLevel } from "@prisma/client";
 import { prisma } from "@/globals/libs/prisma";
 import { respondWithError } from "@/globals/utils/httpError";
@@ -65,9 +66,14 @@ export async function POST(req: NextRequest) {
 
     const data = createGroupSchema.parse(await req.json());
 
-    const group = await prisma.group.create({
-      data,
-      select: { id: true, name: true, slug: true, category: true },
+    // Group creation extends the vocabulary events scope by, so it freezes
+    // eligibility (exclusive form) across the insert.
+    const group = await prisma.$transaction(async (tx) => {
+      await takeRosterExclusiveLock(tx);
+      return tx.group.create({
+        data,
+        select: { id: true, name: true, slug: true, category: true },
+      });
     });
 
     return NextResponse.json(ok(group), { status: 201 });
