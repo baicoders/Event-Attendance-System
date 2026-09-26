@@ -66,6 +66,8 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
 
   // An admin-issued temporary password gets the user in, and no further. The
   // gate lifts as soon as ChangePasswordForm refreshes the session.
+  // Server routes enforce the same rule; this is the UX mirror, not the
+  // boundary.
   if (user.mustChangePassword) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-slate-700 p-6">
@@ -75,8 +77,7 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
               Choose a new password
             </h1>
             <p className="mt-2 text-sm text-slate-600">
-              You signed in with a temporary password issued by an
-              administrator. Pick your own to continue.
+              You signed in with an administrator-issued temporary password.
             </p>
           </div>
 
@@ -91,7 +92,7 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
               }
             }}
           >
-            Return to login
+            Sign out
           </button>
         </div>
       </main>

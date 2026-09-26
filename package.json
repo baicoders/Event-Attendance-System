@@ -12,6 +12,8 @@
     "test:operator-api": "node scripts/test-operator-api.mjs",
     "test:progress": "node --import tsx --test globals/utils/attendance.test.ts globals/utils/attendanceProgress.test.ts globals/utils/attendanceProgressRead.test.ts features/attendance/utils/progressRequest.test.ts features/attendance/utils/validateProgressResponse.test.ts",
     "test:progress-api": "node --import tsx scripts/test-attendance-progress-api.mjs",
+    "test:account-recovery": "node --import tsx --test globals/utils/credentials.test.ts features/auth/schema/changePasswordSchema.test.ts && node --import tsx scripts/test-account-recovery-api.mjs",
+    "account:recover": "tsx scripts/account-recover.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",

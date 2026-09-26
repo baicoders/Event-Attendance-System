@@ -22,7 +22,7 @@ import {
 } from "@/globals/utils/attendance";
 import { buildEventStudentFilter } from "@/globals/utils/buildEventStudentFilter";
 import { fullName } from "@/globals/utils/formatting";
-import { assertActiveUser, assertEventVisibility, AuthError, type AuthSession } from "@/globals/utils/auth";
+import { assertActiveUser, assertEventVisibility, assertPasswordChangeCompleted, AuthError, type AuthSession } from "@/globals/utils/auth";
 import { bucketForStudent, GROUP_DIMENSIONS, summarizeGroups } from "@/globals/utils/reportGroups";
 import { REPORT_TIME_ZONE } from "@/globals/utils/reportTime";
 
@@ -73,10 +73,12 @@ export async function loadAuthorizedEventReportSnapshot(
   maxStudents?: number,
 ): Promise<EventReportSnapshot | null> {
   return prisma.$transaction(async (tx) => {
-    const currentUser = await tx.user.findUnique({ where: { id: user.id }, select: { id: true, role: true, status: true } });
+    const currentUser = await tx.user.findUnique({ where: { id: user.id }, select: { id: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
     if (!currentUser) throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
+    if (currentUser.credentialVersion !== user.credentialVersion) throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
     const viewer = { ...user, ...currentUser };
     assertActiveUser(viewer);
+    assertPasswordChangeCompleted(viewer);
     const event = await tx.event.findUnique({ where: { id: eventId }, include: REPORT_EVENT_INCLUDE });
     if (!event) return null;
     assertEventVisibility(event, viewer);

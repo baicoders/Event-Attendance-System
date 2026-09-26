@@ -95,6 +95,10 @@ model User {
   // Set when an admin issues a temporary password; cleared once the user
   // picks their own. Gates the app shell until then.
   mustChangePassword Boolean @default(false)
+  // Increments on every credential change (reset, replacement, local
+  // recovery). Mirrored inside the signed cookie so a reset revokes
+  // previously issued cookies at the next server session check.
+  credentialVersion Int @default(0)
   createdEvents   Event[]    @relation("EventCreator")
   reviewedEvents  Event[]    @relation("EventReviewer")
   createdRecords  Record[]   @relation("RecordCreator")
