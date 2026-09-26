@@ -53,6 +53,7 @@ export default function StudentImporter({ onImportSuccess }: Props) {
         queryClient.invalidateQueries({ queryKey: ["stats", "students"] });
         queryClient.invalidateQueries({ queryKey: queryKeys.events.all() });
         queryClient.invalidateQueries({ queryKey: queryKeys.records.all() });
+        queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
         onImportSuccess(data.data?.count ?? 0);
         setParsedData(null);
       } else {

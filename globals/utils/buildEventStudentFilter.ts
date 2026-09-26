@@ -40,15 +40,14 @@ export const buildEventStudentFilter = (
  * based on the event's category and included groups.
  */
 export const isStudentInEvent = (
-  student: Student,
-  event: { category: EventCategory; includedGroups: { slug: string }[] },
+  student: Pick<Student, "schoolLevel"> & { groups?: ReadonlyArray<{ slug: string }> },
+  event: { category: EventCategory; includedGroups: ReadonlyArray<{ slug: string }> },
 ): boolean => {
   const category = event.category;
   if (category === "ALL") return true;
   if (category === "COLLEGE") return student.schoolLevel === "COLLEGE";
   if (category === "SHS") return student.schoolLevel === "SHS";
 
-  const includedSlugs: string[] = event.includedGroups.map((g) => g.slug);
-
+  const includedSlugs = event.includedGroups.map((group) => group.slug);
   return student.groups?.some((group) => includedSlugs.includes(group.slug)) ?? false;
 };

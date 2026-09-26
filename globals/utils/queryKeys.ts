@@ -51,6 +51,9 @@ export const queryKeys = {
   },
   reports: {
     all: () => ["reports"] as const,
+    studentHistoryPrefix: () => ["reports", "studentHistory"] as const,
+    studentHistory: (principalId: string, studentId: string, params: string) =>
+      ["reports", "studentHistory", principalId, studentId, params] as const,
     /** One event's full report (`GET /api/reports/events/[eventId]`). */
     event: (eventId: string) => ["reports", "event", eventId] as const,
     /**

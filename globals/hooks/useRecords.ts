@@ -34,6 +34,7 @@ export const useCreateRecord = (_eventId: string) => {
     /** Re-sync server state after success */
     onSuccess: (data, input) => {
       const eventId = input.eventId;
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({
@@ -84,6 +85,7 @@ export const useUpdateAttendanceRecord = (eventId: string) => {
     /** Re-sync server state after success */
     onSuccess: (data) => {
       const affectedEventId = data.eventId;
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({
@@ -148,6 +150,7 @@ export const useDeleteRecord = (eventId: string) => {
 
     onSuccess: (data) => {
       const affectedEventId = data.eventId;
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
       // Prefix invalidation so BOTH the live present-only table and the
       // includeAbsent report variant refresh (not just the exact false key).
       queryClient.invalidateQueries({

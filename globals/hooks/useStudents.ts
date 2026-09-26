@@ -144,6 +144,7 @@ const invalidateStudentDependents = (queryClient: QueryClient) => {
   queryClient.invalidateQueries({ queryKey: ["stats", "students"] });
   queryClient.invalidateQueries({ queryKey: queryKeys.events.all() });
   queryClient.invalidateQueries({ queryKey: queryKeys.records.all() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.reports.studentHistoryPrefix() });
 };
 
 export const useSaveStudent = () => {
