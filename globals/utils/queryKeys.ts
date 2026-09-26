@@ -88,4 +88,10 @@ export const queryKeys = {
     users: () => ["admin", "users"] as const,
     system: () => ["admin", "system"] as const,
   },
+  backups: {
+    all: () => ["backups"] as const,
+    status: () => ["backups", "status"] as const,
+    jobs: () => ["backups", "jobs"] as const,
+    job: (jobId: string) => ["backups", "job", jobId] as const,
+  },
 };

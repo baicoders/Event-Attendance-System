@@ -46,3 +46,7 @@ next-env.d.ts
 # database — PostgreSQL is the only provider). Kept out of version control.
 *.db
 *.db-journal
+
+# Backup runner storage (catalog, spool, locks, artifacts, manifests).
+# Private per-deployment data — never committed.
+/backups/

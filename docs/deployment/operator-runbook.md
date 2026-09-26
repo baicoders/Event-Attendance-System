@@ -28,10 +28,55 @@ with writers stopped. See [attendance correction release notes](attendance-corre
 
 **Do this before anything else in this document, and every few hours during the
 event.** The system of record is the PostgreSQL database `DATABASE_URL` points
-at — not a file on the laptop. Back it up with `pg_dump`, using the
-administrative connection string (`DIRECT_URL` when set, otherwise
-`DATABASE_URL`). These are standard PostgreSQL tools and work the same whether
-the database is self-hosted or managed.
+at — not a file on the laptop.
+
+**Normally: Settings → Backups.** The console shows five separate facts — latest
+dump (created, archive validated), latest restore test (isolated database,
+passed), automatic runs (last scheduled, next expected, overdue), second copy
+(exact artifact, checksum-verified), and provider recovery (not configured /
+not verified unless an operator verified it). A created dump is never labelled
+"restore verified" until its isolated restore passes. A manual request never
+resets the automatic clock. **This console never downloads database files and
+never restores production.** Creating a backup asks for confirmation naming the
+configured database label and warning the archive holds student data and
+password hashes.
+
+An authenticated admin request only durably records the job; the UI polls it.
+The controlled runner owns execution — one supervised process per source with
+a cross-process lock (overlap is skipped, not queued):
+
+```bash
+# Manual request from a terminal (same spool the UI writes):
+pnpm backup:request -- --kind manual
+pnpm backup:run                 # drains REQUESTED jobs
+pnpm backup:run -- --scheduled  # scheduled tick (OS timer every 15 min in
+                                # event operations, daily otherwise)
+pnpm backup:status              # canonical status JSON (same DTO the UI reads)
+pnpm backup:verify -- <artifactId>   # isolated restore rehearsal
+pnpm backup:jobs -- --limit 20
+pnpm backup:prune               # retention only when BACKUP_RETENTION_CONFIRMED=true
+```
+
+Backups are `pg_dump --format=custom` from the direct endpoint (`DIRECT_URL`,
+never a pooler) with a dedicated read, private passfile (no passwords in
+arguments), `--no-password`, verified TLS, and a server/client major check —
+an older `pg_dump` against a newer server is refused, never assumed. Each job
+writes a private `.partial` file, checksums it, inspects the archive
+table-of-contents, then atomically publishes the archive + manifest + catalog
+entry. Partial/failed dumps never become available, and a failed job never
+deletes the last good artifact. Retention keeps 48 recent + 7 daily
+checkpoints, always protects the latest restore-verified and pinned pre-change
+backups, and requires explicit policy confirmation. A second destination
+(`BACKUP_SECONDARY_DIR` + `_LABEL`) holds a checksum-verified copy of the
+exact artifact; whether it is a separate failure domain is a deployment
+assertion (`BACKUP_FAILURE_DOMAIN_NOTE`), never inferred from a folder path.
+
+### Direct pg_dump (fallback when the runner is unavailable)
+
+Back it up with `pg_dump`, using the administrative connection string
+(`DIRECT_URL` when set, otherwise `DATABASE_URL`). These are standard
+PostgreSQL tools and work the same whether the database is self-hosted or
+managed.
 
 ```bash
 mkdir -p backups
@@ -41,12 +86,13 @@ pg_dump --format=custom --file="backups/eas-$(date +%Y%m%d-%H%M).dump" "$DIRECT_
 `pg_dump` reads consistently without stopping the server, but prefer a quiet
 moment anyway.
 
-There is no in-app equivalent. This one is always manual.
-
 ### Restore — into a rehearsal database, never over the live one
 
 Never restore a dump over the live event database during the event. Prove a
-backup works by restoring it into a separate database:
+backup works by restoring it into a separate database. The rehearsal below is
+what `pnpm backup:verify` automates (checksum, compatibility, empty-target
+check, `pg_restore --exit-on-error --single-transaction --no-owner
+--no-privileges`, schema/relation/timeout-only checks, then drop):
 
 ```bash
 # 1. Create an empty rehearsal database on the same server
@@ -61,7 +107,9 @@ psql "<DIRECT_URL-with-eas_rehearsal>" -c 'SELECT (SELECT COUNT(*) FROM "Student
 ```
 
 Only promote a rehearsal database to live outside event hours, with the server
-stopped, after taking a fresh `pg_dump` of the live database first. Drop the
+stopped, after taking a fresh backup of the live database first. Preserve the
+displaced live database separately; reversing after new writes is not lossless.
+Restoring the database does not restore browser-local journals. Drop the
 rehearsal database when done (`DROP DATABASE eas_rehearsal;`).
 
 ### Before reopening service: verify, rotate, smoke-check
