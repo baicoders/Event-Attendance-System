@@ -4,6 +4,7 @@ import PageHeader from "@/globals/components/shared/PageHeader";
 import { page } from "@/globals/constants/designTokens";
 import { useAuth } from "@/globals/contexts/AuthContext";
 import AccountSection from "@/features/settings/components/AccountSection";
+import BackupsSection from "@/features/settings/components/BackupsSection";
 import ManageGroupsSection from "@/features/settings/components/ManageGroupsSection";
 import UsersSection from "@/features/settings/components/UsersSection";
 import SystemSection from "@/features/settings/components/SystemSection";
@@ -43,6 +44,7 @@ const SettingsPage = () => {
             <ManageGroupsSection />
             <UsersSection />
             <SystemSection />
+            <BackupsSection />
           </>
         ) : null}
       </div>
