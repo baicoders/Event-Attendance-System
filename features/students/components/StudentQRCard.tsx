@@ -5,13 +5,13 @@ import QRCode from "react-qr-code";
 import { Student } from "@/globals/types/students";
 import { formatSection } from "@/globals/utils/formatting";
 
-export const StudentQRCard = memo(function StudentQRCard({ student, showGroupDetail = true }: { student: Student; showGroupDetail?: boolean }) {
+export const StudentQRCard = memo(function StudentQRCard({ student, showGroupDetail = true, fillHeight = true }: { student: Student; showGroupDetail?: boolean; fillHeight?: boolean }) {
   const name = [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ");
   const group = student.program || student.strand || student.department || student.house;
   const detail = showGroupDetail ? [group?.toUpperCase(), student.section && formatSection(student.section)].filter(Boolean).join(" • ") : "";
 
   return (
-    <article className="student-qr-card flex h-full flex-col items-center justify-center rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-950">
+    <article className={`student-qr-card flex flex-col items-center justify-center rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-950 ${fillHeight ? "h-full" : ""}`}>
       <div className="student-qr-code bg-white p-2">
         <QRCode value={student.id} size={160} bgColor="#FFFFFF" fgColor="#000000" className="h-auto w-full" />
       </div>

@@ -180,7 +180,7 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
               </section>
               <section className="rounded-2xl border bg-white p-5" aria-label="Student QR">
                 <h2 className="mb-3 text-lg font-semibold">Student QR</h2>
-                <StudentQRCard student={student} showGroupDetail={!ambiguous} />
+                <StudentQRCard student={student} showGroupDetail={!ambiguous} fillHeight={false} />
                 <button type="button" className="mt-3 text-sm text-indigo-700 underline" onClick={() => setQrOwner(principalId)}>View larger QR</button>
               </section>
             </div>

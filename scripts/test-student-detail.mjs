@@ -60,6 +60,9 @@ async function browserCheck(cookie) {
     assert.ok(await evaluate('document.body.innerText.includes("Section A")'));
     const qrMarkup = await evaluate('document.querySelector(".student-qr-code svg")?.outerHTML');
     assert.ok(qrMarkup?.includes("<svg"));
+    const qrBounds = await evaluate('(() => { const section = document.querySelector(\'section[aria-label="Student QR"]\'); const card = section.querySelector(".student-qr-card"); const button = section.querySelector("button"); return { sectionBottom: section.getBoundingClientRect().bottom, cardBottom: card.getBoundingClientRect().bottom, buttonBottom: button.getBoundingClientRect().bottom, sectionHeight: section.getBoundingClientRect().height, cardHeight: card.getBoundingClientRect().height }; })()');
+    assert.ok(qrBounds.cardBottom <= qrBounds.sectionBottom - 12, `QR card escapes its section: ${JSON.stringify(qrBounds)}`);
+    assert.ok(qrBounds.buttonBottom <= qrBounds.sectionBottom - 12, `QR button escapes its section: ${JSON.stringify(qrBounds)}`);
     await evaluate('[...document.querySelectorAll("button")].find(button => button.textContent?.includes("View larger QR")).click()');
     await until('document.querySelector("[role=dialog]")?.textContent?.includes("Student QR Code")');
     await command("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
