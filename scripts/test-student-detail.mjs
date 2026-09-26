@@ -46,7 +46,7 @@ async function browserCheck(cookie) {
   });
   const command = (method, params = {}) => new Promise((resolve, reject) => { const id = ++nextId; pending.set(id, { resolve, reject }); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async expression => { const response = await command("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }); if (response.exceptionDetails) throw new Error(response.exceptionDetails.text); return response.result.value; };
-  const until = async expression => { for (let i = 0; i < 100; i++) { try { if (await evaluate(expression)) return; } catch { /* Navigation can replace the execution context. */ } await delay(100); } throw new Error(`Timed out: ${expression}; dialog=${await evaluate('document.querySelector("[role=dialog]")?.textContent?.slice(0,1000)')}`); };
+  const until = async expression => { for (let i = 0; i < 100; i++) { try { if (await evaluate(expression)) return; } catch { /* Navigation can replace the execution context. */ } await delay(100); } throw new Error(`Timed out: ${expression}; state=${JSON.stringify(await evaluate('({dialogs:[...document.querySelectorAll("[role=dialog]")].map(dialog => dialog.textContent?.slice(0,500)), cancel:[...document.querySelectorAll("[role=dialog] button")].filter(button => button.textContent?.includes("Cancel")).map(button => ({disabled:button.disabled,html:button.outerHTML.slice(0,300)}))})'))}`); };
   try {
     await command("Page.enable");
     await command("Runtime.enable");
@@ -84,6 +84,38 @@ async function browserCheck(cookie) {
     await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.includes("Save Changes")).click()');
     await until('document.querySelector("h1")?.textContent?.includes("Anita Lee")');
     assert.equal(await evaluate('document.querySelector(".student-qr-code svg")?.outerHTML'), qrMarkup);
+    await evaluate('[...document.querySelectorAll("button")].find(button => button.textContent?.includes("Edit student")).click()');
+    await until('document.querySelector(\'[role=dialog] input[name="firstName"]\') !== null');
+    await evaluate('(() => { const input = document.querySelector(\'[role=dialog] input[name="firstName"]\'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "Local"); input.dispatchEvent(new Event("input", { bubbles: true })); })()');
+    await db.student.update({ where: { id: form.id }, data: { firstName: "Externally" } });
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.trim() === "Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Academic Standing")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.trim() === "Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Group Assignments")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.includes("Save Changes")).click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("changed after you opened")');
+    await command("Network.setBlockedURLs", { urls: [`*api/students/${form.id}`] });
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.includes("Reload current version")).click()');
+    await until('document.body.innerText.includes("Reload current student record?")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.trim() === "Confirm").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Could not reload the current record")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.includes("Back")).click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Academic Standing")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.includes("Back")).click()');
+    await until('document.querySelector(\'[role=dialog] input[name="firstName"]\') !== null');
+    assert.equal(await evaluate('document.querySelector(\'[role=dialog] input[name="firstName"]\').value'), "Local");
+    await command("Network.setBlockedURLs", { urls: [] });
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.includes("Reload current version")).click()');
+    await until('document.body.innerText.includes("Reload current student record?")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.trim() === "Confirm").click()');
+    await until('document.querySelector(\'[role=dialog] input[name="firstName"]\')?.value === "Externally"');
+    await delay(500);
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.includes("Cancel")).click()');
+    await delay(200);
+    if (await evaluate('document.body.innerText.includes("Discard student changes?")')) {
+      await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.trim() === "Confirm").click()');
+    }
+    await until('document.querySelector("[role=dialog]") === null');
     await command("Page.navigate", { url: `${origin}/students/student-list?category=ALL` });
     await until('document.querySelector(\'a[href^="/students/00000123456"]\') !== null');
     const href = await evaluate('document.querySelector(\'a[href^="/students/00000123456"]\').getAttribute("href")');
@@ -94,7 +126,7 @@ async function browserCheck(cookie) {
     await until('document.querySelector("h1")?.textContent?.includes("Slash Student")');
     await command("Page.navigate", { url: `${origin}/students/${encodeURIComponent("ab12%2F3456")}` });
     await until('document.querySelector("h1")?.textContent?.includes("Percent Student")');
-    console.log("Browser fixture passed: direct mobile links including encoded separator, QR/modal stability after edit, dirty editor discard, saved edit, identity/groups, roster profile link, attendance tab, and 375px layout.");
+    console.log("Browser fixture passed: direct mobile links including encoded separator, QR/modal stability after edit, dirty editor discard, saved edit, conflict reload failure preserves input, identity/groups, roster profile link, attendance tab, and 375px layout.");
   } finally { ws.close(); }
 }
 

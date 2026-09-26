@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ApiError } from "@/globals/utils/api";
 import { toastSuccess, toastWarning } from "@/globals/components/shared/toasts";
 import { useAuth } from "@/globals/contexts/AuthContext";
+import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 import { page } from "@/globals/constants/designTokens";
 import { hasAmbiguousStudentGroups } from "@/globals/utils/studentGroupReview";
 import { safeStudentReturnHref } from "@/globals/utils/studentReturn";
@@ -25,14 +26,32 @@ const groupLabels: Record<string, string> = {
 export default function StudentDetailClient({ studentId }: { studentId: string }) {
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const principalId = user?.status === "ACTIVE" ? user.id : "";
+  const principalRef = useRef(principalId);
+  principalRef.current = principalId;
+  const previousPrincipal = useRef(principalId);
+  const confirm = useConfirm();
   const query = useStudentDetail(studentId);
   const edit = useEditStudentDetail(studentId);
-  const [snapshot, setSnapshot] = useState<StudentDetail>();
+  const [editing, setEditing] = useState<{ owner: string; student: StudentDetail } | null>(null);
+  const snapshot = editing?.owner === principalId ? editing.student : undefined;
   const [editorKey, setEditorKey] = useState(0);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [canReloadEditor, setCanReloadEditor] = useState(false);
-  const [qrOpen, setQrOpen] = useState(false);
+  const [qrOwner, setQrOwner] = useState<string | null>(null);
+  const qrOpen = qrOwner === principalId && !!principalId;
   const [copyMessage, setCopyMessage] = useState("");
+  useEffect(() => {
+    const authFailed = query.error instanceof ApiError && [401, 403].includes(query.error.status);
+    if (previousPrincipal.current !== principalId || authFailed) {
+      previousPrincipal.current = principalId;
+      setEditing(null);
+      setQrOwner(null);
+      setEditorError(null);
+      setCanReloadEditor(false);
+      setCopyMessage("");
+    }
+  }, [principalId, query.error]);
   const backHref = safeStudentReturnHref(searchParams.get("returnTo"));
   const tab = searchParams.get("tab") === "attendance" ? "attendance" : "overview";
   const student = user?.status === "ACTIVE" && !(query.error instanceof ApiError && [401, 403].includes(query.error.status)) &&
@@ -48,20 +67,23 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
 
   const openEditor = () => {
     if (!student || query.isFetching || query.isError || ambiguous) return;
-    setSnapshot(student);
+    setEditing({ owner: principalId, student });
     setEditorKey(key => key + 1);
     setEditorError(null);
     setCanReloadEditor(false);
   };
   const save = async (values: StudentFormValues) => {
-    if (!snapshot) return;
+    if (!snapshot || !principalId) return;
+    const editingPrincipal = principalId;
     setEditorError(null);
     try {
-      const saved = await edit.mutateAsync({ expectedVersion: snapshot.editVersion, student: { ...values, id: snapshot.id } });
+      const saved = await edit.mutateAsync({ principalId: editingPrincipal, expectedVersion: snapshot.editVersion, student: { ...values, id: snapshot.id } });
+      if (principalRef.current !== editingPrincipal) return;
       if (saved.changed) toastSuccess("Student changes saved");
       else toastWarning("No student changes to save");
-      setSnapshot(undefined);
+      setEditing(current => current?.owner === editingPrincipal ? null : current);
     } catch (error) {
+      if (principalRef.current !== editingPrincipal) return;
       if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
         await query.refetch();
       }
@@ -79,12 +101,20 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
     }
   };
   const reloadEditor = async () => {
+    if (!snapshot || !await confirm({
+      title: "Reload current student record?",
+      description: "This will discard your unsaved entries and replace them with the current record.",
+    })) return;
+    const editingPrincipal = principalId;
     const refreshed = await query.refetch();
-    if (refreshed.data?.id === studentId) {
-      setSnapshot(refreshed.data);
+    if (principalRef.current !== editingPrincipal) return;
+    if (refreshed.isSuccess && !refreshed.isError && refreshed.data?.id === studentId) {
+      setEditing({ owner: editingPrincipal, student: refreshed.data });
       setEditorKey(key => key + 1);
       setEditorError(null);
       setCanReloadEditor(false);
+    } else {
+      setEditorError("Could not reload the current record. Your unsaved entries are still here; try again when the connection is available.");
     }
   };
   const copyId = async () => {
@@ -151,7 +181,7 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
               <section className="rounded-2xl border bg-white p-5" aria-label="Student QR">
                 <h2 className="mb-3 text-lg font-semibold">Student QR</h2>
                 <StudentQRCard student={student} showGroupDetail={!ambiguous} />
-                <button type="button" className="mt-3 text-sm text-indigo-700 underline" onClick={() => setQrOpen(true)}>View larger QR</button>
+                <button type="button" className="mt-3 text-sm text-indigo-700 underline" onClick={() => setQrOwner(principalId)}>View larger QR</button>
               </section>
             </div>
             <section className="rounded-2xl border bg-white p-5">
@@ -164,9 +194,9 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
             <StudentAttendanceHistoryPanel key={studentId} studentId={studentId} />
           </section>}
           <footer className="text-xs text-slate-600">Current roster record · Record created {dateFormat.format(student.createdAt)} · Last updated {dateFormat.format(student.updatedAt)} · Asia/Manila. Changing school or group assignments can change current-roster reports.</footer>
-          <StudentQrModal open={qrOpen} onOpenChange={setQrOpen} student={student} showGroupDetail={!ambiguous} />
-          <StudentFormDrawer key={`${studentId}-${editorKey}`} student={snapshot} isOpen={!!snapshot}
-            onViewQR={() => setQrOpen(true)} onClose={() => setSnapshot(undefined)} onSubmit={save}
+          <StudentQrModal open={qrOpen} onOpenChange={open => setQrOwner(open ? principalId : null)} student={student} showGroupDetail={!ambiguous} />
+          <StudentFormDrawer key={`${studentId}-${principalId}-${editorKey}`} student={snapshot} isOpen={!!snapshot}
+            onViewQR={() => setQrOwner(principalId)} onClose={() => setEditing(null)} onSubmit={save}
             saveError={editorError} onReloadCurrent={canReloadEditor ? () => void reloadEditor() : undefined} />
         </> : null}
     </div>

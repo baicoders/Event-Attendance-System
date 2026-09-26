@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/globals/contexts/AuthContext";
 import { ApiError, fetchApi } from "@/globals/utils/api";
@@ -40,14 +40,18 @@ export function useStudentDetail(studentId: string) {
 export function useEditStudentDetail(studentId: string) {
   const { user } = useAuth();
   const client = useQueryClient();
+  const principalRef = useRef(user?.id ?? "");
+  principalRef.current = user?.status === "ACTIVE" ? user.id : "";
   return useMutation({
-    mutationFn: async ({ expectedVersion, student }: { expectedVersion: string; student: StudentFormValues }) =>
+    mutationFn: async ({ expectedVersion, student }: { principalId: string; expectedVersion: string; student: StudentFormValues }) =>
       transform(await fetchApi<StudentDetailDTO>(`/api/students/${encodeURIComponent(studentId)}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, cache: "no-store",
         body: JSON.stringify({ expectedVersion, student: { ...student, id: studentId } }),
       })),
-    onSuccess: saved => {
-      client.setQueryData(queryKeys.students.detail(user?.id ?? "", studentId), saved);
+    onSuccess: (saved, variables) => {
+      if (principalRef.current === variables.principalId) {
+        client.setQueryData(queryKeys.students.detail(variables.principalId, studentId), saved);
+      }
       void client.invalidateQueries({ queryKey: queryKeys.students.all() });
       void client.invalidateQueries({ queryKey: ["stats", "students"] });
       void client.invalidateQueries({ queryKey: queryKeys.audience.all() });
