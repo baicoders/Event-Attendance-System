@@ -22,7 +22,7 @@ export async function GET(
       const eligible = await tx.student.count({ where: eligibleFilter });
       const present = await tx.record.count({ where: { eventId, timein: { not: null }, student: eligibleFilter } });
       return { eligible, present };
-    });
+    }, { isolationLevel: "RepeatableRead" });
     if (!result) return NextResponse.json(err("Event not found."), { status: 404 });
     const eligibleStudentsCount = result.eligible;
     const presentStudentsCount = result.present;

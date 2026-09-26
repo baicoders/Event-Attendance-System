@@ -1,25 +1,27 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { Worker } from "node:worker_threads";
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import type { PrismaClient } from "@prisma/client";
+import {
+  createDisposableDb,
+  createTestClient,
+  type DisposableDb,
+} from "@/globals/libs/testDb";
 import { readAttendanceProgress, ProgressReadError } from "./attendanceProgressRead";
 import { parseProgressQuery } from "./attendanceProgressQuery";
 
-const dir = mkdtempSync(join(tmpdir(), "issue72-progress-"));
-const url = `file:${join(dir, "attendance.db")}`;
+let disposable: DisposableDb;
 let db: PrismaClient;
+let disconnect: () => Promise<void>;
 let eventId: string;
 let groupId: string;
 const viewer = { id: "viewer", role: "ORGANIZER" as const };
 
 before(async () => {
-  execFileSync("pnpm", ["exec", "prisma", "db", "push"], { cwd: process.cwd(), env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
-  db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) });
+  disposable = await createDisposableDb("test");
+  const client = createTestClient(disposable.url);
+  db = client.db;
+  disconnect = client.disconnect;
   await db.user.create({ data: { id: "owner", name: "Owner", email: "owner@example.test", password: "test", status: "ACTIVE" } });
   await db.user.create({ data: { id: "viewer", name: "Viewer", email: "viewer@example.test", password: "test", status: "ACTIVE" } });
   const group = await db.group.create({ data: { name: "Section A", slug: "section-a", category: "SECTION" } });
@@ -35,7 +37,7 @@ before(async () => {
   await db.record.create({ data: { eventId, studentId: "S1", method: "SCANNED", timein: new Date() } });
   await db.record.create({ data: { eventId, studentId: "S2", method: "SCANNED", timeout: new Date() } });
 });
-after(async () => { await db?.$disconnect(); rmSync(dir, { recursive: true, force: true }); });
+after(async () => { await disconnect?.(); await disposable?.cleanup(); });
 
 test("read transaction returns one authorized current-roster evaluation", async () => {
   const query = parseProgressQuery(new URLSearchParams(`includeRows=1&bucket=g:${groupId}`));
@@ -66,7 +68,7 @@ test("role and account changes are revalidated within the read transaction", asy
 test("a scan, roster edit, group rename, and status change cannot mix into one progress read", async () => {
   await db.student.create({ data: { id: "S4", firstName: "Fourth", lastName: "Student", schoolLevel: "COLLEGE", yearLevel: "YEAR_1" } });
   const writer = new Worker(new URL("./fixtures/progressConcurrentWriter.mjs", import.meta.url), {
-    workerData: { url, eventId, groupId },
+    workerData: { url: disposable.url, eventId, groupId },
   });
   const message = () => new Promise<unknown>((resolve, reject) => {
     writer.once("message", resolve);
@@ -87,8 +89,8 @@ test("a scan, roster edit, group rename, and status change cannot mix into one p
     writer.postMessage("start");
     assert.equal(await attempting, "attempting");
     const writeResult = message();
-    // The writer runs on a separate thread so its SQLite busy wait cannot
-    // block this thread from releasing the reader's transaction.
+    // The writer runs on an independent pool/connection so it cannot block
+    // this thread from releasing the reader's Repeatable Read snapshot.
     await new Promise((resolve) => setTimeout(resolve, 20));
     releaseReader();
     const [read, write] = await Promise.allSettled([readPromise, writeResult]);
@@ -105,7 +107,9 @@ test("a scan, roster edit, group rename, and status change cannot mix into one p
       assert.equal(result.breakdown.find((bucket) => bucket.bucketKey === `g:${groupId}`)?.label, "Section A");
       assert.equal(result.breakdown.find((bucket) => bucket.bucketKey === `g:${groupId}`)?.eligible, 2);
     } else {
-      assert.match(String(read.reason), /busy|locked|timeout/i);
+      // Repeatable Read serialization failures surface as P2034/40001 — still
+      // proof the snapshot did not mix the concurrent write.
+      assert.match(String(read.reason), /P2034|40001|serialization|deadlock|busy|locked|timeout/i);
     }
   } finally { await writer.terminate(); }
 });

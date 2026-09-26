@@ -1,10 +1,12 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { performance } from "node:perf_hooks";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import { recordAttendance } from "@/features/attendance/server/recordAttendance";
 
-const db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: workerData.url }) });
+const pool = new Pool({ connectionString: workerData.url as string, max: 5 });
+const db = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 parentPort?.on("message", async (request: {
   kind: "baseline" | "guarded"; eventId: string; studentId: string; userId: string;

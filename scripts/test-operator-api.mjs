@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { setTimeout as delay } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { createDisposableDatabase } from "./pg-test-db.mjs";
 
-const temp = await mkdtemp(join(tmpdir(), "issue70-operator-api-"));
-const databaseUrl = `file:${join(temp, "test.db")}`;
+const disposable = await createDisposableDatabase("test");
+const databaseUrl = disposable.url;
+const pool = new Pool({ connectionString: databaseUrl, max: 8 });
 const port = 42000 + Math.floor(Math.random() * 10000);
 const base = `http://127.0.0.1:${port}`;
-const env = { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "issue70-operator-api-test-secret" };
+const env = { ...process.env, DATABASE_URL: databaseUrl, DIRECT_URL: databaseUrl, AUTH_SECRET: "issue70-operator-api-test-secret" };
 let server;
 let prisma;
 
@@ -37,9 +37,7 @@ async function login(email) {
 }
 
 try {
-  const push = spawnSync("pnpm", ["exec", "prisma", "db", "push"], { env, encoding: "utf8" });
-  assert.equal(push.status, 0, push.stderr || push.stdout);
-  prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: databaseUrl }) });
+  prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
   const owner = await prisma.user.create({ data: {
     name: "Owner", email: "issue70-owner@example.test", password: "password-123", status: "ACTIVE",
   } });
@@ -125,8 +123,12 @@ try {
   const noTimeIn = await request("/api/records", { cookie: operatorCookie, method: "POST", body: {
     ...input, studentId: "00000000002", expectedMode: "TIME_OUT",
   } });
-  assert.equal(noTimeIn.response.status, 409);
-  assert.equal(noTimeIn.result.code, "NO_TIME_IN");
+  // Timeout-only recording is allowed: a TIME_OUT first creates a record with
+  // null time-in (delivered behavior, preserved by the PG port).
+  assert.equal(noTimeIn.response.status, 201, JSON.stringify(noTimeIn.result));
+  assert.equal(noTimeIn.result.data.operation, "TIME_OUT");
+  assert.equal(noTimeIn.result.data.timein, null);
+  assert.ok(noTimeIn.result.data.timeout);
   const timedOut = await request("/api/records", { cookie: operatorCookie, method: "POST", body: {
     ...input, method: "MANUAL", expectedMode: "TIME_OUT",
   } });
@@ -169,7 +171,7 @@ try {
   const wallMs = Math.round(performance.now() - started);
   assert.ok(throughput.every(({ response }) => response.status === 201), JSON.stringify(throughput.map(({ response, result }) => [response.status, result])));
   assert.equal(await prisma.record.count({ where: { eventId: throughputEvent.id } }), 5);
-  console.log(`Operator HTTP checks passed: seven sessions, event-roster permissions, mode conflict, actor/method/timestamp, no prior time-in, mode race; five writes in ${wallMs} ms.`);
+  console.log(`Operator HTTP checks passed: seven sessions, event-roster permissions, mode conflict, actor/method/timestamp, timeout-only with null time-in, mode race; five writes in ${wallMs} ms.`);
   if (process.env.MANUAL_BROWSER_TEST === "1") {
     const browser = spawnSync("python3", ["scripts/test-manual-browser.py", base, throughputEvent.id, owner.email],
       { env, encoding: "utf8", timeout: 120_000 });
@@ -181,5 +183,6 @@ try {
     try { process.kill(-server.pid, "SIGTERM"); } catch { /* Already stopped */ }
   }
   await prisma?.$disconnect();
-  await rm(temp, { recursive: true, force: true });
+  await pool.end();
+  await disposable.cleanup();
 }

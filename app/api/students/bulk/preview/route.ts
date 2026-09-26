@@ -58,7 +58,7 @@ export async function POST(req: Request) {
         });
         return { target, students };
       },
-      { timeout: PREVIEW_READ_TIMEOUT_MS, maxWait: 5_000 },
+      { timeout: PREVIEW_READ_TIMEOUT_MS, maxWait: 5_000, isolationLevel: "RepeatableRead" },
     );
 
     if (!snapshot.target) {

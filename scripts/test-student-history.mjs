@@ -1,6 +1,6 @@
 /** Disposable end-to-end API fixture. Run after `npm run build` with `node scripts/test-student-history.mjs`. */
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -8,11 +8,15 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { createDisposableDatabase } from "./pg-test-db.mjs";
 
+const disposable = await createDisposableDatabase("test");
+const dbUrl = disposable.url;
+const pool = new Pool({ connectionString: dbUrl, max: 8 });
 const scratch = mkdtempSync(join(tmpdir(), "student-history-"));
-const dbUrl = `file:${join(scratch, "history.db")}`;
-const env = { ...process.env, DATABASE_URL: dbUrl, AUTH_SECRET: "student-history-disposable-test-secret", NODE_ENV: "production" };
+const env = { ...process.env, DATABASE_URL: dbUrl, DIRECT_URL: dbUrl, AUTH_SECRET: "student-history-disposable-test-secret", NODE_ENV: "production" };
 let server;
 let prisma;
 let chrome;
@@ -95,8 +99,7 @@ async function browserCheck(cookie) {
 }
 
 try {
-  execFileSync("npx", ["prisma", "migrate", "deploy"], { env, stdio: "pipe" });
-  prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: dbUrl }) });
+  prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
   const today = schoolDate();
   const todayStart = schoolMidnight(today);
   const past = offset => new Date(todayStart.getTime() - offset * day + 8 * 60 * 60_000);
@@ -207,6 +210,8 @@ try {
     try { process.kill(-chrome.pid, "SIGTERM"); } catch { /* already exited */ }
   }
   await prisma?.$disconnect();
+  await pool.end();
+  await disposable.cleanup();
   await delay(500);
   try { rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
   catch (error) { console.warn(`Could not remove temporary fixture ${scratch}: ${error.message}`); }

@@ -9,7 +9,7 @@ import {
   setAuthSession,
 } from "@/globals/utils/auth";
 import { hashPassword, verifyPassword } from "@/globals/utils/password";
-import { applyOwnPasswordChange } from "@/globals/utils/credentials";
+import { applyOwnPasswordChange, lockUserRowsForUpdate } from "@/globals/utils/credentials";
 import { changePasswordSchema } from "@/features/auth/schema/changePasswordSchema";
 import { rateLimit } from "@/globals/utils/rateLimit";
 
@@ -71,11 +71,18 @@ export async function POST(req: Request) {
     // Hash outside the write so the conditional update below stays short.
     const newHash = await hashPassword(newPassword);
 
-    const updated = await applyOwnPasswordChange(prisma, {
-      userId: snapshot.id,
-      expectedCredentialVersion: snapshot.credentialVersion,
-      verifiedPasswordHash: snapshot.password,
-      newPasswordHash: newHash,
+    // Guarded PostgreSQL write: lock the User row, then run the conditional
+    // update + winning-generation reread on the same transaction connection.
+    // A fresh global reread that sees someone else's later reset is never
+    // authority to sign a newer cookie.
+    const updated = await prisma.$transaction(async (tx) => {
+      await lockUserRowsForUpdate(tx, [snapshot.id]);
+      return applyOwnPasswordChange(tx, {
+        userId: snapshot.id,
+        expectedCredentialVersion: snapshot.credentialVersion,
+        verifiedPasswordHash: snapshot.password,
+        newPasswordHash: newHash,
+      });
     });
 
     if (!updated) {

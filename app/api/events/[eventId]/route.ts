@@ -16,6 +16,7 @@ import {
   AUDIENCE_CHANGE_HAS_RECORDS_CODE,
   getEventAudienceChangeError,
 } from "@/globals/utils/eventAudienceGuard";
+import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 
 const submitSchema = z.object({
   action: z.enum(["SUBMIT", "APPROVE", "REJECT"]),
@@ -111,15 +112,26 @@ export async function PATCH(
         assertEventOwnership(event, user);
         assertEventStatus(event, "DRAFT");
 
-        const updated = await prisma.event.update({
-          where: { id: eventId },
-          data: {
-            status: "PENDING",
-            reviewedById: null,
-            rejectionReason: null,
-            reviewedAt: null,
-          },
+        const updated = await prisma.$transaction(async (tx) => {
+          await takeRosterExclusiveLock(tx);
+          await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+          const fresh = await tx.event.findUnique({ where: { id: eventId } });
+          if (!fresh) return null;
+          assertEventOwnership(fresh, user);
+          assertEventStatus(fresh, "DRAFT");
+          return tx.event.update({
+            where: { id: eventId },
+            data: {
+              status: "PENDING",
+              reviewedById: null,
+              rejectionReason: null,
+              reviewedAt: null,
+            },
+          });
         });
+        if (!updated) {
+          return NextResponse.json(err("Event not found."), { status: 404 });
+        }
 
         return NextResponse.json(ok(updated), { status: 200 });
       }
@@ -130,15 +142,25 @@ export async function PATCH(
         // DRAFT is intentionally not approvable: drafts must be submitted
         // first so the approval always reviews a finished event.
         assertEventStatus(event, ["PENDING", "REJECTED", "APPROVED"]);
-        const approved = await prisma.event.update({
-          where: { id: eventId },
-          data: {
-            status: "APPROVED",
-            reviewedById: user.id,
-            reviewedAt: new Date(),
-            rejectionReason: null,
-          },
+        const approved = await prisma.$transaction(async (tx) => {
+          await takeRosterExclusiveLock(tx);
+          await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+          const fresh = await tx.event.findUnique({ where: { id: eventId } });
+          if (!fresh) return null;
+          assertEventStatus(fresh, ["PENDING", "REJECTED", "APPROVED"]);
+          return tx.event.update({
+            where: { id: eventId },
+            data: {
+              status: "APPROVED",
+              reviewedById: user.id,
+              reviewedAt: new Date(),
+              rejectionReason: null,
+            },
+          });
         });
+        if (!approved) {
+          return NextResponse.json(err("Event not found."), { status: 404 });
+        }
 
         return NextResponse.json(ok(approved), { status: 200 });
       }
@@ -147,15 +169,25 @@ export async function PATCH(
         assertEventStatus(event, "PENDING");
         const { reason } = rejectionSchema.parse(payload);
 
-        const rejected = await prisma.event.update({
-          where: { id: eventId },
-          data: {
-            status: "REJECTED",
-            reviewedById: user.id,
-            reviewedAt: new Date(),
-            rejectionReason: reason,
-          },
+        const rejected = await prisma.$transaction(async (tx) => {
+          await takeRosterExclusiveLock(tx);
+          await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+          const fresh = await tx.event.findUnique({ where: { id: eventId } });
+          if (!fresh) return null;
+          assertEventStatus(fresh, "PENDING");
+          return tx.event.update({
+            where: { id: eventId },
+            data: {
+              status: "REJECTED",
+              reviewedById: user.id,
+              reviewedAt: new Date(),
+              rejectionReason: reason,
+            },
+          });
         });
+        if (!rejected) {
+          return NextResponse.json(err("Event not found."), { status: 404 });
+        }
 
         return NextResponse.json(ok(rejected), { status: 200 });
       }
@@ -213,16 +245,37 @@ export async function PATCH(
     const { includedGroups, ...eventData } = data;
     // acknowledgeAudienceChange is a client-only signal, not a Prisma column.
     delete eventData.acknowledgeAudienceChange;
-    const updated = await prisma.event.update({
-      where: { id: eventId },
-      data: {
-        ...eventData,
-        ...rejectionReset,
-        ...(includedGroups
-          ? { includedGroups: { set: includedGroups.map((id) => ({ id })) } }
-          : {}),
-      },
+    // Content mutation (may rescope eligibility): exclusive roster freeze +
+    // FOR UPDATE, with ownership/status rechecked after locking.
+    const updated = await prisma.$transaction(async (tx) => {
+      await takeRosterExclusiveLock(tx);
+      await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+      const fresh = await tx.event.findUnique({
+        where: { id: eventId },
+        include: { includedGroups: true },
+      });
+      if (!fresh) return null;
+      assertEventOwnership(fresh, user);
+      assertEventStatus(
+        fresh,
+        user.role === "ADMIN"
+          ? ["DRAFT", "PENDING", "APPROVED", "REJECTED"]
+          : ["DRAFT", "REJECTED"]
+      );
+      return tx.event.update({
+        where: { id: eventId },
+        data: {
+          ...eventData,
+          ...rejectionReset,
+          ...(includedGroups
+            ? { includedGroups: { set: includedGroups.map((id) => ({ id })) } }
+            : {}),
+        },
+      });
     });
+    if (!updated) {
+      return NextResponse.json(err("Event not found."), { status: 404 });
+    }
 
     return NextResponse.json(ok(updated), { status: 200 });
   } catch (error) {
@@ -245,11 +298,23 @@ export async function DELETE(
 
     assertEventOwnership(existing, user);
 
-    const attendanceCount = await prisma.record.count({
-      where: { eventId: existing.id },
+    const blocked = await prisma.$transaction(async (tx) => {
+      await takeRosterExclusiveLock(tx);
+      await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+      const fresh = await tx.event.findUnique({ where: { id: eventId } });
+      if (!fresh) return "missing" as const;
+      assertEventOwnership(fresh, user);
+      const attendanceCount = await tx.record.count({ where: { eventId: fresh.id } });
+      if (attendanceCount > 0) return "blocked" as const;
+      await tx.event.delete({ where: { id: eventId } });
+      return "deleted" as const;
     });
 
-    if (attendanceCount > 0) {
+    if (blocked === "missing") {
+      return NextResponse.json(err("Event not found."), { status: 404 });
+    }
+
+    if (blocked === "blocked") {
       return NextResponse.json(
         err(
           "Cannot delete this event because attendance has already been recorded.",
@@ -258,8 +323,6 @@ export async function DELETE(
         { status: 409 }
       );
     }
-
-    await prisma.event.delete({ where: { id: eventId } });
 
     return NextResponse.json(ok(null), { status: 200 });
   } catch (error) {

@@ -3,6 +3,7 @@ import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
 import { respondWithError } from "@/globals/utils/httpError";
 import { requireAuth, requireRole } from "@/globals/utils/auth";
+import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 import {
   deleteGroupSchema,
   updateGroupSchema,
@@ -137,6 +138,14 @@ export async function DELETE(
 
     await prisma.$transaction(
       async (tx) => {
+        // Roster maintenance takes the exclusive form: eligibility is frozen
+        // across the reassignment/deletion while scans wait.
+        await takeRosterExclusiveLock(tx);
+        // Lock both groups in deterministic order before touching join rows.
+        const ordered = [groupId, reassignToGroupId].filter((id): id is string => !!id).sort();
+        for (const id of ordered) {
+          await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${id} FOR UPDATE`;
+        }
         if (reassignToGroupId && studentIds.length > 0) {
           await tx.group.update({
             where: { id: reassignToGroupId },

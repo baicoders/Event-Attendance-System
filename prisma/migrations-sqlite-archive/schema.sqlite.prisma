@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model Event {
@@ -13,8 +13,8 @@ model Event {
   description String?
   category    EventCategory
   isTimeout   Boolean       @default(false)
-  start       DateTime      @db.Timestamptz(3)
-  end         DateTime      @db.Timestamptz(3)
+  start       DateTime
+  end         DateTime
   allDay      Boolean       @default(false)
   status      EventStatus   @default(DRAFT)
 
@@ -26,11 +26,11 @@ model Event {
   createdBy       User?     @relation("EventCreator", fields: [createdById], references: [id])
   reviewedById    String?
   reviewedBy      User?     @relation("EventReviewer", fields: [reviewedById], references: [id])
-  reviewedAt      DateTime? @db.Timestamptz(3)
+  reviewedAt      DateTime?
   rejectionReason String?
 
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([createdById])
@@ -51,8 +51,8 @@ model Student {
   groups  Group[]
   records Record[]
 
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Roster sort modes, so the common orderings don't need a temp B-tree.
   // Group-membership filtering goes through the Group relation, so it is not
@@ -69,8 +69,8 @@ model Record {
   studentId String
   student   Student          @relation(fields: [studentId], references: [id])
   method    AttendanceMethod
-  timein    DateTime? @db.Timestamptz(3)
-  timeout   DateTime? @db.Timestamptz(3)
+  timein    DateTime?
+  timeout   DateTime?
 
   // Audit trail: who created the record and who last touched it
   recordedById     String?
@@ -78,8 +78,8 @@ model Record {
   lastModifiedById String?
   lastModifiedBy   User?   @relation("RecordModifier", fields: [lastModifiedById], references: [id])
 
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([eventId, studentId])
 }
@@ -104,8 +104,8 @@ model User {
   createdRecords  Record[]   @relation("RecordCreator")
   modifiedRecords Record[]   @relation("RecordModifier")
 
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Group {
@@ -118,8 +118,8 @@ model Group {
   students Student[]
   events   Event[]   @relation("EventGroups")
 
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([category])
 }

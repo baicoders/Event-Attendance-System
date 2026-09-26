@@ -1,4 +1,4 @@
-/** HTTP fixture for #74. Run with a disposable /tmp/issue74-export-*.db and a local server. */
+/** HTTP fixture for #74. Run with a disposable PostgreSQL test database and a local server. */
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 
@@ -6,8 +6,25 @@ import { prisma } from "@/globals/libs/prisma";
 import { eventExportSchema } from "@/features/reports/utils/eventExport";
 import { serializeCsv } from "@/globals/utils/csvExport";
 
+function assertDisposablePostgresDatabase() {
+  const dbUrl = process.env.DATABASE_URL ?? "";
+  let dbName = "";
+  try {
+    dbName = new URL(dbUrl).pathname.replace(/^\//, "").split("/")[0] ?? "";
+  } catch {
+    dbName = "";
+  }
+  if (
+    !dbUrl.startsWith("postgresql://") ||
+    !/^test_[a-z0-9_]+$/.test(dbName) ||
+    ["event_attendance_dev", "event_attendance_prod"].includes(dbName)
+  ) {
+    throw new Error("Use a disposable PostgreSQL test database (postgresql://.../test_<name>). Refusing dev/prod databases.");
+  }
+}
+
 async function main() {
-  if (!/^file:\/tmp\/issue74-export-[a-z-]+\.db$/.test(process.env.DATABASE_URL ?? "")) throw new Error("Use a disposable /tmp/issue74-export-*.db database.");
+  assertDisposablePostgresDatabase();
   await prisma.record.deleteMany();
   await prisma.event.deleteMany();
   await prisma.student.deleteMany();

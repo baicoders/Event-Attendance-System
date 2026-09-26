@@ -9,7 +9,7 @@ export class ProgressReadError extends Error {
   }
 }
 
-/** Load authorization, targeting, and the eligible population in one SQLite read transaction. */
+/** Load authorization, targeting, and the eligible population in one PostgreSQL Repeatable Read snapshot. */
 export async function readAttendanceProgress(
   db: PrismaClient,
   eventId: string,
@@ -60,7 +60,7 @@ export async function readAttendanceProgress(
       },
     });
     return { event, students, selectedGroup, evaluatedAt: new Date().toISOString() };
-  }, { maxWait: 5_000, timeout: 15_000 });
+  }, { maxWait: 5_000, timeout: 15_000, isolationLevel: "RepeatableRead" });
 
   const { event, students, selectedGroup, evaluatedAt } = snapshot;
   return {

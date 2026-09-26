@@ -79,9 +79,14 @@ const SystemSection = () => {
             {data.nodeEnv}
           </StatusBadge>
         </Row>
-        <Row label="Database file">
+        <Row label="Database">
           <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">
-            {data.databaseFile}
+            {data.database.database}
+          </code>
+        </Row>
+        <Row label="PostgreSQL">
+          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">
+            {data.database.serverVersion}
           </code>
         </Row>
         <Row label="AUTH_SECRET">

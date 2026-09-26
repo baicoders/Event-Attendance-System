@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { createDisposableDatabase } from "./pg-test-db.mjs";
 
-const temp = await mkdtemp(join(tmpdir(), "issue83-account-recovery-"));
-const databaseUrl = `file:${join(temp, "test.db")}`;
+const disposable = await createDisposableDatabase("test");
+const databaseUrl = disposable.url;
+const pool = new Pool({ connectionString: databaseUrl, max: 8 });
 const secret = "issue83-account-recovery-test-secret";
 const port = 42200 + Math.floor(Math.random() * 1000);
 const base = `http://127.0.0.1:${port}`;
-const env = { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: secret };
+const env = { ...process.env, DATABASE_URL: databaseUrl, DIRECT_URL: databaseUrl, AUTH_SECRET: secret };
 let server;
 let prisma;
 
@@ -81,13 +81,8 @@ function legacyCookie(user) {
 }
 
 try {
-  const push = spawnSync("pnpm", ["exec", "prisma", "db", "push"], {
-    env,
-    encoding: "utf8",
-  });
-  assert.equal(push.status, 0, push.stderr || push.stdout);
   prisma = new PrismaClient({
-    adapter: new PrismaBetterSqlite3({ url: databaseUrl }),
+    adapter: new PrismaPg(pool),
   });
 
   const admin = await prisma.user.create({
@@ -413,5 +408,6 @@ try {
     }
   }
   await prisma?.$disconnect();
-  await rm(temp, { recursive: true, force: true });
+  await pool.end();
+  await disposable.cleanup();
 }

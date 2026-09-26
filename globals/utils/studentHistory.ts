@@ -25,7 +25,7 @@ export async function loadStudentHistory(studentId: string, query: ReturnType<ty
         select: { id: true, eventId: true, timein: true, timeout: true, method: true } }));
     }
     return { student, events, records };
-  }, { maxWait: 2_000, timeout: 10_000 });
+  }, { maxWait: 2_000, timeout: 10_000, isolationLevel: "RepeatableRead" });
   if (!snapshot) return null;
   const projection = projectStudentHistory({ ...snapshot, todayStart: query.todayStart,
     view: query.view, outcome: query.outcome, search: query.search, page: query.page, pageSize: query.pageSize, evaluatedAt });

@@ -1,16 +1,20 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { Worker } from "node:worker_threads";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 type WorkerResult = { ready?: boolean; ok?: boolean; ms?: number; error?: string };
 
-const dir = mkdtempSync(join(tmpdir(), "issue70-benchmark-"));
-const url = `file:${join(dir, "attendance.db")}`;
+// Runs against the PostgreSQL database in DATABASE_URL (a disposable test
+// database). The schema is ensured with `prisma db push`, then the fixture
+// rows are removed again in the finally block.
+const url = process.env.DATABASE_URL;
+if (!url) {
+  throw new Error("DATABASE_URL is not set. Point it at a disposable PostgreSQL test database.");
+}
+const pool = new Pool({ connectionString: url, max: 10 });
 let db: PrismaClient | undefined;
 
 function onceMessage(worker: Worker) {
@@ -21,22 +25,30 @@ function onceMessage(worker: Worker) {
 }
 
 async function main() {
+let user: { id: string } | undefined;
+let event: { id: string } | undefined;
+let studentIds: string[] = [];
 try {
   execFileSync("pnpm", ["exec", "prisma", "db", "push"], {
     cwd: process.cwd(), env: { ...process.env, DATABASE_URL: url }, stdio: "pipe",
   });
-  db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) });
-  const user = await db.user.create({ data: {
+  db = new PrismaClient({ adapter: new PrismaPg(pool) });
+  user = await db.user.create({ data: {
     name: "Benchmark", email: "benchmark@example.test", password: "test", status: "ACTIVE",
   } });
-  const event = await db.event.create({ data: {
+  event = await db.event.create({ data: {
     title: "Operator benchmark", category: "ALL", status: "APPROVED", createdById: user.id,
     start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
   } });
-  await db.student.createMany({ data: Array.from({ length: 500 }, (_, index) => ({
-    id: String(index + 1).padStart(11, "0"), firstName: "Test", lastName: `Student ${index}`,
+  studentIds = Array.from({ length: 500 }, (_, index) => String(index + 1).padStart(11, "0"));
+  await db.student.createMany({ data: studentIds.map((id, index) => ({
+    id, firstName: "Test", lastName: `Student ${index}`,
     schoolLevel: "COLLEGE" as const, yearLevel: "YEAR_1" as const,
   })) });
+
+  const fixtureUser = user;
+  const fixtureEvent = event;
+  if (!fixtureUser || !fixtureEvent) throw new Error("Fixture setup failed.");
 
   let nextStudent = 1;
   for (const kind of ["baseline", "guarded"] as const) {
@@ -49,7 +61,7 @@ try {
         const results = workers.map(onceMessage);
         const started = performance.now();
         workers.forEach((worker) => worker.postMessage({
-          kind, eventId: event.id, studentId: String(nextStudent++).padStart(11, "0"), userId: user.id,
+          kind, eventId: fixtureEvent.id, studentId: String(nextStudent++).padStart(11, "0"), userId: fixtureUser.id,
         }));
         const settled = await Promise.all(results);
         const elapsed = performance.now() - started;
@@ -65,8 +77,19 @@ try {
     }
   }
 } finally {
+  // Remove only the fixture rows created above so the database is left clean.
+  if (db) {
+    try {
+      await db.record.deleteMany({ where: { eventId: event?.id } });
+      await db.event.deleteMany({ where: { id: event?.id } });
+      await db.student.deleteMany({ where: { id: { in: studentIds } } });
+      await db.user.deleteMany({ where: { id: user?.id } });
+    } catch {
+      /* best-effort fixture cleanup */
+    }
+  }
   await db?.$disconnect();
-  rmSync(dir, { recursive: true, force: true });
+  await pool.end();
 }
 }
 

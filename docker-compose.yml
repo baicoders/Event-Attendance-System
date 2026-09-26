@@ -1,0 +1,28 @@
+name: event-attendance-system
+
+# Local PostgreSQL 17 (pinned digest verified 2026-09-26).
+# Developers are not required to run Docker: any PostgreSQL 17 with UTF-8/UTC
+# works. CI provisions the same major as production.
+services:
+  db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: event_attendance_dev
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5433:5432"
+    volumes:
+      - eas-pgdata:/var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - timezone=UTC
+      - -c
+      - log_timezone=UTC
+
+volumes:
+  eas-pgdata:

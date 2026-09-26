@@ -1,11 +1,26 @@
-/** Run against a disposable SQLite DB and a running dev server. See docs below. */
+/** Run against a disposable PostgreSQL test database and a running dev server. See docs below. */
 import assert from "node:assert/strict";
 import { prisma } from "@/globals/libs/prisma";
 
-async function main() {
-if (!/^file:\/tmp\/issue67-audience-[a-z-]+\.db$/.test(process.env.DATABASE_URL ?? "")) {
-  throw new Error("Use a disposable /tmp/issue67-audience-*.db database.");
+function assertDisposablePostgresDatabase() {
+  const dbUrl = process.env.DATABASE_URL ?? "";
+  let dbName = "";
+  try {
+    dbName = new URL(dbUrl).pathname.replace(/^\//, "").split("/")[0] ?? "";
+  } catch {
+    dbName = "";
+  }
+  if (
+    !dbUrl.startsWith("postgresql://") ||
+    !/^test_[a-z0-9_]+$/.test(dbName) ||
+    ["event_attendance_dev", "event_attendance_prod"].includes(dbName)
+  ) {
+    throw new Error("Use a disposable PostgreSQL test database (postgresql://.../test_<name>). Refusing dev/prod databases.");
+  }
 }
+
+async function main() {
+assertDisposablePostgresDatabase();
 
 const base = process.env.AUDIENCE_TEST_BASE_URL ?? "http://127.0.0.1:3100";
 const prefix = `issue67-${Date.now()}`;

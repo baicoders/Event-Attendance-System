@@ -1,8 +1,10 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
-const db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: workerData.url }) });
+const pool = new Pool({ connectionString: workerData.url, max: 2 });
+const db = new PrismaClient({ adapter: new PrismaPg(pool) });
 parentPort.postMessage("ready");
 parentPort.once("message", async () => {
   parentPort.postMessage("attempting");
@@ -18,5 +20,6 @@ parentPort.once("message", async () => {
     parentPort.postMessage({ error: String(error) });
   } finally {
     await db.$disconnect();
+    await pool.end();
   }
 });

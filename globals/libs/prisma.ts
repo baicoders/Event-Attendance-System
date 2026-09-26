@@ -1,33 +1,43 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
+import {
+  RUNTIME_POOL_TUNING,
+  getRuntimeDatabaseUrl,
+  sslForUrl,
+} from './dbConfig';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
 function createPrismaClient() {
-  // Fail fast: a silent ":memory:" fallback would make a misconfigured
-  // deployment look functional while losing every write on restart.
-  if (!process.env.DATABASE_URL) {
-    throw new Error(
-      "DATABASE_URL environment variable is not set. Add it to .env (e.g. DATABASE_URL=\"file:./dev.db\")."
-    );
-  }
+  // Fail fast: a misconfigured deployment must fail loudly instead of
+  // silently running against the wrong database.
+  const connectionString = getRuntimeDatabaseUrl();
+  const ssl = sslForUrl(connectionString);
 
-  const adapter = new PrismaBetterSqlite3({
-    url: process.env.DATABASE_URL,
+  const pool = new Pool({
+    connectionString,
+    max: RUNTIME_POOL_TUNING.max,
+    connectionTimeoutMillis: RUNTIME_POOL_TUNING.connectionTimeoutMillis,
+    idleTimeoutMillis: RUNTIME_POOL_TUNING.idleTimeoutMillis,
+    ...(ssl ? { ssl } : {}),
   });
+  pool.on('error', (error) => {
+    // Pool-level errors (idle client failures, restarts) are logged, not
+    // thrown: in-flight transactions surface their own errors.
+    console.error('[prisma] idle pool error', error);
+  });
+
+  const adapter = new PrismaPg(pool);
 
   return new PrismaClient({
     adapter,
-    // Bulk roster imports (2,000+ upserts in one array-form transaction) run
-    // far longer than Prisma's default 5s timeout / 2s maxWait. The
-    // synchronous better-sqlite3 adapter blocks the event loop, so the engine's
-    // 5s timer cannot fire mid-batch — but the 2s maxWait CAN fail a second
-    // concurrent import with P2028 ("Unable to start a transaction in the
-    // given time."). Set generous defaults here (the one place that governs
-    // batch transaction options) so a full-roster import, and any import that
-    // has to queue behind one, completes instead of erroring.
+    // Bulk roster imports (2,000+ upserts in one transaction) run far longer
+    // than Prisma's default 5s timeout / 2s maxWait. Keep generous defaults
+    // at the client level so a full-roster import, and any import that has
+    // to queue behind one, completes instead of erroring.
     transactionOptions: {
       timeout: 120_000,
       maxWait: 30_000,

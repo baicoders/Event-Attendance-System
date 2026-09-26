@@ -7,6 +7,7 @@ import { respondWithError } from "@/globals/utils/httpError";
 import { studentSchema } from "@/globals/schemas/studentSchema";
 import { studentEditVersion } from "@/globals/utils/studentDetail";
 import { updateStudentDetail } from "@/globals/utils/studentEdit";
+import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 
 const privateHeaders = { "Cache-Control": "private, no-store" };
 const editFields = new Set(["id", "firstName", "lastName", "middleName", "schoolLevel", "yearLevel", "section", "house", "department", "program", "strand"]);
@@ -85,11 +86,14 @@ export async function DELETE(
     await requireAuth();
     const { id } = await params;
 
-    const attendanceCount = await prisma.record.count({
-      where: { studentId: id },
+    const blocked = await prisma.$transaction(async (tx) => {
+      await takeRosterExclusiveLock(tx);
+      const attendanceCount = await tx.record.count({ where: { studentId: id } });
+      if (attendanceCount > 0) return true;
+      await tx.student.delete({ where: { id } });
+      return false;
     });
-
-    if (attendanceCount > 0) {
+    if (blocked) {
       return NextResponse.json(
         err(
           "Cannot delete this student because attendance has already been recorded for them.",
@@ -98,8 +102,6 @@ export async function DELETE(
         { status: 409 }
       );
     }
-
-    await prisma.student.delete({ where: { id } });
     return NextResponse.json(ok(null), { status: 200 });
   } catch (error) {
     return respondWithError(error);

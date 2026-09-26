@@ -4,8 +4,25 @@ import { writeFile } from "node:fs/promises";
 
 import { prisma } from "@/globals/libs/prisma";
 
+function assertDisposablePostgresDatabase() {
+  const dbUrl = process.env.DATABASE_URL ?? "";
+  let dbName = "";
+  try {
+    dbName = new URL(dbUrl).pathname.replace(/^\//, "").split("/")[0] ?? "";
+  } catch {
+    dbName = "";
+  }
+  if (
+    !dbUrl.startsWith("postgresql://") ||
+    !/^test_[a-z0-9_]+$/.test(dbName) ||
+    ["event_attendance_dev", "event_attendance_prod"].includes(dbName)
+  ) {
+    throw new Error("Use a disposable PostgreSQL test database (postgresql://.../test_<name>). Refusing dev/prod databases.");
+  }
+}
+
 async function main() {
-  if (!/^file:\/tmp\/issue74-export-[a-z-]+\.db$/.test(process.env.DATABASE_URL ?? "")) throw new Error("Use the disposable export fixture database.");
+  assertDisposablePostgresDatabase();
   const base = "http://127.0.0.1:3112";
   const owner = await prisma.user.findFirst({ where: { name: "Owner" }, orderBy: { createdAt: "desc" } });
   const event = await prisma.event.findFirst({ where: { title: "Export, fixture" }, orderBy: { createdAt: "desc" } });

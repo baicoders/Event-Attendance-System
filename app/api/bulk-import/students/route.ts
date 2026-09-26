@@ -6,6 +6,7 @@ import { studentSchema } from "@/globals/schemas/studentSchema";
 import { z } from "zod";
 import { respondWithError } from "@/globals/utils/httpError";
 import { validateStudentGroupSlugs } from "@/globals/utils/studentGroups";
+import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 
 const bulkSchema = z.array(studentSchema);
 
@@ -62,47 +63,54 @@ export async function POST(request: Request) {
     }
     const { slugToId } = resolution;
 
-    // Process the transaction
+    // Process the transaction (interactive form so the exclusive roster
+    // freeze is held across the whole batch; array-form cannot take locks).
     const results = await prisma.$transaction(
-      students.map((data) => {
-        // Map data slugs to actual IDs (all validated above).
-        const studentGroupIds = [
-          data.section,
-          data.house,
-          data.department,
-          data.program,
-          data.strand,
-        ]
-          .filter(Boolean)
-          .map((slug) => slugToId.get(slug as string))
-          .filter(Boolean)
-          .map((id) => ({ id }));
+      async (tx) => {
+        await takeRosterExclusiveLock(tx);
+        const out = [];
+        for (const data of students) {
+          // Map data slugs to actual IDs (all validated above).
+          const studentGroupIds = [
+            data.section,
+            data.house,
+            data.department,
+            data.program,
+            data.strand,
+          ]
+            .filter(Boolean)
+            .map((slug) => slugToId.get(slug as string))
+            .filter(Boolean)
+            .map((id) => ({ id }));
 
-        return prisma.student.upsert({
-          where: { id: data.id },
-          update: {
-            firstName: data.firstName,
-            lastName: data.lastName,
-            middleName: data.middleName || null,
-            schoolLevel: data.schoolLevel,
-            yearLevel: data.yearLevel,
-            groups: {
-              set: studentGroupIds, // Replace existing relationships
+          out.push(await tx.student.upsert({
+            where: { id: data.id },
+            update: {
+              firstName: data.firstName,
+              lastName: data.lastName,
+              middleName: data.middleName || null,
+              schoolLevel: data.schoolLevel,
+              yearLevel: data.yearLevel,
+              groups: {
+                set: studentGroupIds, // Replace existing relationships
+              },
             },
-          },
-          create: {
-            id: data.id,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            middleName: data.middleName || null,
-            schoolLevel: data.schoolLevel,
-            yearLevel: data.yearLevel,
-            groups: {
-              connect: studentGroupIds,
+            create: {
+              id: data.id,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              middleName: data.middleName || null,
+              schoolLevel: data.schoolLevel,
+              yearLevel: data.yearLevel,
+              groups: {
+                connect: studentGroupIds,
+              },
             },
-          },
-        });
-      }),
+          }));
+        }
+        return out;
+      },
+      { timeout: 120_000, maxWait: 30_000 },
     );
 
     return NextResponse.json(

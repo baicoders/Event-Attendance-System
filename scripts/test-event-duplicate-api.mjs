@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { createDisposableDatabase } from "./pg-test-db.mjs";
 
-const temp = await mkdtemp(join(tmpdir(), "duplicate-event-api-"));
-const databaseUrl = `file:${join(temp, "test.db")}`;
+const disposable = await createDisposableDatabase("test");
+const databaseUrl = disposable.url;
+const pool = new Pool({ connectionString: databaseUrl, max: 8 });
 const port = 41000 + Math.floor(Math.random() * 10000);
 const base = `http://127.0.0.1:${port}`;
-const env = { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "duplicate-event-api-test-secret" };
+const env = { ...process.env, DATABASE_URL: databaseUrl, DIRECT_URL: databaseUrl, AUTH_SECRET: "duplicate-event-api-test-secret" };
 let server;
 let prisma;
 
@@ -36,10 +36,7 @@ async function login(email) {
 }
 
 try {
-  const push = spawnSync("pnpm", ["exec", "prisma", "db", "push"], { env, encoding: "utf8" });
-  assert.equal(push.status, 0, push.stderr || push.stdout);
-
-  prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: databaseUrl }) });
+  prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
   const users = await Promise.all([
     ["owner", "ORGANIZER", "ACTIVE"],
     ["other", "ORGANIZER", "ACTIVE"],
@@ -118,5 +115,6 @@ try {
     try { process.kill(-server.pid, "SIGTERM"); } catch { /* already stopped */ }
   }
   await prisma?.$disconnect();
-  await rm(temp, { recursive: true, force: true });
+  await pool.end();
+  await disposable.cleanup();
 }

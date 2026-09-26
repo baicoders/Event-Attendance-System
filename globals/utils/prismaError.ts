@@ -75,10 +75,40 @@ function handleKnownRequestError(
           "The database transaction did not complete and was rolled back. Retrying the operation is safe.",
       };
 
+    // Transaction conflict from serialization/deadlock (P2034). Callers with a
+    // guarded-write retry loop may retry once; all other callers surface 503.
+    case "P2034":
+      return {
+        status: 503,
+        message:
+          "The database detected a write conflict and rolled back. Retrying the operation is safe.",
+      };
+
     default:
       return {
         status: 500,
         message: "Database error occurred.",
       };
   }
+}
+
+/**
+ * True only for a confirmed-rollback serialization/deadlock that a
+ * guarded-write loop may retry once (at most two total attempts).
+ * Covers Prisma P2034 and the underlying PostgreSQL SQLSTATEs 40001
+ * (serialization_failure) / 40P01 (deadlock_detected) after verifying the
+ * pg adapter surfaces them in the message/meta. Never true for unique,
+ * validation, auth or unknown transport failures.
+ */
+export function isRetryableTransactionError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/\b(40001|40P01)\b/.test(message)) return true;
+  // pg deadlock/serialization messages without a bare SQLSTATE prefix.
+  if (/deadlock detected|serialization failure|could not serialize access/i.test(message)) {
+    return true;
+  }
+  return false;
 }

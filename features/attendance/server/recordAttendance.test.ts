@@ -1,26 +1,24 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import type { PrismaClient } from "@prisma/client";
+import {
+  createDisposableDb,
+  createTestClient,
+  type DisposableDb,
+} from "@/globals/libs/testDb";
 
-const dir = mkdtempSync(join(tmpdir(), "issue70-recording-"));
-const url = `file:${join(dir, "attendance.db")}`;
+let disposable: DisposableDb;
 let db: PrismaClient;
+let disconnect: () => Promise<void>;
 let eventId: string;
 let studentId: string;
 let userId: string;
 
 before(async () => {
-  execFileSync("pnpm", ["exec", "prisma", "db", "push"], {
-    cwd: process.cwd(),
-    env: { ...process.env, DATABASE_URL: url },
-    stdio: "pipe",
-  });
-  db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) });
+  disposable = await createDisposableDb("test");
+  const client = createTestClient(disposable.url);
+  db = client.db;
+  disconnect = client.disconnect;
   const user = await db.user.create({ data: {
     name: "Operator", email: "operator@example.test", password: "test", status: "ACTIVE",
   } });
@@ -36,7 +34,7 @@ before(async () => {
   eventId = event.id;
 });
 
-after(async () => { await db?.$disconnect(); rmSync(dir, { recursive: true, force: true }); });
+after(async () => { await disconnect?.(); await disposable?.cleanup(); });
 
 test("expected mode selects only a matching time-in and preserves first writer", async () => {
   const { recordAttendance } = await import("./recordAttendance");
@@ -93,9 +91,9 @@ test("time-out without time-in creates a record with null time-in and preserves 
   assert.equal(again.record.method, "SCANNED");
 });
 
-test("independent SQLite clients never commit the opposite mode during a switch", async () => {
+test("independent PostgreSQL clients never commit the opposite mode during a switch", async () => {
   const { recordAttendance } = await import("./recordAttendance");
-  const second = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) });
+  const second = createTestClient(disposable.url);
   try {
     for (let i = 0; i < 12; i++) {
       const currentEvent = await db.event.create({ data: {
@@ -104,7 +102,7 @@ test("independent SQLite clients never commit the opposite mode during a switch"
       } });
       const [scan] = await Promise.allSettled([
         recordAttendance(db, { eventId: currentEvent.id, studentId, method: "SCANNED", expectedMode: "TIME_IN" }, { id: userId, role: "ORGANIZER" }),
-        second.event.update({ where: { id: currentEvent.id }, data: { isTimeout: true } }),
+        second.db.event.update({ where: { id: currentEvent.id }, data: { isTimeout: true } }),
       ]);
       const persisted = await db.record.findUnique({ where: { eventId_studentId: { eventId: currentEvent.id, studentId } } });
       assert.equal(persisted?.timeout ?? null, null);
@@ -115,12 +113,12 @@ test("independent SQLite clients never commit the opposite mode during a switch"
         assert.equal(persisted, null);
       }
     }
-  } finally { await second.$disconnect(); }
+  } finally { await second.disconnect(); }
 });
 
 test("a time-out racing a switch back to time-in preserves the prior time-in", async () => {
   const { recordAttendance } = await import("./recordAttendance");
-  const second = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) });
+  const second = createTestClient(disposable.url);
   try {
     const event = await db.event.create({ data: {
       title: "Reverse race", category: "ALL", status: "APPROVED", createdById: userId,
@@ -132,7 +130,7 @@ test("a time-out racing a switch back to time-in preserves the prior time-in", a
     await db.event.update({ where: { id: event.id }, data: { isTimeout: true } });
     const [scan] = await Promise.allSettled([
       recordAttendance(db, { eventId: event.id, studentId, method: "MANUAL", expectedMode: "TIME_OUT" }, owner),
-      second.event.update({ where: { id: event.id }, data: { isTimeout: false } }),
+      second.db.event.update({ where: { id: event.id }, data: { isTimeout: false } }),
     ]);
     const persisted = await db.record.findUniqueOrThrow({ where: { eventId_studentId: { eventId: event.id, studentId } } });
     assert.equal(persisted.timein?.toISOString(), before.record.timein?.toISOString());
@@ -143,16 +141,21 @@ test("a time-out racing a switch back to time-in preserves the prior time-in", a
     } else {
       assert.equal(persisted.timeout, null);
     }
-  } finally { await second.$disconnect(); }
+  } finally { await second.disconnect(); }
 });
 
-test("five concurrent requests on the server client preserve one record and write-once timestamps", async () => {
+test("five concurrent requests preserve one record and write-once timestamps", async () => {
   const { recordAttendance } = await import("./recordAttendance");
-  const clients = Array.from({ length: 5 }, () => db);
-  const event = await db.event.create({ data: {
-    title: "Concurrent scans", category: "ALL", status: "APPROVED", createdById: userId,
-    start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
-  } });
+  // Same-client concurrency plus two independent pools: the pair advisory lock
+  // + unique constraint converge to one record regardless of pool.
+  const second = createTestClient(disposable.url);
+  const third = createTestClient(disposable.url);
+  try {
+    const clients = [db, db, db, second.db, third.db];
+    const event = await db.event.create({ data: {
+      title: "Concurrent scans", category: "ALL", status: "APPROVED", createdById: userId,
+      start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
+    } });
     const timeins = await Promise.allSettled(clients.map((client) => recordAttendance(client,
       { eventId: event.id, studentId, method: "SCANNED", expectedMode: "TIME_IN" }, { id: userId, role: "ORGANIZER" })));
     assert.ok(timeins.some((result) => result.status === "fulfilled"));
@@ -166,6 +169,35 @@ test("five concurrent requests on the server client preserve one record and writ
     assert.equal(after[0].timein?.toISOString(), before.timein?.toISOString());
     assert.ok(after[0].timeout);
     assert.equal(after[0].method, "SCANNED");
+  } finally {
+    await second.disconnect();
+    await third.disconnect();
+  }
+});
+
+test("different students scanning the same event proceed concurrently", async () => {
+  const { recordAttendance } = await import("./recordAttendance");
+  const second = createTestClient(disposable.url);
+  try {
+    const event = await db.event.create({ data: {
+      title: "Different-pair concurrency", category: "ALL", status: "APPROVED", createdById: userId,
+      start: new Date("2026-09-25T00:00:00Z"), end: new Date("2026-09-26T00:00:00Z"),
+    } });
+    const a = await db.student.create({ data: {
+      id: "00000110011", firstName: "Pair", lastName: "A", schoolLevel: "COLLEGE", yearLevel: "YEAR_1",
+    } });
+    const b = await db.student.create({ data: {
+      id: "00000110022", firstName: "Pair", lastName: "B", schoolLevel: "COLLEGE", yearLevel: "YEAR_1",
+    } });
+    const owner = { id: userId, role: "ORGANIZER" as const };
+    const [ra, rb] = await Promise.all([
+      recordAttendance(db, { eventId: event.id, studentId: a.id, method: "SCANNED" }, owner),
+      recordAttendance(second.db, { eventId: event.id, studentId: b.id, method: "SCANNED" }, owner),
+    ]);
+    assert.equal(ra.changed, true);
+    assert.equal(rb.changed, true);
+    assert.equal(await db.record.count({ where: { eventId: event.id } }), 2);
+  } finally { await second.disconnect(); }
 });
 
 test("legacy requests follow server mode, while authorization and eligibility still deny writes", async () => {

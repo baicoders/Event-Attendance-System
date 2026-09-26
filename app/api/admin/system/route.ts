@@ -1,4 +1,3 @@
-import { basename } from "path";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/globals/libs/prisma";
@@ -11,12 +10,20 @@ import { version as appVersion } from "@/package.json";
 const MIN_AUTH_SECRET_LENGTH = 16;
 
 /**
- * Which SQLite file is actually in use, without leaking the path layout of the
- * host machine. `file:./prisma/dev.db` -> `dev.db`.
+ * PostgreSQL identity for the operator console, without leaking topology or
+ * secrets. Returns the connected database name + server version only — never
+ * connection strings, passwords, hostnames or CA material.
  */
-function databaseFileName(): string {
-  const url = process.env.DATABASE_URL ?? "";
-  return basename(url.replace(/^file:/, "").split("?")[0]) || "unknown";
+async function databaseIdentity(): Promise<{ database: string; serverVersion: string }> {
+  const rows = await prisma.$queryRaw<Array<{ database: string; server_version: string }>>`
+    SELECT current_database() AS database, version() AS server_version
+  `;
+  const row = rows[0];
+  return {
+    database: row?.database ?? "unknown",
+    // First line only ("PostgreSQL 17.11 on ...") — no build paths.
+    serverVersion: (row?.server_version ?? "unknown").split("\n")[0],
+  };
 }
 
 /**
@@ -33,18 +40,19 @@ export async function GET() {
 
     const secret = process.env.AUTH_SECRET ?? "";
 
-    const [students, groups, events, records, users] = await Promise.all([
+    const [students, groups, events, records, users, db] = await Promise.all([
       prisma.student.count(),
       prisma.group.count(),
       prisma.event.count(),
       prisma.record.count(),
       prisma.user.count(),
+      databaseIdentity(),
     ]);
 
     return NextResponse.json(
       ok({
         nodeEnv: process.env.NODE_ENV ?? "unknown",
-        databaseFile: databaseFileName(),
+        database: db,
         authSecret: {
           configured: secret.length > 0,
           meetsMinLength: secret.length >= MIN_AUTH_SECRET_LENGTH,

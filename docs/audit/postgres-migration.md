@@ -1,5 +1,14 @@
 # SQLite → PostgreSQL Migration Assessment
 
+> **Implemented (issue #51).** The migration assessed below has landed:
+> `provider = "postgresql"`, a single squashed PG baseline migration (the old
+> SQLite history is archived under `prisma/migrations-sqlite-archive/`),
+> `PrismaPg` over a `pg` pool at runtime and in the seed, the guarded-write
+> protocol with Repeatable Read snapshots, and case-insensitive name search.
+> The rest of this file is the **historical pre-migration assessment**,
+> preserved as written — see
+> `docs/releases/issue-51-postgres-migration.md` for cutover evidence.
+
 Scope: identify what will and won't carry over cleanly if this app moves to Postgres
 later. **Nothing here is a beta blocker** — per the audit brief, theoretical
 scalability is explicitly out of scope for the one-week release decision. This is a

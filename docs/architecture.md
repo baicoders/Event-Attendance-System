@@ -18,8 +18,8 @@ A single Next.js application that lets a school run event attendance:
 - **Students** are a roster, not users. They never log in. A student's identity for
   attendance purposes is their 11-character student ID, encoded in a QR code.
 
-There is one Node process, one SQLite file, and no background jobs, queues, caches,
-or external services.
+There is one Node process, one PostgreSQL 17 database, and no background jobs,
+queues, caches, or external services.
 
 ---
 
@@ -43,7 +43,7 @@ Browser (organizer laptop / phone on the LAN)
 └───────────────────────────────────────────────────────────────┘
   │
   ▼
-Prisma Client 7  ──  @prisma/adapter-better-sqlite3  ──  dev.db (SQLite file)
+Prisma Client 7  ──  PrismaPg (pg Pool)  ──  PostgreSQL 17
 ```
 
 Key structural facts:
@@ -60,8 +60,8 @@ Key structural facts:
 |---|---|
 | Framework | Next.js `15.5.20`, App Router, React 19, Turbopack for dev *and* build |
 | Language | TypeScript, `strict: true`; path alias `@/*` → repo root |
-| ORM | Prisma 7 with the `better-sqlite3` **driver adapter** (not the classic engine) |
-| DB | SQLite, single file |
+| ORM | Prisma 7 with the `PrismaPg` **driver adapter** over a `pg` pool |
+| DB | PostgreSQL 17 |
 | Server state | TanStack Query v5 |
 | Tables | TanStack Table v8 |
 | Forms | react-hook-form + Zod v4 resolvers |
@@ -102,7 +102,7 @@ globals/                Everything shared
   types/                Domain types, mostly `PrismaX & { … }`
   utils/                auth, rate limiting, eligibility filter, formatting, errors
 
-prisma/                 schema.prisma, migrations/, seed.ts, dev.db (untracked)
+prisma/                 schema.prisma, migrations/, seed.ts
 public/                 logos + student_import_template.csv
 ```
 
@@ -357,15 +357,20 @@ aggregate student counts; they expose no personally identifying data.
 
 ### Connection
 
-`globals/libs/prisma.ts` builds one `PrismaClient` over
-`new PrismaBetterSqlite3({ url: process.env.DATABASE_URL })`. It **throws on boot if
-`DATABASE_URL` is unset** — deliberately, so a misconfigured deployment can't silently
-run against an in-memory database and lose every write on restart. The client is
-cached on `globalThis` outside production so dev HMR doesn't leak connections.
+`globals/libs/prisma.ts` builds one `PrismaClient` over `PrismaPg` on a `pg`
+`Pool` (max 8 connections per process), with the connection string resolved by
+`globals/libs/dbConfig.ts::getRuntimeDatabaseUrl()`. It **throws on boot unless
+`DATABASE_URL` is a PostgreSQL URL** — deliberately, so a misconfigured
+deployment can't silently run against a local file or in-memory database and
+lose every write on restart. Non-local hosts get verified TLS (`sslForUrl`).
+The client is cached on `globalThis` outside production so dev HMR doesn't leak
+connections.
 
-`prisma/schema.prisma`'s `datasource db` has no `url` — it comes from
-`prisma.config.ts` via `env("DATABASE_URL")` for CLI operations and from the adapter
-at runtime.
+`DATABASE_URL` is the pooled runtime endpoint; `DIRECT_URL` is the direct
+non-pooled endpoint for migrations and maintenance (the two may coincide in
+local development, never via a transaction pooler). `prisma.config.ts`
+resolves the migration URL the same way and likewise refuses
+non-PostgreSQL URLs.
 
 ### Five models
 
@@ -401,41 +406,39 @@ ever needs tuning.
 
 ### Migrations
 
-12 SQLite migrations, `provider = "sqlite"` in `migration_lock.toml`. The history is
-real and destructive in places — `20260401135507_overhaul_schema` dropped
+One PostgreSQL baseline migration (`20260926075853_init_postgres_baseline`,
+`provider = "postgresql"` in `migration_lock.toml`). The SQLite history was
+squashed, not replayed, and is archived read-only under
+`prisma/migrations-sqlite-archive/`. The baseline absorbed a destructive
+history along the way — `20260401135507_overhaul_schema` dropped
 `Student.collegeProgram/department/departmentSlug/house/houseSlug/shsStrand/status`
 and `Event.includedGroups` (a JSON column) in favour of the `Group` relations, and
 `20260408082631` dropped `Student.section`. Several stale files in `features/` still
 reference those removed columns (see §14).
 
-### PostgreSQL migration readiness
+### PostgreSQL notes (SQLite → Postgres migration landed, issue #51)
 
-The application code is essentially portable; the migration history is not.
-
-**In your favour:**
-- No raw SQL anywhere. No `$queryRaw`, no SQLite-specific functions.
-- All enums are real Prisma enums and map cleanly to Postgres enums.
+**In your favour (carried over unchanged):**
+- Domain reads and writes go through the Prisma Client query builder, which
+  generates the Postgres dialect. All enums are real Prisma enums and map to
+  native Postgres enums.
 - IDs are `cuid()` strings, not autoincrement integers.
 - `DateTime` fields carry no SQLite-only semantics.
-- The only SQLite coupling in application code is two lines in `globals/libs/prisma.ts`
-  and two in `prisma/seed.ts` (the `PrismaBetterSqlite3` adapter construction).
+- The only database coupling in application code is the adapter construction
+  in `globals/libs/prisma.ts` and `prisma/seed.ts` (now `PrismaPg` over a `pg`
+  pool), plus connection rules in `globals/libs/dbConfig.ts`.
 
-**What actually blocks it:**
-- Every migration file is SQLite DDL (`PRAGMA defer_foreign_keys`, table-rebuild-and-
-  rename). They cannot be replayed against Postgres. A move means **squashing to a
-  fresh baseline migration** generated against a Postgres datasource, then migrating
-  the data separately.
-- `migration_lock.toml` pins the provider and will refuse a provider switch.
-- Swap the adapter (`@prisma/adapter-pg` or the plain client) and drop
-  `better-sqlite3` + `@types/better-sqlite3` + the pnpm `onlyBuiltDependencies` entry.
-- Case-sensitivity differs: SQLite `LIKE` is case-insensitive by default, Postgres
-  is not. Today this is a non-issue because **no query uses `contains`/`startsWith`** —
-  all text search happens client-side. Revisit if server-side search is ever added.
-- SQLite's single-writer lock is the main behavioural difference; Postgres would
-  remove the write-serialization ceiling described in §12.
-
-None of this is required for the beta. The current concurrency profile (2–5 users)
-sits far inside what SQLite handles.
+**Postgres-specific behaviour to know:**
+- Targeted raw SQL exists, and only for Postgres mechanics: the guarded-write
+  protocol issues `SELECT ... FOR SHARE` and `pg_advisory_xact_lock` calls
+  (`globals/utils/pgLocks.ts`), and the operator-console identity check reads
+  `current_database()`/`version()`. No domain query is hand-written SQL.
+- Case-sensitivity differs from SQLite: Postgres `LIKE` is case-sensitive, so
+  the human name/ID search passes `mode: "insensitive"`
+  (`globals/utils/audiencePreview.ts`). All other text search still happens
+  client-side (`globals/utils/fuzzySearch.ts`).
+- Concurrency follows the guarded-write protocol plus Repeatable Read
+  snapshots — see §12.
 
 ---
 
@@ -603,17 +606,26 @@ device on a stale copy.
 
 ## 12. Concurrency assumptions
 
-- **SQLite serializes writers.** With 2–5 concurrent operators and one scan every few
-  seconds this is a non-issue; it is the reason the design avoids long transactions.
-- The only multi-statement transaction in the codebase is the bulk student import
-  (`prisma.$transaction([...upserts])`) — all-or-nothing, and potentially long for a
-  2,000-row file. **Do not run a bulk import while an event is being scanned.**
-- Everything else relies on **compare-and-set `updateMany`** plus the
-  `@@unique([eventId, studentId])` constraint rather than transactions. Concurrent
-  scans of the same student are safe by construction.
+- **Postgres MVCC plus the guarded-write protocol.** Attendance writes
+  (`features/attendance/server/recordAttendance.ts`) run in a bounded
+  transaction: a shared roster-state advisory lock (freezes eligibility without
+  making different-student scans exclusive with each other), `SELECT ...
+  FOR SHARE` on the event row (scans linearize against mode changes), then an
+  exclusive transaction-scoped advisory lock on the `(eventId, studentId)`
+  pair — followed by the long-standing compare-and-set `updateMany` plus the
+  `@@unique([eventId, studentId])` constraint. The whole transaction retries
+  once on serialization/deadlock errors only.
+- The bulk student import is a single all-or-nothing interactive transaction
+  (explicit `timeout: 120s`, `maxWait: 30s`) that takes the **exclusive**
+  roster lock; attendance takes the shared form, so the two block each other.
+  **Do not run a bulk import while an event is being scanned.**
+- Reads that must be self-consistent (event report, attendance progress,
+  exports, audience preview) run at **Repeatable Read** so concurrent writes
+  can't skew totals mid-read.
 - The timeout-mode endpoint takes an **explicit desired state** (`{ isTimeout: true }`),
-  not a blind toggle, and applies it with `updateMany WHERE isTimeout = !desired` — so
-  two operators both pressing "start time-out" converge instead of cancelling out.
+  not a blind toggle, inside a transaction holding `FOR UPDATE` on the event
+  row — so two operators both pressing "start time-out" converge instead of
+  cancelling out.
 - Rate limiting (`globals/utils/rateLimit.ts`) is an in-process `Map`, fixed-window,
   with opportunistic cleanup above 10,000 keys. It is correct for one process only, and
   it keys off `x-forwarded-for` falling back to the literal string `"local"` — on a LAN
@@ -718,11 +730,13 @@ assumptions, and they are the things that surprise you six months later.
 ### Intended shape
 
 One laptop runs the Next.js server; phones and other laptops on the same Wi-Fi hit it
-by IP. The SQLite file on that laptop is the entire system of record.
+by IP. The PostgreSQL 17 database is the entire system of record — a local
+container (`docker compose up -d db`) or a managed instance; the server just
+points at it.
 
 ```bash
 corepack pnpm install
-# .env must contain DATABASE_URL and (for production) AUTH_SECRET
+# .env must contain DATABASE_URL (+ DIRECT_URL for pooled production) and (for production) AUTH_SECRET
 corepack pnpm exec prisma migrate deploy
 corepack pnpm build
 corepack pnpm start
@@ -732,15 +746,16 @@ corepack pnpm start
 
 | Variable | Required | Behaviour |
 |---|---|---|
-| `DATABASE_URL` | **always** | Prisma throws on boot without it. Currently `file:./prisma/dev.db` — **resolved relative to the process working directory**, so starting the server from a different directory points at a different (empty) database. |
+| `DATABASE_URL` | **always** | Pooled runtime PostgreSQL connection string. The app throws on boot unless it is a `postgresql://…` URL — SQLite/file URLs are refused. |
+| `DIRECT_URL` | pooled production | Direct (non-pooled, non-pooler) PostgreSQL URL for migrations and maintenance. May coincide with `DATABASE_URL` in local development. |
 | `AUTH_SECRET` | production | ≥16 chars, else boot throws in production. Silently falls back to `dev-only-insecure-secret` outside production. **Not present in the committed `.env`.** |
 | `NODE_ENV` | set by tooling | Controls the auth-cookie `secure` flag, the Prisma global cache, and the seed guard. |
 | `SEED_FORCE` | optional | `"true"` allows the destructive seed to run with `NODE_ENV=production`. |
 
 ### Runtime dependencies
 
-- Node (for `better-sqlite3`, a native module — `pnpm-workspace.yaml` allowlists its build)
-- A writable filesystem path for the SQLite file
+- Node
+- Network access to the PostgreSQL database (local container or managed instance)
 - A camera + a **secure browsing context** for QR scanning
 - Google Fonts are fetched at **build** time by `next/font` (Poppins, Geist Mono) — the
   build machine needs network access; runtime does not.
@@ -771,9 +786,10 @@ reaches the app over HTTPS on that host, HSTS will pin it there for a year.
   scripts need nonce plumbing to do it properly.
 - `pnpm db:seed` **wipes every table** (records → events → students → groups → users) and
   refuses to run under `NODE_ENV=production` unless `SEED_FORCE=true`.
-- Backups are entirely manual: copy the SQLite file. There is no export-everything
+- Backups are entirely manual: `pg_dump` to a timestamped file (see the
+  operator runbook §1). There is no export-everything
   endpoint and no automated backup.
-- `prisma/dev.db` is correctly gitignored and untracked.
+- No database files live in the repo — nothing under `prisma/` is the database itself.
 - Build and lint both pass on `main`; `npx tsc --noEmit` is clean.
 
 ---
@@ -783,7 +799,7 @@ reaches the app over HTTPS on that host, HSTS will pin it there for a year.
 Things you cannot do without changing the architecture, listed so you don't rediscover
 them under time pressure:
 
-1. **No horizontal scaling.** In-memory rate limiting plus a local SQLite file.
+1. **No horizontal scaling.** In-memory rate limiting assumes a single process.
 2. **No historical eligibility.** See §15.1. Fixing this means snapshotting the eligible
    set at approval or event start — a schema change, not a patch.
 3. **No group management UI.** New sections require a database edit or a (destructive)
@@ -818,8 +834,11 @@ and the reasoning is recorded in code comments and git history.
   input can't reconstruct, and the optimistic write corrupted and duplicated rows in
   timeout mode. Invalidation plus 8-second polling replaced it. Record *deletion* still
   has an optimistic path, because removing by id is reconstructable.
-- **No transactions on the scan path.** Compare-and-set plus a unique constraint is
-  simpler and avoids holding SQLite's write lock during a scan burst.
+- **Bounded guarded-write transactions on the scan path.** Compare-and-set plus a
+  unique constraint plus short advisory/row-share locks keep concurrent scans safe
+  without long exclusive holds. (The pre-Postgres design avoided transactions
+  entirely to dodge SQLite's single-writer lock; the current design keeps the same
+  compare-and-set core inside a short Postgres transaction — see §12.)
 - **In-memory rate limiting.** Correct for one process; the file says so.
 - **Console-only audit logging.** Enough to answer "who deleted that record" from the
   terminal.
