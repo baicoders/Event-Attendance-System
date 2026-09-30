@@ -137,12 +137,12 @@ Query patterns actually used, consistently:
 
 ## How do I use a transaction?
 
-Rarely, and the codebase has exactly one bulk-write example:
-`app/api/bulk-import/students/route.ts` runs student upserts in the
-**interactive form** (`prisma.$transaction(async (tx) => { ... })`) with an
-explicit `timeout: 120_000, maxWait: 30_000` and takes the exclusive roster
-advisory lock first (`takeRosterExclusiveLock`), so a 2,000-row import is
-all-or-nothing and serialized against roster edits.
+Reviewed student imports use `features/students/import/server.ts` and the
+`/api/students/imports/preview` and `/commit` routes. Preview uses a PostgreSQL
+RepeatableRead snapshot; commit takes the exclusive roster advisory lock and
+revalidates every reviewed Student and Group before applying CREATE/UPDATE only.
+UNCHANGED students receive no write. The interactive transaction remains atomic
+with `timeout: 120_000, maxWait: 30_000`.
 
 **Know this before copying it**: the explicit timeout/maxWait are load-bearing,
 not generous defaults — the default 5s/2s would roll a full-roster batch back
@@ -168,7 +168,7 @@ three different patterns coexist:
 1. **Shared, reused across multiple write paths**: `globals/schemas/studentSchema.ts`
    (`studentSchema`, with a `.superRefine` for school-level-dependent field
    requirements) is imported by both `POST /api/students` and
-   `POST /api/bulk-import/students`, and by the client-side student form
+   the reviewed student-import service, and by the client-side student form
    (`StudentFormDrawer`). This is the pattern to follow when a shape is genuinely
    shared between a form and one or more API routes.
 2. **Shared but only one real consumer**: `globals/schemas/index.ts` exports
@@ -271,14 +271,10 @@ polling) — a completed event's data doesn't need to refresh every 8 seconds. F
 this if you add a new "does this need to update while someone's actively scanning"
 query.
 
-**Exception — one component bypasses this pattern entirely.**
-`features/students/components/StudentImporter.tsx` does a raw `fetch()` to
-`/api/bulk-import/students` inside a plain async function, manually parses the JSON
-envelope, and manually calls `queryClient.invalidateQueries(...)` four times — instead
-of a `useMutation` hook in `globals/hooks/useStudents.ts`. This is a genuine
-inconsistency, not a considered exception; if you're touching bulk import, moving it to
-a `useMutation` (mirroring `useSaveStudent`) would match the rest of the codebase, but
-that's a refactor, not something required to add new features elsewhere.
+**Reviewed imports use explicit fetch dispatch.** `StudentImporter` runtime-validates
+preview and result envelopes and never automatically retries a sent commit.
+Transport or malformed acknowledgement is Outcome unknown. Confirmed mutations
+invalidate student, audience, event/progress, record and report query prefixes.
 
 ---
 
@@ -713,11 +709,13 @@ Edit `prisma/seed.ts` and run `pnpm db:seed`. Know before you touch this file:
 
 ## How do I import/export data (CSV)?
 
-- **Import**: `react-papaparse`'s `useCSVReader` hook, parsed client-side
-  (`{ header: true, skipEmptyLines: true }`), then POSTed as JSON (not as a file) to
-  `/api/bulk-import/students` — see `StudentImporter.tsx`. The API validates every row
-  with the same `studentSchema` used for single-student creation, plus the shared
-  `validateStudentGroupSlugs` group-integrity check, before writing anything.
+- **Import**: ADMIN-only canonical CSV source. The same strict parser runs in the
+  browser and server, with a 10 MiB file and complete HTTP request byte boundary.
+  `/api/students/imports/preview` classifies every row and signs the source/input/
+  roster/Group review; `/commit` reauthenticates and rejects stale reviews before
+  atomic CREATE/UPDATE writes. Only file IDs are affected; Groups are explicitly
+  created through the existing Group API. Legacy `/api/bulk-import/students`
+  returns `410 REVIEW_REQUIRED`. See `student-import.md` for operation and checks.
 - **Export**: `globals/hooks/useDataExport.ts`, a generic `{ apiUrl, filename }` hook
   used by unrelated array endpoints. It lazy-imports `react-papaparse` and uses
   `globals/utils/csvExport.ts` to neutralize formula-leading final cells.

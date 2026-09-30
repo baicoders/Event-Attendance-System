@@ -87,7 +87,7 @@ const ManageGroupsSection = () => {
   };
 
   return (
-    <section className="flex w-full flex-col gap-4">
+    <section id="groups" className="flex w-full scroll-mt-6 flex-col gap-4">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className={typeToken.sectionTitle}>Groups</h2>

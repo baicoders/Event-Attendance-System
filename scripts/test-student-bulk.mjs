@@ -124,7 +124,7 @@ async function browserCheck(cookie) {
     const delimiter = cookie.indexOf("=");
     await command("Network.setCookie", { name: cookie.slice(0, delimiter), value: cookie.slice(delimiter + 1), url: origin });
     await command("Page.navigate", { url: `${origin}/students/student-list?category=ALL` });
-    await until('document.body.innerText.includes("Dela Cruz")');
+    await until('document.body?.innerText.includes("Dela Cruz")');
     // Select two rows across the roster via their accessible checkboxes.
     await evaluate('document.querySelector(\'[aria-label="Select 00000123456"]\')?.click()');
     await evaluate('document.querySelector(\'[aria-label="Select 00000123457"]\')?.click()');

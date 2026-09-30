@@ -87,7 +87,7 @@ roster data during an event. There is no ownership concept for students.
 
 - `POST /api/students` — **upsert** keyed on `id`. Creating a "new" student with an
   existing ID silently overwrites that student's record.
-- `POST /api/bulk-import/students` — array upsert in one transaction, all-or-nothing.
+- `POST /api/students/imports/preview` and `/commit` — ADMIN-only reviewed canonical CSV; stale-safe atomic CREATE/UPDATE, untouched UNCHANGED and omitted IDs. Legacy `/api/bulk-import/students` rejects unreviewed writes with 410.
 - `DELETE /api/students/[id]` — hard delete, no confirmation server-side.
 
 ### Who depends on it
