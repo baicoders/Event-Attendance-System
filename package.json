@@ -32,7 +32,8 @@
     "benchmark:import": "tsx scripts/benchmark/http-import-benchmark.ts",
     "benchmark:operator": "node --import tsx scripts/benchmark/operator-mode.ts",
     "postinstall": "prisma generate",
-    "test:student-import": "node --import tsx --test features/students/import/csv.test.ts features/students/import/classify.test.ts features/students/import/contract.test.ts && node --conditions=react-server --import tsx --test features/students/import/token.test.ts && node --import tsx scripts/test-student-import.mjs"
+    "test:student-import": "node --import tsx --test features/students/import/csv.test.ts features/students/import/classify.test.ts features/students/import/contract.test.ts features/students/import/receiptContract.test.ts features/students/import/commandHash.test.ts globals/utils/pgLocks.test.ts && node --conditions=react-server --import tsx --test features/students/import/token.test.ts && node --import tsx scripts/test-student-import.mjs",
+    "test:student-import-durability": "node --import tsx scripts/test-student-import-durability.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",

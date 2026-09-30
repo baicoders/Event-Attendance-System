@@ -7,7 +7,15 @@ const request = { v: 1, fileName: "students.csv", sourceHash: "a".repeat(64), cs
 test("import boundary accepts canonical v1 source and requires reviewed commit", () => {
   assert.equal(importRequestSchema.safeParse(request).success, true);
   assert.equal(commitRequestSchema.safeParse(request).success, false);
-  assert.equal(commitRequestSchema.safeParse({ ...request, previewToken: "signed-review" }).success, true);
+  assert.equal(commitRequestSchema.safeParse({ ...request, previewToken: "signed-review", commandId: "6321ef49-c004-4540-bc8d-331b87e00c4b" }).success, true);
+});
+
+test("commit requires stable UUID identity and canonicalizes its textual case", () => {
+  const commit = { ...request, previewToken: "signed-review" };
+  assert.equal(commitRequestSchema.safeParse(commit).success, false);
+  assert.equal(commitRequestSchema.safeParse({ ...commit, commandId: "not-a-uuid" }).success, false);
+  assert.equal(commitRequestSchema.parse({ ...commit, commandId: "6321EF49-C004-4540-BC8D-331B87E00C4B" }).commandId, "6321ef49-c004-4540-bc8d-331b87e00c4b");
+  assert.equal(importRequestSchema.safeParse({ ...request, commandId: "6321ef49-c004-4540-bc8d-331b87e00c4b" }).success, false);
 });
 
 test("request rejects aliases, extra keys, path-like names and malformed hashes", () => {

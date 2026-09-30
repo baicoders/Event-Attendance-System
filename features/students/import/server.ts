@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { AuthError, type AuthSession } from '@/globals/utils/auth';
 import { studentSchema } from '@/globals/schemas/studentSchema';
-import { takeRosterExclusiveLock } from '@/globals/utils/pgLocks';
+import { takeRosterExclusiveLock, takeImportCommandLock } from '@/globals/utils/pgLocks';
 import { parseStudentImportCsv, hasStructuralCsvErrors } from './csv';
 import { classifyStudentImport, normalizeStudentImportRow } from './classify';
 import {
@@ -12,7 +12,10 @@ import {
 } from './contract';
 import { ImportError } from './errors';
 import { hashImportReview, importHash } from './stateHash';
-import { IMPORT_TOKEN_PURPOSE, IMPORT_TOKEN_TTL_MS, signImportToken, verifyImportToken, type ImportToken } from './token';
+import { IMPORT_TOKEN_PURPOSE, IMPORT_TOKEN_TTL_MS, signImportToken, verifyImportToken, assertImportTokenFresh, type ImportToken } from './token';
+import { hashImportCommand } from './commandHash';
+import { buildImportReceiptResult } from './receiptContract';
+import { projectImportReceipt } from './receiptProjection';
 
 const READ_CHUNK = 500;
 export const IMPORT_TRANSACTION_OPTIONS = { timeout:120_000, maxWait:30_000 };
@@ -117,13 +120,34 @@ export async function runImportTransaction<T>(db:PrismaClient, work:(tx:Prisma.T
 export async function commitStudentImport(db:PrismaClient, raw:unknown, actor:AuthSession) {
   const input=commitRequestSchema.parse(raw);
   const prepared=prepareImport(input);
-  const token=verifyReviewedInput(input,actor,prepared);
+  // Verify purpose, signature, actor and source even on replay. Expiry only
+  // prevents first execution; an immutable exact receipt remains resolvable.
+  const token=verifyReviewedInput(input,actor,prepared,true);
+  const requestHash=hashImportCommand(input,actor.id,prepared);
+  const createdAt=new Date();
   const result=await runImportTransaction(db,async tx=>{
-    await guardImportActor(tx,actor);
+    const fresh=await guardImportActor(tx,actor);
+    await takeImportCommandLock(tx,actor.id,input.commandId);
+    const existing=await tx.studentImportBatch.findUnique({where:{actorId_commandId:{actorId:actor.id,commandId:input.commandId}}});
+    if(existing) {
+      if(existing.requestHash!==requestHash) throw new ImportError('This import reference was already used for a different reviewed command.','IMPORT_COMMAND_REUSED',409);
+      return {receipt:projectImportReceipt(existing),replayed:true};
+    }
+    assertImportTokenFresh(token);
     await takeRosterExclusiveLock(tx);
+    assertImportTokenFresh(token);
     const review=await revalidateImport(tx,prepared,token);
     await applyImport(tx,review);
-    return {v:1 as const,counts:review.counts,committedAt:new Date().toISOString()};
+    // Construction, insert and validation of the persisted response are inside
+    // this transaction: any failure rolls back every tentative Student write.
+    const receiptResult=buildImportReceiptResult(review);
+    const saved=await tx.studentImportBatch.create({data:{
+      commandId:input.commandId,actorId:actor.id,actorNameSnapshot:fresh.name,
+      fileName:input.fileName,sourceFileHash:prepared.sourceHash,normalizedInputHash:prepared.normalizedInputHash,requestHash,
+      totalRows:review.counts.total,createdCount:review.counts.create,updatedCount:review.counts.update,unchangedCount:review.counts.unchanged,
+      result:receiptResult,contractVersion:1,createdAt,committedAt:new Date(),
+    }});
+    return {receipt:projectImportReceipt(saved),replayed:false};
   });
   return result;
 }

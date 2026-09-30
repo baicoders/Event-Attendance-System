@@ -68,7 +68,7 @@ Key structural facts:
 | UI | Tailwind v4 + shadcn/ui (vendored under `globals/components/shad-cn`) |
 | Calendar | FullCalendar (dayGrid + timeGrid + interaction) |
 | QR | `@yudiel/react-qr-scanner` (read), `react-qr-code` (render) |
-| CSV | `react-papaparse` (parse on import, `jsonToCSV` on export) |
+| CSV | Focused canonical import parser; `react-papaparse` `jsonToCSV` on export |
 | Package manager | pnpm (via corepack) |
 | Tests | **none** — there is no test framework, no test files, and no CI config |
 
@@ -340,7 +340,8 @@ mode on, or delete records from events **they created**.
 | `PATCH /api/records/[id]` | `requireAuth` + `assertEventVisibility` + APPROVED |
 | `DELETE /api/records/[id]` | `requireAuth` + **`assertEventOwnership`** (owner or admin only) |
 | `GET/POST /api/students`, `GET/DELETE /api/students/[id]` | `requireAuth` only — **any active user may read and mutate the roster** |
-| `POST /api/students/imports/preview`, `/commit` | fresh `requireAuth` + ADMIN; commit guards actor inside transaction |
+| `POST /api/students/imports/preview`, `/commit` | fresh `requireAuth` + ADMIN; commit guards actor and atomically persists its actor-scoped replay receipt |
+| `GET /api/students/imports`, `/[id]`, `/commands/[commandId]` | fresh ADMIN; bounded metadata history, historical detail, actor-scoped command resolution |
 | `POST /api/bulk-import/students` | ADMIN; 410 REVIEW_REQUIRED, no writes |
 | `GET /api/groups` | **no auth** |
 | `GET /api/groups/byCategory/[category]` | **no auth** |

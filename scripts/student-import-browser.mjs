@@ -37,6 +37,10 @@ def confirm(page):
 def mobile_width(page):
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "375px import screen overflows horizontally"
 
+def checkpoint(label):
+    print("__" + label + "__", flush=True)
+    assert sys.stdin.readline().strip() == "ready"
+
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
     context = browser.new_context(viewport={"width": 1440, "height": 1000})
@@ -49,10 +53,16 @@ with sync_playwright() as p:
     page.on("request", lambda request: preview_requests.append(json.loads(request.post_data))
             if request.url.endswith("/api/students/imports/preview") else None)
     page.goto(base + "/students/import", wait_until="domcontentloaded")
-    expect(page.get_by_label("Choose CSV file")).to_be_visible()
-    page.get_by_label("Choose CSV file").focus()
+    # SSR renders the input before AuthContext establishes the client actor.
+    # Wait for authenticated history hydration before focusing that native node.
+    expect(page.get_by_label("Recent imports", exact=True).get_by_role("button", name="Refresh imports", exact=True)).to_be_enabled()
+    native_file = page.get_by_label("Choose CSV file")
+    expect(native_file).to_be_visible()
+    expect(native_file).to_be_enabled()
+    native_file.focus()
+    expect(native_file).to_be_focused()
     with page.expect_file_chooser() as chooser:
-        page.keyboard.press("Enter")
+        native_file.press("Enter")
     chooser.value.set_files({"name": "keyboard-selected.csv", "mimeType": "text/csv", "buffer": config["raceB"].encode("utf-8")})
     expect(page.get_by_text("keyboard-selected.csv", exact=True)).to_be_visible()
     page.get_by_role("button", name="Reset", exact=True).click()
@@ -151,6 +161,33 @@ with sync_playwright() as p:
     mobile_width(page)
     page.screenshot(path="/tmp/student-import-mobile-success.png", full_page=True)
     assert len(commit_requests) == 1, "one confirmed command was dispatched"
+    first_command = json.loads(commit_requests[0])
+    assert re.fullmatch(r"[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}", first_command["commandId"]), "confirmed import has a client UUID"
+    receipt_href = page.get_by_role("link", name="View receipt", exact=True).get_attribute("href")
+    receipt_page = context.new_page()
+    receipt_page.goto(base + receipt_href, wait_until="domcontentloaded")
+    expect(receipt_page.get_by_role("heading", name="Import receipt", exact=True)).to_be_visible()
+    expect(receipt_page.get_by_label("Import receipt", exact=True)).to_contain_text("Historical evidence")
+    expect(receipt_page.get_by_label("Import receipt", exact=True)).to_contain_text("Current student fields and group membership may differ")
+    receipt_rows = receipt_page.get_by_label("Receipt rows", exact=True)
+    receipt_rows.get_by_role("button", name="Updated", exact=True).click()
+    expect(receipt_rows).to_contain_text("Browser Updated")
+    expect(receipt_rows).to_contain_text("firstName")
+    receipt_rows.get_by_role("button", name="Created", exact=True).click()
+    receipt_page.get_by_label("Search receipt rows").fill("00000123800")
+    expect(receipt_rows).to_contain_text("00000123800")
+    expect(receipt_rows.get_by_role("link", name="View current student", exact=True).filter(visible=True)).to_have_count(1)
+    receipt_page.get_by_label("Search receipt rows").fill("")
+    receipt_rows.get_by_role("button", name="Unchanged", exact=True).click()
+    expect(receipt_rows).to_contain_text("00000123457")
+    receipt_rows.get_by_role("button", name="All", exact=True).click()
+    receipt_page.set_viewport_size({"width": 375, "height": 812})
+    mobile_width(receipt_page)
+    receipt_page.get_by_label("Search receipt rows").focus()
+    receipt_page.keyboard.press("Tab")
+    assert receipt_page.evaluate("document.activeElement !== document.body")
+    receipt_page.screenshot(path="/tmp/student-import-receipt-mobile.png", full_page=True)
+    receipt_page.close()
 
     page.get_by_role("button", name="Import another file", exact=True).click()
     upload(page, "stale-browser.csv", config["stale"])
@@ -180,11 +217,85 @@ with sync_playwright() as p:
     assert len(commit_requests) == before_loss + 1, "unknown outcome never automatically retries"
     mobile_width(page)
     page.screenshot(path="/tmp/student-import-mobile-unknown.png", full_page=True)
+    lost_wire = commit_requests[-1]
+    checkpoint("CHECK_START")
+    page.get_by_role("button", name="Check result", exact=True).click()
+    expect(page.get_by_role("heading", name="Import confirmed", exact=True)).to_be_visible()
+    assert len(commit_requests) == before_loss + 1, "checking result sends no second command"
+    checkpoint("CHECK_END")
+    page.unroute("**/api/students/imports/commit", lose_response)
+    page.get_by_role("button", name="Import another file", exact=True).click()
+    upload(page, "lost-response-retry.csv", config["lostRetry"])
+    review(page)
+    page.route("**/api/students/imports/commit", lose_response)
+    confirm(page)
+    expect(page.get_by_role("heading", name="Outcome unknown", exact=True)).to_be_visible(timeout=120000)
+    retry_wire = commit_requests[-1]
+    assert json.loads(retry_wire)["commandId"] != json.loads(lost_wire)["commandId"], "newly reviewed file receives a distinct UUID"
+    page.unroute("**/api/students/imports/commit", lose_response)
+    checkpoint("RETRY_START")
+    page.get_by_role("button", name="Retry same reviewed import", exact=True).click()
+    expect(page.get_by_role("heading", name="Import confirmed", exact=True)).to_be_visible()
+    expect(page.get_by_text("No roster changes were applied again.", exact=False)).to_be_visible()
+    assert commit_requests[-1] == retry_wire, "post-commit retry uses the exact frozen body including original UUID and preview"
+    checkpoint("RETRY_END")
+
+    page.get_by_role("button", name="Import another file", exact=True).click()
+    upload(page, "never-received.csv", config["neverReceived"])
+    review(page)
+    def never_received(route):
+        route.abort("failed")
+    page.route("**/api/students/imports/commit", never_received)
+    confirm(page)
+    expect(page.get_by_role("heading", name="Outcome unknown", exact=True)).to_be_visible()
+    absent_wire = commit_requests[-1]
+    page.unroute("**/api/students/imports/commit", never_received)
+    page.get_by_role("button", name="Check result", exact=True).click()
+    expect(page.get_by_role("alert").filter(has_text="No receipt is available yet")).to_be_visible()
+    expect(page.get_by_role("heading", name="Outcome unknown", exact=True)).to_be_visible()
+    def reject_retry(route):
+        route.fulfill(status=500, content_type="application/json", body=json.dumps({"success": False, "code": "IMPORT_REJECTED", "outcome": "REJECTED", "message": "This retry was rolled back."}))
+    page.route("**/api/students/imports/commit", reject_retry)
+    page.get_by_role("button", name="Retry same reviewed import", exact=True).click()
+    expect(page.get_by_role("alert").filter(has_text="This retry was rolled back")).to_be_visible()
+    expect(page.get_by_role("heading", name="Outcome unknown", exact=True)).to_be_visible()
+    assert commit_requests[-1] == absent_wire
+    page.unroute("**/api/students/imports/commit", reject_retry)
+    page.get_by_role("button", name="Retry same reviewed import", exact=True).click()
+    expect(page.get_by_role("heading", name="Import complete", exact=True)).to_be_visible()
+    assert commit_requests[-1] == absent_wire, "before-received explicit retry executes the original reviewed UUID once"
+
+    # Prepare a real bounded history page without product-only seed hooks.
+    history_seed = page.evaluate("""async csv => {
+      const bytes = new TextEncoder().encode(csv);
+      const hash = await crypto.subtle.digest('SHA-256', bytes);
+      const sourceHash = [...new Uint8Array(hash)].map(value => value.toString(16).padStart(2, '0')).join('');
+      const source = {v:1,fileName:'browser-history.csv',sourceHash,csv};
+      const preview = await fetch('/api/students/imports/preview', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(source)}).then(response => response.json());
+      if (!preview.success || preview.data.counts.unchanged !== 1) throw new Error('history seed must be one unchanged real Student');
+      for(let index=0;index<22;index++) {
+        const response = await fetch('/api/students/imports/commit', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...source,previewToken:preview.data.previewToken,commandId:crypto.randomUUID()})});
+        const body=await response.json(); if(!response.ok||!body.success) throw new Error('history command failed');
+      }
+      return true;
+    }""", config["history"])
+    assert history_seed
+    history = page.get_by_label("Recent imports", exact=True)
+    history.get_by_role("button", name="Refresh imports", exact=True).click()
+    expect(history.locator("li")).to_have_count(20)
+    first_page_links = history.locator("li a").evaluate_all("links => links.map(link => link.getAttribute('href'))")
+    history.get_by_role("button", name="Older imports", exact=True).click()
+    expect(history.get_by_text("Page 2", exact=True)).to_be_visible()
+    second_page_links = history.locator("li a").evaluate_all("links => links.map(link => link.getAttribute('href'))")
+    assert not set(first_page_links).intersection(second_page_links)
+    mobile_width(page)
+    page.screenshot(path="/tmp/student-import-history-mobile.png", full_page=True)
+    history.get_by_role("button", name="Newer imports", exact=True).click()
+    expect(history.get_by_text("Page 1", exact=True)).to_be_visible()
 
     # Shared Settings form must retain its ordinary create/rename behavior.
     page.set_viewport_size({"width": 1440, "height": 1000})
-    print("__SETTINGS_START__", flush=True)
-    assert sys.stdin.readline().strip() == "ready"
+    checkpoint("SETTINGS_START")
     page.goto(base + "/settings#groups", wait_until="domcontentloaded")
     groups = page.locator("#groups")
     expect(groups.get_by_role("button", name="Add group", exact=True)).to_be_visible()
@@ -206,8 +317,7 @@ with sync_playwright() as p:
     settings_dialog.get_by_label("Name", exact=True).fill("Renamed Ordinary Section")
     settings_dialog.get_by_role("button", name="Save", exact=True).click()
     expect(groups.get_by_role("button", name="Rename Renamed Ordinary Section", exact=True)).to_be_visible()
-    print("__SETTINGS_END__", flush=True)
-    assert sys.stdin.readline().strip() == "ready"
+    checkpoint("SETTINGS_END")
 
     page.goto(base + "/students/import", wait_until="domcontentloaded")
     upload(page, "delayed-source-a.csv", config["raceB"])
@@ -250,9 +360,67 @@ with sync_playwright() as p:
     page.wait_for_timeout(250)
     expect(page.get_by_label("Import review rows")).to_have_count(0)
     expect(page.get_by_text("account-switch.csv", exact=True)).to_have_count(0)
+    # Resolve a real committed unknown command only after this admin has
+    # logged out and a different account has signed in. Its late response must
+    # never reveal the old actor's receipt in the new account's component tree.
+    context.add_cookies([{"name": name, "value": value, "url": base, "httpOnly": True, "sameSite": "Lax"}])
+    page.goto(base + "/students/import", wait_until="domcontentloaded")
+    upload(page, "late-check.csv", config["lateCheck"])
+    review(page)
+    page.route("**/api/students/imports/commit", lose_response)
+    confirm(page)
+    expect(page.get_by_role("heading", name="Outcome unknown", exact=True)).to_be_visible(timeout=120000)
+    page.unroute("**/api/students/imports/commit", lose_response)
+    held_checks = []
+    def hold_check(route):
+        response = route.fetch(timeout=60000)
+        assert response.status == 200
+        held_checks.append((route, response))
+    page.route("**/api/students/imports/commands/*", hold_check)
+    checkpoint("CHECK_START")
+    page.get_by_role("button", name="Check result", exact=True).click()
+    for attempt in range(100):
+        if held_checks:
+            break
+        page.wait_for_timeout(50)
+    assert len(held_checks) == 1
+    page.get_by_role("button", name="Logout", exact=True).click()
+    page.wait_for_url("**/login", timeout=60000)
+    page.get_by_label("Email", exact=True).fill("org@import.example.test")
+    page.get_by_label("Password", exact=True).fill("fixture-password-123")
+    page.get_by_role("button", name="Sign in", exact=True).click()
+    page.wait_for_url("**/dashboard", timeout=60000)
+    held_checks[0][0].fulfill(response=held_checks[0][1])
+    page.unroute("**/api/students/imports/commands/*", hold_check)
+    page.wait_for_timeout(250)
+    expect(page.get_by_role("heading", name="Import confirmed", exact=True)).to_have_count(0)
+    expect(page.get_by_label("Recent imports", exact=True)).to_have_count(0)
+    expect(page.get_by_text("late-check.csv", exact=True)).to_have_count(0)
+    checkpoint("CHECK_END")
+    context.add_cookies([{"name": name, "value": value, "url": base, "httpOnly": True, "sameSite": "Lax"}])
+    held_details = []
+    def hold_detail(route):
+        response = route.fetch(timeout=60000)
+        assert response.status == 200
+        held_details.append((route, response))
+    receipt_id = receipt_href.rsplit("/", 1)[1]
+    page.route("**/api/students/imports/" + receipt_id, hold_detail)
+    page.goto(base + receipt_href, wait_until="domcontentloaded")
+    for attempt in range(100):
+        if held_details:
+            break
+        page.wait_for_timeout(50)
+    assert len(held_details) == 1
+    page.get_by_role("button", name="Logout", exact=True).click()
+    page.wait_for_url("**/login", timeout=60000)
+    held_details[0][0].fulfill(response=held_details[0][1])
+    page.unroute("**/api/students/imports/" + receipt_id, hold_detail)
+    page.wait_for_timeout(250)
+    expect(page.get_by_label("Import receipt", exact=True)).to_have_count(0)
+    expect(page.get_by_text("mixed-browser.csv", exact=True)).to_have_count(0)
     context.close()
     browser.close()
-    print("Import browser checks passed: keyboard native file selection, structural errors/replacement, filters/search/diffs, explicit Group/repreview, late Group source race, confirmation, known success, stale rejection UI, real post-commit response loss/no retry, Settings create/rename with zero Student writes, delayed response replacement/logout, keyboard and 375px width.")
+    print("Import browser checks passed: reviewed import and receipt, exact frozen UUID/check/replay after real response loss, before-received missing check and exact retry, historical detail/filter/search, bounded history pagination, Group/Settings/source/account races, keyboard and 375px width.")
 `;
 
 export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) {
@@ -261,6 +429,10 @@ export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) 
     mixed: toCsv([row("00000123456", { firstName: "Browser Updated" }), row("00000123457"), row("00000123800"), row("00000123801", { section: "browser-created" })]),
     stale: toCsv([row("00000123802")]),
     lost: toCsv([row("00000123803")]),
+    lostRetry: toCsv([row("00000123806")]),
+    neverReceived: toCsv([row("00000123807")]),
+    lateCheck: toCsv([row("00000123808")]),
+    history: toCsv([row("00000123457")]),
     raceA: toCsv([row("00000123804", { section: "browser-race-created" })]),
     raceB: toCsv([row("00000123805")]),
     raceOnly: process.argv.includes("--browser-race"),
@@ -270,17 +442,19 @@ export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) 
   const child = spawn("python3", ["-c", browserScript], { stdio: ["pipe", "pipe", "pipe"] });
   child.stdin.write(JSON.stringify(input) + "\n");
   let output = "", errors = "";
-  let lines = "", settingsWritesBefore, milestoneError;
+  let lines = "", milestoneError;
+  const milestoneSnapshots = new Map();
   let milestones = Promise.resolve();
   child.stdout.on("data", (chunk) => {
     output += chunk; lines += chunk;
     while (lines.includes("\n")) {
       const end = lines.indexOf("\n"), line = lines.slice(0, end); lines = lines.slice(end + 1);
-      if (!["__SETTINGS_START__", "__SETTINGS_END__"].includes(line)) continue;
+      const marker = /^__(SETTINGS|CHECK|RETRY)_(START|END)__$/.exec(line);
+      if (!marker) continue;
       milestones = milestones.then(async () => {
-        const result = await db.$queryRawUnsafe('SELECT COUNT(*)::int AS n FROM "ImportTestWrites"');
-        if (line === "__SETTINGS_START__") settingsWritesBefore = result[0].n;
-        else assert.equal(result[0].n, settingsWritesBefore, "Settings Group creation/rename caused zero Student writes");
+        const result = await db.$queryRawUnsafe('SELECT (SELECT COUNT(*)::int FROM "ImportTestWrites") AS writes,(SELECT COUNT(*)::int FROM "StudentImportBatch") AS receipts');
+        if (marker[2] === "START") milestoneSnapshots.set(marker[1], result[0]);
+        else assert.deepEqual(result[0], milestoneSnapshots.get(marker[1]), `${marker[1]} caused zero Student writes and zero new receipts`);
         child.stdin.write("ready\n");
       }).catch((error) => { milestoneError = error; child.kill("SIGKILL"); });
     }
@@ -295,11 +469,16 @@ export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) 
   if (!input.raceOnly) {
     assert.equal(await db.student.count({ where: { id: "00000123803" } }), 1, "response-loss command committed exactly one new Student");
     assert.equal(await db.student.count({ where: { id: "00000123802" } }), 0, "simulated stale rejection never sent to mutation service");
+    for (const id of ["00000123803", "00000123806", "00000123807", "00000123808"]) {
+      assert.equal(await db.student.count({ where: { id } }), 1);
+      const retained = await db.studentImportBatch.findMany({ where: { result: { path: ["rows", "0", "studentId"], equals: id } } });
+      assert.equal(retained.length, 1, "lost/before-received command retains exactly one receipt");
+    }
   }
   assert.equal(await db.group.count({ where: { slug: "browser-race-created" } }), 1, "Group created for abandoned source remains durable");
   if (!input.raceOnly) {
     const settingsGroup = await db.group.findUnique({ where: { slug: "ordinary-settings-section" } });
     assert.equal(settingsGroup?.name, "Renamed Ordinary Section"); assert.equal(settingsGroup.category, "SECTION");
   }
-  console.log(output.replace(/^__SETTINGS_(?:START|END)__\n/gm, "").trim());
+  console.log(output.replace(/^__(?:SETTINGS|CHECK|RETRY)_(?:START|END)__\n/gm, "").trim());
 }
