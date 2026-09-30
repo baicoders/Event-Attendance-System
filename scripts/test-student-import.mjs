@@ -3,8 +3,8 @@
  * All writes use a migrated disposable database; no production fallback.
  */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { createHash, createHmac } from "node:crypto";
+import { spawn, spawnSync } from "node:child_process";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
@@ -13,7 +13,9 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createDisposableDatabase } from "./pg-test-db.mjs";
 const locksModule = await import("../globals/utils/pgLocks.ts");
-const { ROSTER_EXCLUSIVE_KEY } = locksModule.default ?? locksModule;
+const { ROSTER_EXCLUSIVE_KEY, importCommandKey } = locksModule.default ?? locksModule;
+const receiptModule = await import("../features/students/import/receiptContract.ts");
+const { receiptCommitResponseSchema, receiptSchema, receiptHistorySchema } = receiptModule.default ?? receiptModule;
 
 const secret = "reviewed-import-disposable-test-secret";
 const headers = ["id", "lastName", "firstName", "middleName", "schoolLevel", "yearLevel", "section", "house", "program", "department", "strand"];
@@ -52,14 +54,25 @@ async function preview(input, cookie) {
   assert.ok(Number.isFinite(Date.parse(data.preparedAt)) && Date.parse(data.expiresAt) > Date.parse(data.preparedAt));
   return { ...response, data };
 }
-async function commit(input, review, cookie) {
-  return api("/api/students/imports/commit", { ...input, previewToken: review.data.previewToken }, cookie);
+const commandIds = new WeakMap();
+function commandBody(input, review, commandId) {
+  if (!commandIds.has(review.data)) commandIds.set(review.data, commandId ?? randomUUID());
+  return { ...input, previewToken: review.data.previewToken, commandId: commandId ?? commandIds.get(review.data) };
 }
-const accepted = (response) => { assert.equal(response.status, 200, JSON.stringify(response.result)); assert.equal(response.result?.success, true); return response.result.data; };
+async function commit(input, review, cookie, commandId) {
+  return api("/api/students/imports/commit", commandBody(input, review, commandId), cookie);
+}
+const accepted = (response) => { assert.equal(response.status, 200, JSON.stringify(response.result)); assert.equal(response.result?.success, true); return receiptCommitResponseSchema.parse(response.result.data).receipt; };
 const rejected = (response, statuses = [400, 403, 409, 413]) => { assert.ok(statuses.includes(response.status), `expected rejection, got ${response.status}: ${JSON.stringify(response.result)}`); assert.equal(response.result?.success, false); };
 const stale = (response) => { rejected(response, [409]); assert.equal(response.result.code, "STALE_PREVIEW"); };
 const snapshot = async () => JSON.stringify({ students: await db.student.findMany({ orderBy: { id: "asc" }, include: { groups: { orderBy: { id: "asc" } } } }), events: await db.event.findMany({ orderBy: { id: "asc" } }), records: await db.record.findMany({ orderBy: { id: "asc" } }) });
 const studentWrites = async () => Number((await pool.query('SELECT COUNT(*)::int AS n FROM "ImportTestWrites"')).rows[0].n);
+const receiptCount = async () => Number((await pool.query('SELECT COUNT(*)::int AS n FROM "StudentImportBatch"')).rows[0].n);
+async function receiptRead(path, cookie) {
+  const result = await api(path, undefined, cookie, { method: "GET" });
+  assert.equal(result.status, 200, JSON.stringify(result.result)); assert.equal(result.cache, "private, no-store");
+  return receiptSchema.parse(result.result.data);
+}
 const serverRss = () => {
   const visit = (pid) => { try { const status = readFileSync(`/proc/${pid}/status`, "utf8"); const own = Number(status.match(/^VmRSS:\s+(\d+)/m)?.[1] ?? 0) * 1024; const children = readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8").trim().split(/\s+/).filter(Boolean); return own + children.reduce((sum, child) => sum + visit(child), 0); } catch { return 0; } };
   return server?.pid ? visit(server.pid) : 0;
@@ -126,6 +139,9 @@ try {
   const small = command([row("00000123459")]);
   const first = await preview(small, adminCookie);
   assert.deepEqual(first.data.counts, { total: 1, create: 1, update: 0, unchanged: 0, blocked: 0 });
+  const noCommandId = await api("/api/students/imports/commit", { ...small, previewToken: first.data.previewToken }, adminCookie);
+  assert.equal(noCommandId.status, 400, "every receipt-capable import must reject a missing client UUID");
+  rejected(await api("/api/students/imports/commit", { ...commandBody(small, first), commandId: "not-a-uuid" }, adminCookie), [400]);
   record("preview route and classification");
   rejected(await api("/api/students/imports/preview", small), [401]);
   rejected(await commit(small, first), [401]);
@@ -135,17 +151,17 @@ try {
   await db.user.update({ where: { id: admins[0].id }, data: { status: "REJECTED" } });
   rejected(await commit(small, first, adminCookie), [401, 403]);
   await db.user.update({ where: { id: admins[0].id }, data: { status: "ACTIVE" } });
-  rejected(await api("/api/students/imports/commit", { ...small, previewToken: `${first.data.previewToken}x` }, adminCookie));
+  rejected(await api("/api/students/imports/commit", { ...commandBody(small, first), previewToken: `${first.data.previewToken}x` }, adminCookie));
   const tokenBody = JSON.parse(Buffer.from(first.data.previewToken.split(".")[0], "base64url").toString("utf8"));
   const expiredBody = Buffer.from(JSON.stringify({ ...tokenBody, preparedAt: Date.now() - 700000, expiresAt: Date.now() - 100000 })).toString("base64url");
   const expiredToken = `${expiredBody}.${createHmac("sha256", secret).update(`student-import-review-v1.${expiredBody}`).digest("base64url")}`;
-  const expiredResponse = await api("/api/students/imports/commit", { ...small, previewToken: expiredToken }, adminCookie);
+  const expiredResponse = await api("/api/students/imports/commit", { ...commandBody(small, first), previewToken: expiredToken }, adminCookie);
   rejected(expiredResponse, [409]); assert.equal(expiredResponse.result.code, "PREVIEW_EXPIRED");
   rejected(await api("/api/students/imports/preview", { ...small, sourceHash: "0".repeat(64) }, adminCookie));
-  rejected(await api("/api/students/imports/commit", { ...small, sourceHash: "0".repeat(64), previewToken: first.data.previewToken }, adminCookie));
-  rejected(await api("/api/students/imports/commit", { ...small, fileName: "different.csv", previewToken: first.data.previewToken }, adminCookie));
+  rejected(await api("/api/students/imports/commit", { ...commandBody(small, first), sourceHash: "0".repeat(64) }, adminCookie));
+  rejected(await api("/api/students/imports/commit", { ...commandBody(small, first), fileName: "different.csv" }, adminCookie));
   const otherPurpose = Buffer.from(JSON.stringify({ ...tokenBody, purpose: "student-bulk-commit-v1" })).toString("base64url");
-  rejected(await api("/api/students/imports/commit", { ...small, previewToken: `${otherPurpose}.${createHmac("sha256", secret).update(`student-import-review-v1.${otherPurpose}`).digest("base64url")}` }, adminCookie));
+  rejected(await api("/api/students/imports/commit", { ...commandBody(small, first), previewToken: `${otherPurpose}.${createHmac("sha256", secret).update(`student-import-review-v1.${otherPurpose}`).digest("base64url")}` }, adminCookie));
   rejected(await api("/api/students/imports/preview", { ...small, students: [] }, adminCookie));
   rejected(await api("/api/students/imports/preview", undefined, adminCookie, { raw: "{" }));
   const beforeValidation = await snapshot();
@@ -169,7 +185,7 @@ try {
   const bytes = 10 * 1024 * 1024;
   rejected(await api("/api/students/imports/preview", fromCsv("x".repeat(bytes + 1)), adminCookie), [413]);
   rejected(await api("/api/students/imports/preview", undefined, adminCookie, { raw: JSON.stringify(small) + " ".repeat(bytes) }), [413]);
-  rejected(await api("/api/students/imports/commit", undefined, adminCookie, { raw: JSON.stringify({ ...small, previewToken: first.data.previewToken }) + " ".repeat(bytes) }), [413]);
+  rejected(await api("/api/students/imports/commit", undefined, adminCookie, { raw: JSON.stringify(commandBody(small, first)) + " ".repeat(bytes) }), [413]);
   record("authorization, parser/header/duplicate/group/body validation");
 
   const missingInput = command([row("00000123459", { section: "review-created" })]);
@@ -178,6 +194,7 @@ try {
   assert.equal((await api("/api/groups", { name: "Created during review", slug: "review-created", category: "SECTION" }, adminCookie)).status, 201);
   assert.equal(await studentWrites(), noStudentWrites);
   assert.equal((await preview(missingInput, adminCookie)).data.counts.create, 1);
+  assert.equal(await receiptCount(), 0, "independent Group creation and abandoned review never fabricate import receipts");
   record("explicit group creation resolves blocker with zero Student writes");
 
   const mixed = command([row(existing.id, { section: "section-b", firstName: "Updated" }), identical, row("00000123459", { middleName: "   ", strand: "   " }), row("00ABC123456", { lastName: "Oñate, Jr.", firstName: "María" })], "mañana.csv");
@@ -189,17 +206,68 @@ try {
   const identicalBefore = await db.student.findUnique({ where: { id: identical.id } });
   const attendanceBefore = JSON.stringify(await db.record.findMany());
   const materialBefore = await studentWrites();
-  const applied = accepted(await commit(mixed, review, adminCookie));
+  const receiptBefore = await receiptCount();
+  const firstMixedResponse = await commit(mixed, review, adminCookie);
+  const applied = accepted(firstMixedResponse);
+  assert.equal(firstMixedResponse.result.data.replayed, false);
   assert.deepEqual(applied.counts, review.data.counts);
+  assert.equal(await receiptCount(), receiptBefore + 1);
+  assert.equal(applied.actorId, admins[0].id); assert.equal(applied.actorNameSnapshot, admins[0].name);
+  assert.equal(applied.fileName, "mañana.csv"); assert.equal(applied.sourceFileHash, mixed.sourceHash);
+  assert.equal(applied.normalizedInputHash, JSON.parse(Buffer.from(review.data.previewToken.split(".")[0], "base64url")).normalizedInputHash);
+  assert.deepEqual(applied.result.rows.map((r) => r.status), ["UPDATE", "UNCHANGED", "CREATE", "CREATE"]);
+  assert.deepEqual(applied.result.rows[1], { csvRow: 3, studentId: identical.id, status: "UNCHANGED" });
   assert.equal(await studentWrites() - materialBefore, 3);
   assert.deepEqual(await db.student.findUnique({ where: { id: omitted.id }, include: { groups: { orderBy: { id: "asc" } } } }), omittedBefore);
   assert.deepEqual(await db.student.findUnique({ where: { id: identical.id } }), identicalBefore);
   assert.equal(JSON.stringify(await db.record.findMany()), attendanceBefore);
+  const immutableBefore = await snapshot(), replayWritesBefore = await studentWrites();
+  const exactReplay = await commit(mixed, review, adminCookie); assert.deepEqual(accepted(exactReplay), applied); assert.equal(exactReplay.result.data.replayed, true);
+  assert.equal(await studentWrites(), replayWritesBefore); assert.equal(await snapshot(), immutableBefore); assert.equal(await receiptCount(), receiptBefore + 1);
+  await heldRoster(async () => {
+    const withoutRosterLock = await Promise.race([commit(mixed, review, adminCookie), delay(2000).then(() => { throw new Error("Exact replay waited for a held roster lock"); })]);
+    assert.deepEqual(accepted(withoutRosterLock), applied); assert.equal(withoutRosterLock.result.data.replayed, true);
+  });
+  assert.deepEqual(await receiptRead(`/api/students/imports/commands/${applied.commandId}`, adminCookie), applied);
+  assert.deepEqual(await receiptRead(`/api/students/imports/${applied.id}`, otherCookie), applied);
+  const privateCommand = await api(`/api/students/imports/commands/${applied.commandId}`, undefined, otherCookie, { method: "GET" });
+  rejected(privateCommand, [404]); assert.equal(privateCommand.result.code, "IMPORT_RECEIPT_NOT_FOUND");
+  for (const alteredInput of [fromCsv(mixed.csv + "\n", mixed.fileName), command([row(existing.id, { firstName: "Different reviewed name" })], mixed.fileName), mixed]) {
+    const changedReview = await preview(alteredInput, adminCookie);
+    const collision = await commit(alteredInput, changedReview, adminCookie, applied.commandId);
+    rejected(collision, [409]); assert.equal(collision.result.code, "IMPORT_COMMAND_REUSED");
+  }
+  const otherReview = await preview(mixed, otherCookie);
+  const otherActorReceipt = accepted(await commit(mixed, otherReview, otherCookie, applied.commandId));
+  assert.notEqual(otherActorReceipt.id, applied.id); assert.equal(otherActorReceipt.actorId, admins[1].id);
+  assert.deepEqual(await receiptRead(`/api/students/imports/commands/${applied.commandId}`, otherCookie), otherActorReceipt);
+  assert.equal(await studentWrites(), replayWritesBefore);
+  record("one atomic mixed receipt, exact replay zero writes/no roster wait, actor-scoped UUID and changed-command conflicts");
   const noops = await preview(mixed, adminCookie); assert.equal(noops.data.counts.unchanged, 4);
   const noopsBefore = await snapshot(), writesBefore = await studentWrites();
-  accepted(await commit(mixed, noops, adminCookie));
+  const allUnchangedReceipt = accepted(await commit(mixed, noops, adminCookie));
+  assert.equal(allUnchangedReceipt.counts.unchanged, 4); assert.ok(allUnchangedReceipt.result.rows.every((r) => r.status === "UNCHANGED"));
   assert.equal(await snapshot(), noopsBefore); assert.equal(await studentWrites(), writesBefore);
   record("mixed material writes, exact diffs, leading-zero/text IDs, Unicode, noops and omitted roster/attendance preservation");
+  const createdSectionC = await api("/api/groups", { slug: "section-c", name: "Section C", category: "SECTION" }, adminCookie);
+  assert.equal(createdSectionC.status, 201);
+  const supportedEditor = await api(`/api/students/${existing.id}`, undefined, adminCookie, { method: "GET" });
+  assert.equal(supportedEditor.status, 200);
+  const supportedEdit = await api(`/api/students/${existing.id}`, { expectedVersion: supportedEditor.result.data.editVersion, student: row(existing.id, { firstName: "Later manual edit", section: "section-c" }) }, adminCookie, { method: "PATCH" });
+  assert.equal(supportedEdit.status, 200, JSON.stringify(supportedEdit.result));
+  await db.group.update({ where: { id: "section-b" }, data: { name: "Renamed after the original import" } });
+  const laterRoster = await snapshot(), laterWrites = await studentWrites();
+  const afterLaterEdit = await commit(mixed, review, adminCookie); assert.deepEqual(accepted(afterLaterEdit), applied);
+  assert.equal(await snapshot(), laterRoster); assert.equal(await studentWrites(), laterWrites);
+  const originalToken = JSON.parse(Buffer.from(review.data.previewToken.split(".")[0], "base64url"));
+  const clockProbe = spawnSync("node", ["--conditions=react-server", "--import", "tsx", "scripts/student-import-replay-clock.mjs"], {
+    encoding: "utf8", timeout: 30000, input: JSON.stringify({ command: commandBody(mixed, review), actor: admins[0], expectedReceipt: applied, now: originalToken.expiresAt + 1000 }),
+    env: { ...process.env, DATABASE_URL: disposable.url, DIRECT_URL: disposable.url, AUTH_SECRET: secret },
+  });
+  assert.equal(clockProbe.status, 0, clockProbe.stderr || clockProbe.stdout);
+  assert.equal(JSON.parse(clockProbe.stdout).forbiddenRosterOperations, 0);
+  assert.equal(await snapshot(), laterRoster); assert.equal(await studentWrites(), laterWrites);
+  record("historical exact replay after later Student/Group edits and token expiry performs zero roster reads/writes");
 
   for (const mutation of ["student", "group-name", "group-slug", "group-delete", "appeared", "membership"]) {
     const input = command([row("00000123463")]);
@@ -232,8 +300,22 @@ try {
   await pool.query(`CREATE FUNCTION import_test_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."firstName" = 'Force rollback' THEN RAISE EXCEPTION 'fixture student write failure'; END IF; RETURN NEW; END; $$`);
   await pool.query('CREATE TRIGGER import_test_failure BEFORE INSERT OR UPDATE ON "Student" FOR EACH ROW EXECUTE FUNCTION import_test_failure()');
   const rollbackBefore = await snapshot();
-  try { const failure = await commit(rollbackInput, rollbackReview, adminCookie); rejected(failure, [409, 500]); assert.equal(failure.result.code, "IMPORT_REJECTED"); assert.equal(await snapshot(), rollbackBefore); } finally { await pool.query('DROP TRIGGER import_test_failure ON "Student"'); }
+  const rollbackReceipts = await receiptCount();
+  try { const failure = await commit(rollbackInput, rollbackReview, adminCookie); rejected(failure, [409, 500]); assert.equal(failure.result.code, "IMPORT_REJECTED"); assert.equal(await snapshot(), rollbackBefore); assert.equal(await receiptCount(), rollbackReceipts); } finally { await pool.query('DROP TRIGGER import_test_failure ON "Student"'); }
   record("mid-batch database failure rolls back entire roster");
+  for (const failureKind of ["insert", "validation"]) {
+    const input = command([row("00000123850"), row("00000123851")]);
+    const reviewed = await preview(input, adminCookie);
+    const before = await snapshot(), receiptBeforeFailure = await receiptCount(), writesBeforeFailure = await studentWrites();
+    const operation = failureKind === "insert" ? "RAISE EXCEPTION 'receipt insertion fixture failure';" : `NEW.result = jsonb_set(NEW.result, '{rows,0,status}', '"BAD"'::jsonb);`;
+    await pool.query(`CREATE OR REPLACE FUNCTION import_test_receipt_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN ${operation} RETURN NEW; END; $$`);
+    await pool.query('CREATE TRIGGER import_test_receipt_failure BEFORE INSERT ON "StudentImportBatch" FOR EACH ROW EXECUTE FUNCTION import_test_receipt_failure()');
+    try {
+      const failure = await commit(input, reviewed, adminCookie); rejected(failure, [500]); assert.equal(failure.result.code, "IMPORT_REJECTED");
+      assert.equal(await snapshot(), before); assert.equal(await receiptCount(), receiptBeforeFailure); assert.equal(await studentWrites(), writesBeforeFailure);
+    } finally { await pool.query('DROP TRIGGER import_test_receipt_failure ON "StudentImportBatch"'); }
+    record("receipt failure rolls back tentative Students and receipt", { failureKind });
+  }
 
   for (const change of [{ status: "REJECTED" }, { credentialVersion: { increment: 1 } }]) {
     const actorInput = command([row("00000123830")]);
@@ -271,7 +353,8 @@ try {
   const halfReview = await preview(halfInput, adminCookie);
   const gateKey = BigInt("812370000000") + BigInt(process.pid);
   const controller = await pool.connect(), reader = await pool.connect(), renamer = await pool.connect();
-  let halfCommit, readerResult, renameResult;
+  let halfCommit, duplicateHalfCommit, readerResult, renameResult;
+  const halfReceiptsBefore = await receiptCount();
   try {
     await controller.query("SELECT pg_advisory_lock($1)", [gateKey.toString()]);
     await pool.query(`CREATE FUNCTION import_test_half() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.id = '00000123821' THEN PERFORM pg_advisory_xact_lock(${gateKey}); END IF; RETURN NEW; END; $$`);
@@ -280,6 +363,12 @@ try {
     const waitingImportPid = await waitForAdvisoryWait(gateKey);
     assert.ok(waitingImportPid, "second Student INSERT reached the trigger barrier after the first tentative write");
     assert.equal(await db.student.count({ where: { id: { in: ["00000123820", "00000123821"] } } }), 0, "unlocked independent reader sees no uncommitted half import");
+    assert.equal(await receiptCount(), halfReceiptsBefore);
+    const inFlightCommandId = commandBody(halfInput, halfReview).commandId;
+    const missingWhileInFlight = await api(`/api/students/imports/commands/${inFlightCommandId}`, undefined, adminCookie, { method: "GET" });
+    rejected(missingWhileInFlight, [404]); assert.equal(missingWhileInFlight.result.code, "IMPORT_RECEIPT_NOT_FOUND");
+    duplicateHalfCommit = commit(halfInput, halfReview, adminCookie);
+    await waitForAdvisoryWait(importCommandKey(admins[0].id, inFlightCommandId));
     await reader.query("BEGIN");
     const readerPid = (await reader.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
     readerResult = reader.query("SELECT pg_advisory_xact_lock_shared($1)", [ROSTER_EXCLUSIVE_KEY.toString()]).then(async () => {
@@ -291,11 +380,15 @@ try {
     renameResult = renamer.query('UPDATE "Group" SET name=$1 WHERE id=$2', ["After import label", "section-a"]);
     await waitForBlockedBackend(renamerPid);
     await controller.query("SELECT pg_advisory_unlock($1)", [gateKey.toString()]);
-    accepted(await halfCommit); assert.equal(await readerResult, 2, "guarded roster reader resumes with the complete import"); await renameResult;
+    const halfResponse = await halfCommit, duplicateHalfResponse = await duplicateHalfCommit;
+    assert.equal(halfResponse.result.data.replayed, false); assert.equal(duplicateHalfResponse.result.data.replayed, true);
+    assert.deepEqual(accepted(duplicateHalfResponse), accepted(halfResponse));
+    assert.equal(await receiptCount(), halfReceiptsBefore + 1);
+    assert.equal(await readerResult, 2, "guarded roster reader resumes with the complete import"); await renameResult;
     record("half-import atomic visibility and referenced Group rename freeze", { waitingImportPid, independentReaderPid: readerPid, independentRenamerPid: renamerPid });
   } finally {
     await controller.query("SELECT pg_advisory_unlock($1)", [gateKey.toString()]);
-    await Promise.allSettled([halfCommit, readerResult, renameResult].filter(Boolean));
+    await Promise.allSettled([halfCommit, duplicateHalfCommit, readerResult, renameResult].filter(Boolean));
     await reader.query("ROLLBACK");
     await pool.query('DROP TRIGGER IF EXISTS import_test_half ON "Student"');
     controller.release(); reader.release(); renamer.release();
@@ -318,9 +411,45 @@ try {
   const concurrentInput = command([row("00000123467")]);
   const concurrentReview = await preview(concurrentInput, adminCookie);
   const concurrent = await Promise.all([commit(concurrentInput, concurrentReview, adminCookie), commit(concurrentInput, concurrentReview, adminCookie)]);
-  assert.equal(concurrent.filter((r) => r.status === 200).length, 1);
-  stale(concurrent.find((r) => r.status !== 200));
-  record("independent PostgreSQL roster lock waiting, attendance and concurrent stale commit");
+  concurrent.forEach(accepted);
+  assert.deepEqual(concurrent.map((r) => r.result.data.replayed).sort(), [false, true]);
+  assert.equal(concurrent[0].result.data.receipt.id, concurrent[1].result.data.receipt.id);
+  record("independent PostgreSQL roster lock waiting, attendance and concurrent exact replay");
+  const historyInput = command([row("00000123820")], "history-unchanged.csv");
+  const historyReview = await preview(historyInput, adminCookie);
+  assert.equal(historyReview.data.counts.unchanged, 1);
+  const historyWrites = await studentWrites();
+  for (let index = 0; index < 24; index++) accepted(await commit(historyInput, historyReview, adminCookie, randomUUID()));
+  assert.equal(await studentWrites(), historyWrites);
+  await pool.query('UPDATE "StudentImportBatch" SET "committedAt"=clock_timestamp()');
+  const expectedHistoryIds = (await pool.query('SELECT id FROM "StudentImportBatch" ORDER BY "committedAt" DESC,id DESC')).rows.map((r) => r.id);
+  // A single statement timestamp ensures the tie-breaker is exercised exactly.
+  await pool.query('UPDATE "StudentImportBatch" SET "committedAt"=(SELECT MAX("committedAt") FROM "StudentImportBatch")');
+  const tiedHistoryIds = (await pool.query('SELECT id FROM "StudentImportBatch" ORDER BY "committedAt" DESC,id DESC')).rows.map((r) => r.id);
+  assert.equal(tiedHistoryIds.length, expectedHistoryIds.length);
+  const pagedIds = [];
+  let cursor;
+  do {
+    const history = await api(`/api/students/imports${cursor ? `?before=${encodeURIComponent(cursor)}` : ""}`, undefined, adminCookie, { method: "GET" });
+    assert.equal(history.status, 200); assert.equal(history.cache, "private, no-store");
+    const page = receiptHistorySchema.parse(history.result.data); assert.ok(page.items.length <= 20);
+    assert.ok(page.items.every((item) => !Object.hasOwn(item, "result")), "history contains metadata without receipt JSONB");
+    if (!cursor) assert.equal(page.items.length, 20);
+    pagedIds.push(...page.items.map((item) => item.id)); cursor = page.nextCursor;
+  } while (cursor);
+  assert.deepEqual(pagedIds, tiedHistoryIds); assert.equal(new Set(pagedIds).size, pagedIds.length);
+  rejected(await api("/api/students/imports?limit=21", undefined, adminCookie, { method: "GET" }), [400]);
+  rejected(await api("/api/students/imports?before=invalid", undefined, adminCookie, { method: "GET" }), [400]);
+  for (const path of ["/api/students/imports", `/api/students/imports/${applied.id}`, `/api/students/imports/commands/${applied.commandId}`]) {
+    rejected(await api(path, undefined, undefined, { method: "GET" }), [401]);
+    rejected(await api(path, undefined, orgCookie, { method: "GET" }), [403]);
+    await db.user.update({ where: { id: admins[0].id }, data: { status: "REJECTED" } });
+    rejected(await api(path, undefined, adminCookie, { method: "GET" }), [401, 403]);
+    await db.user.update({ where: { id: admins[0].id }, data: { status: "ACTIVE" } });
+  }
+  const projectionSource = readFileSync("features/students/import/receiptProjection.ts", "utf8").split("export type MetadataRow")[0];
+  assert.ok(!/result\s*:/.test(projectionSource), "explicit history database select excludes result JSONB");
+  record("bounded metadata-only history, exact equal-timestamp pagination and fresh ADMIN receipt permissions", { pages: Math.ceil(pagedIds.length / 20), receipts: pagedIds.length });
 
   if (process.argv.includes("--large")) {
     for (const count of [2000, 5005]) {
@@ -332,15 +461,31 @@ try {
       assert.equal(prepared.data.counts.create, count);
       const pending = commit(input, prepared, adminCookie);
       let importLockObserved = false;
+      let importBackend;
       for (let attempt = 0; attempt < 300; attempt++) {
-        const { rows: locks } = await pool.query("SELECT COUNT(*)::int AS n FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE l.locktype='advisory' AND l.mode='ExclusiveLock' AND l.granted AND a.datname=$1", [disposable.dbName]);
-        if (locks[0].n > 0) { importLockObserved = true; break; }
+        const { rows: locks } = await pool.query("SELECT a.pid,a.xact_start FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE l.locktype='advisory' AND l.mode='ExclusiveLock' AND l.granted AND a.datname=$1 AND classid::bigint=$2::bigint AND objid::bigint=$3::bigint", [disposable.dbName, (ROSTER_EXCLUSIVE_KEY >> BigInt(32)).toString(), (ROSTER_EXCLUSIVE_KEY & BigInt("4294967295")).toString()]);
+        if (locks.length) { importLockObserved = true; importBackend = locks[0]; break; }
         await delay(10);
       }
+      assert.ok(importLockObserved, "load observation found the actual exclusive roster transaction");
+      const transactionObservation = (async () => {
+        for (let attempt = 0; attempt < 6000; attempt++) {
+          const { rows: states } = await pool.query("SELECT xact_start,clock_timestamp() AS observed FROM pg_stat_activity WHERE pid=$1", [importBackend.pid]);
+          const state = states[0];
+          if (!state || state.xact_start?.getTime() !== importBackend.xact_start.getTime()) return Math.round((state?.observed.getTime() ?? Date.now()) - importBackend.xact_start.getTime());
+          await delay(25);
+        }
+        throw new Error("load transaction never left its observed PostgreSQL backend");
+      })();
       const scanIds = [existing.id, identical.id, omitted.id, "00000123459"];
       const recordsBefore = await Promise.all(scanIds.map((studentId) => db.record.findUnique({ where: { eventId_studentId: { eventId: event.id, studentId } } })));
       const scans = await Promise.all(scanIds.map((studentId) => api("/api/records", { eventId: event.id, studentId, method: "MANUAL", expectedMode: "TIME_IN" }, orgCookie)));
-      const result = await pending; accepted(result);
+      const result = await pending; const loadReceipt = accepted(result);
+      const dbTransactionObservedMs = await transactionObservation;
+      const appMemoryAfterCommit = serverRss();
+      const { rows: receiptSize } = await pool.query('SELECT pg_column_size(result)::int AS stored_bytes,octet_length(result::text)::int AS json_text_bytes FROM "StudentImportBatch" WHERE id=$1', [loadReceipt.id]);
+      const receiptResponseBytes = Buffer.byteLength(JSON.stringify(loadReceipt));
+      assert.ok(receiptSize[0].json_text_bytes <= 10 * 1024 * 1024 && receiptResponseBytes <= 10 * 1024 * 1024);
       const postCommitRetries = [];
       for (let index = 0; index < scans.length; index++) {
         const scan = scans[index];
@@ -355,7 +500,7 @@ try {
       }
       assert.equal(await db.student.count({ where: { id: { in: rows.map((r) => r.id) } } }), count);
       const later = await preview(input, adminCookie); assert.equal(later.data.counts.unchanged, count);
-      record("large reviewed import", { rows: count, csvBytes: Buffer.byteLength(input.csv), previewRequestBytes: Buffer.byteLength(JSON.stringify(input)), commitRequestBytes: Buffer.byteLength(JSON.stringify({ ...input, previewToken: prepared.data.previewToken })), previewMs: Math.round(prepared.elapsedMs), commitMs: Math.round(result.elapsedMs), fixtureRssChangeBytes: process.memoryUsage().rss - memoryBefore, appRssChangeBytes: serverRss() - appMemoryBefore, importLockObserved, concurrentAttendance: scans.map((scan) => ({ status: scan.status, elapsedMs: Math.round(scan.elapsedMs) })), postCommitRetries });
+      record("large reviewed import with durable receipt", { rows: count, csvBytes: Buffer.byteLength(input.csv), previewRequestBytes: Buffer.byteLength(JSON.stringify(input)), commitRequestBytes: Buffer.byteLength(JSON.stringify(commandBody(input, prepared))), previewMs: Math.round(prepared.elapsedMs), commitMs: Math.round(result.elapsedMs), dbTransactionObservedMs, dbTransactionSamplingIntervalMs: 25, receiptJsonbStoredBytes: receiptSize[0].stored_bytes, receiptJsonTextBytes: receiptSize[0].json_text_bytes, receiptResponseBytes, fixtureRssChangeBytes: process.memoryUsage().rss - memoryBefore, appRssChangeBytes: appMemoryAfterCommit - appMemoryBefore, importLockObserved, concurrentAttendance: scans.map((scan) => ({ status: scan.status, elapsedMs: Math.round(scan.elapsedMs) })), postCommitRetries });
     }
   }
   }

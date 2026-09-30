@@ -33,6 +33,7 @@ export const importRequestSchema = z.object({
 }).strict();
 export const commitRequestSchema = importRequestSchema.extend({
   previewToken: z.string().min(1).max(4096),
+  commandId: z.uuid().transform((value) => value.toLowerCase()),
 }).strict();
 export type ImportRequest = z.infer<typeof importRequestSchema>;
 export type ImportCommitRequest = z.infer<typeof commitRequestSchema>;

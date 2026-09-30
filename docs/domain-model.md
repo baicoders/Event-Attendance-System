@@ -441,3 +441,18 @@ Ranked by how much damage getting them wrong would do.
 11. **Students never authenticate.** A QR code is a bare student ID.
 12. **Group vocabulary is admin-managed.** No section exists until someone creates it —
     in Settings → Groups, or in the seed. It is data, not code.
+
+
+## StudentImportBatch
+
+Immutable historical receipt for one reviewed masterlist command. The actor identity is
+scalar (not a User FK), with a name snapshot; later account/Student/Group changes cannot
+rewrite attribution or retained results. `(actorId, commandId)` is unique; commandId is
+PostgreSQL UUID. History orders by indexed `(committedAt, id)`.
+
+The row stores display filename, exact source/normalized input/canonical command hashes,
+create/update/unchanged counts, strict versioned JSONB and timestamptz server observations.
+Student mutations and receipt insertion commit together. Exact replay returns this
+original receipt without reapplying changes; UNCHANGED students receive no write.
+Initial retention is indefinite, with no legacy backfill or receipt deletion surface.
+See [student-import.md](student-import.md) for authorization, bounds and rollback policy.

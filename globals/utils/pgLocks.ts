@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
  * - `record:<eventId>:<studentId>` — exclusive per attendance pair, including
  *   when no Record exists yet.
  * - `command:<id>` — durable replay identity for correction/receipt commands.
+ * - `student-import-command:<actorId>:<id>` — actor-scoped import identity.
  */
 
 function key64(namespace: string, ...parts: string[]): bigint {
@@ -48,6 +49,10 @@ export function commandKey(commandId: string): bigint {
   return key64("eas", "command", commandId);
 }
 
+export function importCommandKey(actorId: string, commandId: string): bigint {
+  return key64("eas", "student-import-command", actorId, commandId);
+}
+
 export type AdvisoryTx = {
   $queryRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
   $executeRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
@@ -75,6 +80,11 @@ export async function takeRecordPairLock(
 /** Transaction-scoped advisory lock for a durable command identity. */
 export async function takeCommandLock(tx: AdvisoryTx, commandId: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${commandKey(commandId)})`;
+}
+
+/** User guard -> actor/command -> roster -> sorted Group rows. */
+export async function takeImportCommandLock(tx: AdvisoryTx, actorId: string, commandId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${importCommandKey(actorId, commandId)})`;
 }
 
 /**

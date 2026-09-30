@@ -8,14 +8,17 @@ import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 import { queryKeys } from "@/globals/utils/queryKeys";
 import type { GroupCategory } from "@/globals/schemas/groupSchema";
 import GroupFormSheet from "@/features/settings/components/GroupFormSheet";
-import { MAX_IMPORT_BYTES, importPreviewSchema, importCommitResultSchema, importRequestSchema, type ImportPreview, type ImportCounts } from "../import/contract";
+import { MAX_IMPORT_BYTES, importPreviewSchema, importRequestSchema, type ImportPreview, type ImportCounts } from "../import/contract";
 import { parseStudentImportCsv, hasStructuralCsvErrors } from "../import/csv";
 import ImportSourceStep, { type ImportSource } from "./ImportSourceStep";
 import ImportReviewStep from "./ImportReviewStep";
-import ImportResult from "./ImportResult";
+import ImportResult, { type ConfirmedImportResult } from "./ImportResult";
+import { receiptCommitResponseSchema, receiptSchema, type Receipt } from "../import/receiptContract";
 
 const utf8Bytes = (value: string) => new TextEncoder().encode(value).byteLength;
 const payloadFor = (source: ImportSource) => ({ v: 1 as const, fileName: source.fileName, sourceHash: source.sourceHash, csv: source.csv });
+
+type FrozenImportCommand = { commandId: string; body: string; sourceHash: string; fileName: string; counts: ImportCounts };
 
 type Rejection = { success: false; message: string; code: string; outcome: "REJECTED" };
 function isRejection(value: unknown): value is Rejection {
@@ -31,6 +34,7 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
   const generation = useRef(0);
   const mounted = useRef(true);
   const committing = useRef(false);
+  const confirmedReceipts = useRef(new Set<string>());
   const [source, setSource] = useState<ImportSource | null>(null);
   const activeSource = useRef<ImportSource | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -39,7 +43,8 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
   const [largeAcknowledged, setLargeAcknowledged] = useState(false);
   const [error, setError] = useState("");
   const [outcome, setOutcome] = useState<"source" | "success" | "unknown">("source");
-  const [result, setResult] = useState<{ counts: ImportCounts; committedAt: string } | null>(null);
+  const [result, setResult] = useState<ConfirmedImportResult | null>(null);
+  const [command, setCommand] = useState<FrozenImportCommand | null>(null);
   const [groupDefaults, setGroupDefaults] = useState<{ slug: string; category: GroupCategory; generation: number; source: ImportSource } | null>(null);
   const [now, setNow] = useState(Date.now());
 
@@ -56,12 +61,12 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
   const reset = () => {
     generation.current += 1;
     activeSource.current = null;
-    setSource(null); setPreview(null); setError(""); setResult(null); setOutcome("source"); setReading(false); setBusy(false); setLargeAcknowledged(false); setGroupDefaults(null);
+    setSource(null); setPreview(null); setError(""); setResult(null); setCommand(null); setOutcome("source"); setReading(false); setBusy(false); setLargeAcknowledged(false); setGroupDefaults(null);
   };
   const resetAfterOutcome = async () => {
     if (outcome === "unknown") {
       const version = generation.current;
-      const confirmed = await confirm({ title: "Replace an import with an unknown outcome?", description: "The server may already have committed this file. Check the current roster before starting a new review. Replacing the file clears the submitted source from this tab." });
+      const confirmed = await confirm({ title: "Replace an import with an unknown outcome?", description: "The server may already have committed this file. Check the current roster before starting a new review. Replacing the file clears the exact submitted command and its resolution context from this tab." });
       if (!confirmed || !current(version)) return;
     }
     reset();
@@ -125,15 +130,60 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
     }
   };
 
+  const matchesReceipt = (receipt: Receipt, frozen: FrozenImportCommand) =>
+    receipt.commandId === frozen.commandId && receipt.actorId === actor.id &&
+    receipt.fileName === frozen.fileName && receipt.sourceFileHash === frozen.sourceHash &&
+    receipt.counts.blocked === 0 &&
+    (["total", "create", "update", "unchanged", "blocked"] as const).every(key => receipt.counts[key] === frozen.counts[key]);
+
+  const acceptReceipt = (receipt: Receipt, replayed: boolean, checked: boolean) => {
+    setResult({ receipt, replayed, checked }); setOutcome("success"); setPreview(null); setCommand(null); setError("");
+    if (confirmedReceipts.current.has(receipt.id)) return;
+    confirmedReceipts.current.add(receipt.id);
+    for (const key of [queryKeys.students.all(), queryKeys.audience.all(), queryKeys.events.all(), queryKeys.records.all(), queryKeys.reports.all(), ["stats", "students"], ["student-imports"]]) void queryClient.invalidateQueries({ queryKey: key });
+    // An optional consumer callback cannot change a confirmed server outcome.
+    try { onImportSuccess?.(receipt.counts.total); } catch { /* Keep the receipt panel. */ }
+  };
+
+  const refreshRejectedSession = (code: string) => {
+    if (["UNAUTHORIZED", "PASSWORD_CHANGE_REQUIRED", "INACTIVE_USER", "FORBIDDEN"].includes(code)) void refresh();
+  };
+
+  const sendFrozenCommand = async (frozen: FrozenImportCommand, version: number, retry: boolean) => {
+    try {
+      const response = await fetch("/api/students/imports/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: frozen.body, cache: "no-store" });
+      const envelope: unknown = await response.json();
+      if (!current(version)) return;
+      if (isRejection(envelope)) {
+        refreshRejectedSession(envelope.code);
+        if (retry) {
+          setError(`Retry rejected: ${envelope.message} The earlier request's outcome is still unconfirmed. Check result before starting a different import.`);
+          setOutcome("unknown");
+        } else {
+          setError(`${envelope.message} No changes were applied by this request.`);
+          setPreview(null); setCommand(null); setOutcome("source");
+        }
+        return;
+      }
+      if (!response.ok || !envelope || typeof envelope !== "object" || !("success" in envelope) || envelope.success !== true || !("data" in envelope)) { setOutcome("unknown"); return; }
+      const validated = receiptCommitResponseSchema.safeParse(envelope.data);
+      if (!validated.success || !matchesReceipt(validated.data.receipt, frozen)) { setOutcome("unknown"); return; }
+      acceptReceipt(validated.data.receipt, validated.data.replayed, false);
+    } catch {
+      if (current(version)) setOutcome("unknown");
+    }
+  };
+
   const commit = async () => {
     if (!source || !preview?.previewToken || preview.counts.blocked || Date.now() >= Date.parse(preview.expiresAt) || committing.current) return;
     committing.current = true;
     setBusy(true);
     const version = generation.current;
-    // Freeze the exact reviewed command before any asynchronous confirmation.
-    const frozen = JSON.stringify({ ...payloadFor(source), previewToken: preview.previewToken });
+    const reviewed = { ...payloadFor(source), previewToken: preview.previewToken };
     try {
-      if (utf8Bytes(frozen) > MAX_IMPORT_BYTES) {
+      // Include the future UUID's fixed length in the full transport budget,
+      // without allocating a command identity until confirmation is accepted.
+      if (utf8Bytes(JSON.stringify({ ...reviewed, commandId: "00000000-0000-4000-8000-000000000000" })) > MAX_IMPORT_BYTES) {
         setError("This reviewed command exceeds the 10 MiB complete-request limit. Split the CSV and review it again.");
         return;
       }
@@ -141,29 +191,54 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
       const accepted = await confirm({ title: `Import ${source.fileName}?`, description: `${actor.name} (${actor.email}) is confirming ${counts.total.toLocaleString()} rows: ${counts.create.toLocaleString()} created, ${counts.update.toLocaleString()} updated, ${counts.unchanged.toLocaleString()} unchanged. Students absent from this CSV will remain untouched. Group changes may affect event eligibility and reports.` });
       if (!accepted || !current(version)) return;
       if (Date.now() >= Date.parse(preview.expiresAt)) { setError("This review expired while confirmation was open. Refresh the review before importing."); return; }
-      setError("");
-      try {
-        const response = await fetch("/api/students/imports/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: frozen, cache: "no-store" });
-        const envelope: unknown = await response.json();
-        if (!current(version)) return;
-        if (isRejection(envelope)) {
-          setError(`${envelope.message} No changes were applied by this request.`); setPreview(null);
-          if (["UNAUTHORIZED", "PASSWORD_CHANGE_REQUIRED", "INACTIVE_USER", "FORBIDDEN"].includes(envelope.code)) void refresh();
-          return;
-        }
-        if (!response.ok || !envelope || typeof envelope !== "object" || !("success" in envelope) || envelope.success !== true || !("data" in envelope)) { setOutcome("unknown"); return; }
-        const validated = importCommitResultSchema.safeParse(envelope.data);
-        if (!validated.success || validated.data.counts.blocked !== 0 ||
-            !(["total", "create", "update", "unchanged", "blocked"] as const).every(key => validated.data.counts[key] === counts[key])) {
-          setOutcome("unknown"); return;
-        }
-        setResult(validated.data); setOutcome("success"); setPreview(null);
-        for (const key of [queryKeys.students.all(), queryKeys.audience.all(), queryKeys.events.all(), queryKeys.records.all(), queryKeys.reports.all(), ["stats", "students"]]) void queryClient.invalidateQueries({ queryKey: key });
-        // An optional consumer callback cannot change a confirmed server outcome.
-        try { onImportSuccess?.(validated.data.counts.total); } catch { /* Keep the success panel. */ }
-      } catch {
-        if (current(version)) setOutcome("unknown");
+      let commandId: string;
+      try { commandId = crypto.randomUUID(); } catch { setError("Unable to allocate an import reference. No import was sent."); return; }
+      const frozen: FrozenImportCommand = { commandId, body: JSON.stringify({ ...reviewed, commandId }), fileName: source.fileName, sourceHash: source.sourceHash, counts: { ...counts } };
+      setCommand(frozen); setError("");
+      await sendFrozenCommand(frozen, version, false);
+    } finally {
+      committing.current = false;
+      if (current(version)) setBusy(false);
+    }
+  };
+
+  const retrySameCommand = async () => {
+    if (!command || committing.current) return;
+    const version = generation.current;
+    committing.current = true; setBusy(true); setError("");
+    try {
+      // Preserve the exact body, UUID, source and preview identity, including
+      // after expiry: the server can still replay an existing immutable receipt.
+      await sendFrozenCommand(command, version, true);
+    } finally {
+      committing.current = false;
+      if (current(version)) setBusy(false);
+    }
+  };
+
+  const checkResult = async () => {
+    if (!command || committing.current) return;
+    const version = generation.current;
+    committing.current = true; setBusy(true); setError("");
+    try {
+      const response = await fetch(`/api/students/imports/commands/${encodeURIComponent(command.commandId)}`, { cache: "no-store" });
+      const envelope: unknown = await response.json();
+      if (!current(version)) return;
+      if (response.status === 404 && envelope && typeof envelope === "object" && "code" in envelope && envelope.code === "IMPORT_RECEIPT_NOT_FOUND") {
+        setError("No receipt is available yet. The original request may still be in flight; a missing receipt is not proof of rollback. Check again or explicitly retry the same reviewed import.");
+        return;
       }
+      if (isRejection(envelope)) {
+        refreshRejectedSession(envelope.code);
+        setError(`Unable to confirm the earlier request: ${envelope.message} Its outcome remains unknown.`);
+        return;
+      }
+      if (!response.ok || !envelope || typeof envelope !== "object" || !("success" in envelope) || envelope.success !== true || !("data" in envelope)) throw new Error("Unable to check the result.");
+      const validated = receiptSchema.safeParse(envelope.data);
+      if (!validated.success || !matchesReceipt(validated.data, command)) throw new Error("Invalid receipt response.");
+      acceptReceipt(validated.data, false, true);
+    } catch {
+      if (current(version)) setError("The result check could not be confirmed. The import outcome remains unknown; the original command is retained for another explicit check or retry.");
     } finally {
       committing.current = false;
       if (current(version)) setBusy(false);
@@ -172,8 +247,8 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
 
   return <Card className="min-w-0"><CardHeader><CardTitle>Student masterlist import</CardTitle><CardDescription>Review an authoritative CSV before changing student records.</CardDescription></CardHeader><CardContent className="space-y-5">
     {error && <p role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">{error}</p>}
-    {busy && <p role="status">{committing.current ? "Confirming import. Leave this tab open…" : "Preparing authoritative review…"}</p>}
-    {outcome !== "source" && source ? <ImportResult result={outcome === "success" ? result : null} fileName={source.fileName} onAnother={() => void resetAfterOutcome()} /> : preview ? <ImportReviewStep preview={preview} busy={busy} expired={now >= Date.parse(preview.expiresAt)} onReview={() => void review()} onConfirm={() => void commit()} onReplace={reset} onCreateGroup={defaults => { if (source) setGroupDefaults({ ...defaults, generation: generation.current, source }); }} /> : <ImportSourceStep source={source} busy={busy || reading} reading={reading} largeAcknowledged={largeAcknowledged} onAcknowledge={() => setLargeAcknowledged(true)} onFile={file => void readFile(file)} onReset={reset} onReview={() => void review()} />}
+    {busy && <p role="status">{committing.current ? (outcome === "unknown" ? "Resolving this import. Leave this tab open…" : "Confirming import. Leave this tab open…") : "Preparing authoritative review…"}</p>}
+    {outcome !== "source" && source ? <ImportResult result={outcome === "success" ? result : null} fileName={source.fileName} commandId={command?.commandId ?? null} busy={busy} onCheck={() => void checkResult()} onRetry={() => void retrySameCommand()} onAnother={() => void resetAfterOutcome()} /> : preview ? <ImportReviewStep preview={preview} busy={busy} expired={now >= Date.parse(preview.expiresAt)} onReview={() => void review()} onConfirm={() => void commit()} onReplace={reset} onCreateGroup={defaults => { if (source) setGroupDefaults({ ...defaults, generation: generation.current, source }); }} /> : <ImportSourceStep source={source} busy={busy || reading} reading={reading} largeAcknowledged={largeAcknowledged} onAcknowledge={() => setLargeAcknowledged(true)} onFile={file => void readFile(file)} onReset={reset} onReview={() => void review()} />}
     {groupDefaults && <GroupFormSheet isOpen createDefaults={groupDefaults} onClose={() => setGroupDefaults(opened => opened === groupDefaults ? null : opened)} onCreated={() => {
       // Group creation is durable even after Cancel, but its late completion
       // must never revive the review of a replaced file or close a newer form.

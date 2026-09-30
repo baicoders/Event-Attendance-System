@@ -116,6 +116,30 @@ model AttendanceChange {
   @@index([recordId])
 }
 
+// Immutable import outcomes: scalar actor attribution survives account deletion.
+// No Student/Group foreign keys; later roster changes cannot alter these receipts.
+model StudentImportBatch {
+  id                  String   @id @default(cuid())
+  commandId           String   @db.Uuid
+  actorId             String
+  actorNameSnapshot   String
+  fileName            String   @db.VarChar(200)
+  sourceFileHash      String   @db.VarChar(64)
+  normalizedInputHash String   @db.VarChar(64)
+  requestHash         String   @db.VarChar(64)
+  totalRows           Int
+  createdCount        Int
+  updatedCount        Int
+  unchangedCount      Int
+  result              Json     @db.JsonB
+  contractVersion     Int      @default(1)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  committedAt         DateTime @db.Timestamptz(3)
+
+  @@unique([actorId, commandId])
+  @@index([committedAt, id])
+}
+
 model User {
   id              String     @id @default(cuid())
   name            String
