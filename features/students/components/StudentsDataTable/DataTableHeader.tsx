@@ -5,6 +5,7 @@ import StudentSearchInput from "@/features/students/components/StudentsDataTable
 import { useCallback, useState } from "react";
 import StudentSortPopover from "../StudentSortPopover";
 import StudentFilterPopover from "../StudentFilterPopover";
+import { useAuth } from "@/globals/contexts/AuthContext";
 import { Option } from "@/globals/types/primitives";
 
 type Props<TData> = {
@@ -33,6 +34,7 @@ const DataTableHeader = <TData,>({
   onOpenQRCenter,
   selectedCount,
 }: Props<TData>) => {
+  const { user } = useAuth();
   const [activePopover, setActivePopover] = useState<"filter" | "sort" | null>(
     null,
   );
@@ -104,13 +106,13 @@ const DataTableHeader = <TData,>({
               Add
             </button>
 
-            <Link
+            {user?.role === "ADMIN" && <Link
               href={"/students/import"}
               className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-800"
             >
               <Upload className="size-4" strokeWidth={1.6} />
               Import
-            </Link>
+            </Link>}
 
             <button type="button" onClick={onOpenQRCenter} className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-indigo-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700 shadow-sm transition hover:bg-indigo-100">
               <QrCode className="size-4" strokeWidth={1.6} />

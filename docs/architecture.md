@@ -340,7 +340,8 @@ mode on, or delete records from events **they created**.
 | `PATCH /api/records/[id]` | `requireAuth` + `assertEventVisibility` + APPROVED |
 | `DELETE /api/records/[id]` | `requireAuth` + **`assertEventOwnership`** (owner or admin only) |
 | `GET/POST /api/students`, `GET/DELETE /api/students/[id]` | `requireAuth` only — **any active user may read and mutate the roster** |
-| `POST /api/bulk-import/students` | `requireAuth` only |
+| `POST /api/students/imports/preview`, `/commit` | fresh `requireAuth` + ADMIN; commit guards actor inside transaction |
+| `POST /api/bulk-import/students` | ADMIN; 410 REVIEW_REQUIRED, no writes |
 | `GET /api/groups` | **no auth** |
 | `GET /api/groups/byCategory/[category]` | **no auth** |
 | `GET /api/stats/student-counts` | **no auth** |

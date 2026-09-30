@@ -44,7 +44,7 @@ test("today and invalid schedules cannot become finalized absence", () => {
   const input = { student, events: [event("yesterday", "2026-09-25"),
     event("today", "2026-09-26"), event("tomorrow", "2026-09-27"),
     { ...event("invalid", "2026-09-24"), end: at("2026-09-23") }], records: [],
-    todayStart: at("2026-09-26", "00:00"), view: "current-roster" as const,
+    todayStart: at("2026-09-26", "00:00"), evaluatedAt: at("2026-09-26", "16:00"), view: "current-roster" as const,
     outcome: "all" as const, search: "", page: 1, pageSize: 10 };
   const result = projectStudentHistory(input);
   assert.equal(result.summary.comparisonEvents, 1);

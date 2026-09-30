@@ -31,7 +31,8 @@
     "benchmark:probe": "tsx scripts/benchmark/direct-transaction.ts",
     "benchmark:import": "tsx scripts/benchmark/http-import-benchmark.ts",
     "benchmark:operator": "node --import tsx scripts/benchmark/operator-mode.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:student-import": "node --import tsx --test features/students/import/csv.test.ts features/students/import/classify.test.ts features/students/import/contract.test.ts && node --conditions=react-server --import tsx --test features/students/import/token.test.ts && node --import tsx scripts/test-student-import.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",
@@ -72,6 +73,7 @@
     "react-papaparse": "^4.4.0",
     "react-qr-code": "^2.0.21",
     "recharts": "^3.10.1",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",

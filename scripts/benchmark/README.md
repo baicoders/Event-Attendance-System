@@ -16,9 +16,10 @@ Fixtures and harnesses for verifying that the student bulk import handles a full
 - `direct-transaction.ts` — standalone probe that replicates the route's
   `prisma.$transaction([...upserts])` against a scratch PostgreSQL database
   with query logging and a stopwatch. No HTTP, no Next.js.
-- `http-import-benchmark.ts` — end-to-end harness: logs in, POSTs the roster to
-  the real `/api/bulk-import/students`, then inspects the database to verify the
-  outcome. Requires the app already running against the same PostgreSQL database.
+- `http-import-benchmark.ts` — reviewed preview/commit benchmark runner. Provisions
+  a migrated disposable PostgreSQL database with `TEST_DATABASE_URL`, starts the
+  production app, verifies mixed/unchanged/blocked/atomic semantics, and measures
+  2,000 and 5,005 rows. Never uses `DATABASE_URL` as its test target.
 
 ## Regenerate the fixtures
 
@@ -68,26 +69,20 @@ It prints the transaction duration, SQL statement count, and whether any
 timeout fired. It logs every statement; pipe through `2>&1 | grep -v
 '^prisma:query'` for a summary only.
 
-## End-to-end harness (server required)
+## Reviewed end-to-end benchmark
 
 ```bash
-# 1. Start the app against the scratch DB (production build recommended)
-DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5433/test_benchmark" pnpm start
-
-# 2. In another terminal, run the harness against the same database
-DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5433/test_benchmark" pnpm benchmark:import [fresh|rerun|invalid|all]
+pnpm build
+pnpm benchmark:import
 ```
 
-`BASE_URL` (default `http://localhost:3000`) and `ADMIN_EMAIL`/`ADMIN_PASSWORD`
-(default `admin@gmail.com` / `password`) are also configurable.
+`TEST_DATABASE_URL` must point at the dedicated PostgreSQL test control database
+with CREATEDB privilege. The harness creates and drops a unique `test_*` database,
+uses fixture ADMIN accounts and Groups, and starts the built app on an allocated
+local port. No production data or passwords are needed.
 
-Scenarios:
-
-- `fresh` — POST the full roster to an empty Student table.
-- `rerun` — POST the same roster again; must not create duplicates.
-- `invalid` — POST the roster with one bad group slug; the whole batch must be
-  rejected and nothing changed.
-- `all` — fresh, then rerun, then invalid (default).
-
-`test_benchmark` is a scratch database, never the dev or event database. It
-holds no special files — just drop it when done.
+Evidence includes UTF-8 CSV and complete request bytes, preview/commit duration,
+app/fixture RSS change, and attendance latency while the import holds the roster
+lock. Both 2,000 and 5,005 rows remain importable; the UI threshold is advisory.
+The retained direct probe measures historical raw Prisma transaction overhead;
+it does not establish the reviewed import contract.

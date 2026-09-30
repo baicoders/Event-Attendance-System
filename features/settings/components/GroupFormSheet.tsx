@@ -20,6 +20,7 @@ import { toastDanger, toastSuccess } from "@/globals/components/shared/toasts";
 import { slugify } from "@/globals/utils/text";
 import {
   CreateGroupValues,
+  GroupCategory,
   GROUP_CATEGORIES,
   createGroupSchema,
 } from "@/globals/schemas/groupSchema";
@@ -39,6 +40,8 @@ type Props = {
   /** Present => rename an existing group. Absent => create a new one. */
   group?: ManagedGroup;
   onClose: () => void;
+  createDefaults?: { slug: string; category: GroupCategory };
+  onCreated?: () => void;
 };
 
 /**
@@ -48,7 +51,7 @@ type Props = {
  * against and what the roster boards navigate by, so changing it is a delete
  * and recreate, not an edit.
  */
-const GroupFormSheet = ({ isOpen, group, onClose }: Props) => {
+const GroupFormSheet = ({ isOpen, group, onClose, createDefaults, onCreated }: Props) => {
   const isEdit = !!group;
   const { mutateAsync: createGroup } = useCreateGroup();
   const { mutateAsync: updateGroup } = useUpdateGroup();
@@ -65,26 +68,26 @@ const GroupFormSheet = ({ isOpen, group, onClose }: Props) => {
   } = useForm<CreateGroupValues>({
     resolver: zodResolver(createGroupSchema),
     mode: "onChange",
-    defaultValues: { name: "", slug: "", category: undefined },
+    defaultValues: { name: "", slug: createDefaults?.slug ?? "", category: createDefaults?.category },
   });
 
   useEffect(() => {
     reset(
       group
         ? { name: group.name, slug: group.slug, category: group.category }
-        : { name: "", slug: "", category: undefined },
+        : { name: "", slug: createDefaults?.slug ?? "", category: createDefaults?.category },
     );
-  }, [group, reset, isOpen]);
+  }, [group, reset, isOpen, createDefaults]);
 
   // Derive the slug from the name until the operator edits it themselves.
   // Existing data proves the two can legitimately diverge - the "Computer
   // System Servicing" strand is stored as `css` - so this only ever suggests.
   const name = watch("name");
   useEffect(() => {
-    if (isEdit) return;
+    if (isEdit || createDefaults) return;
     if (getFieldState("slug").isDirty) return;
     setValue("slug", slugify(name ?? ""));
-  }, [name, isEdit, getFieldState, setValue]);
+  }, [name, isEdit, createDefaults, getFieldState, setValue]);
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -99,6 +102,7 @@ const GroupFormSheet = ({ isOpen, group, onClose }: Props) => {
         );
       }
       onClose();
+      if (!isEdit) onCreated?.();
     } catch (error) {
       toastDanger(
         isEdit ? "Couldn't rename group" : "Couldn't create group",
@@ -143,7 +147,7 @@ const GroupFormSheet = ({ isOpen, group, onClose }: Props) => {
               error={errors.slug?.message}
             />
 
-            {isEdit ? (
+            {isEdit || createDefaults ? (
               // Read-only rather than a disabled select: PATCH only accepts a
               // name, so offering the control at all would be a lie.
               <div>
@@ -151,10 +155,10 @@ const GroupFormSheet = ({ isOpen, group, onClose }: Props) => {
                   Category
                 </p>
                 <p className="mt-1.5 ml-1 text-sm text-slate-900">
-                  {group.category}
+                  {group?.category ?? createDefaults?.category}
                 </p>
                 <p className="mt-1 ml-1 text-[11px] text-slate-500">
-                  Fixed once a group exists.
+                  {createDefaults ? "Fixed to the CSV column being resolved." : "Fixed once a group exists."}
                 </p>
               </div>
             ) : (
