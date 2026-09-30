@@ -97,7 +97,9 @@ back to a build that can import without receipts**; prefer a forward fix. Otherw
 replay/audit guarantees would silently disappear.
 
 Verification (all database fixtures create unique disposable `test_*` databases;
-TEST_DATABASE_URL is mandatory and never falls back to the school/application DB):
+TEST_DATABASE_URL is mandatory and never falls back to the school/application DB).
+Backup fixtures need version-matched PostgreSQL clients on PATH, or explicit
+BACKUP_PG_DUMP_PATH / BACKUP_PG_RESTORE_PATH overrides:
 
 ```bash
 pnpm build

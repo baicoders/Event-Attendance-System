@@ -43,7 +43,7 @@ async function indexEvidence(pool) {
 function cli(...args) {
   const result = spawnSync("pnpm", ["exec", "tsx", "scripts/backups/cli.ts", ...args], {
     encoding: "utf8", timeout: 120000,
-    env: { ...process.env, DATABASE_URL: url.toString(), DIRECT_URL: url.toString(), AUTH_SECRET: "import-backup-disposable-secret", BACKUP_DIR: backupDir, BACKUP_SOURCE_LABEL: "Disposable import receipt", BACKUP_RETENTION_CONFIRMED: "true", BACKUP_PG_DUMP_PATH: process.env.BACKUP_PG_DUMP_PATH ?? "/tmp/student-import-pg17-tools/pg_dump", BACKUP_PG_RESTORE_PATH: process.env.BACKUP_PG_RESTORE_PATH ?? "/tmp/student-import-pg17-tools/pg_restore" },
+    env: { ...process.env, DATABASE_URL: url.toString(), DIRECT_URL: url.toString(), AUTH_SECRET: "import-backup-disposable-secret", BACKUP_DIR: backupDir, BACKUP_SOURCE_LABEL: "Disposable import receipt", BACKUP_RETENTION_CONFIRMED: "true", BACKUP_PG_DUMP_PATH: process.env.BACKUP_PG_DUMP_PATH ?? "pg_dump", BACKUP_PG_RESTORE_PATH: process.env.BACKUP_PG_RESTORE_PATH ?? "pg_restore" },
   });
   assert.equal(result.status, 0, `backup ${args[0]} failed: ${result.stderr || result.stdout}`);
   const start = Math.min(...["{", "["].map((character) => { const index = result.stdout.indexOf(character); return index < 0 ? Infinity : index; }));
