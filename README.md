@@ -81,7 +81,7 @@ Plus sample students, events, and attendance records.
 
 ## Deployment notes
 
-- Set PostgreSQL `DATABASE_URL` (runtime/pooled role) + `DIRECT_URL` (migration/direct role) and a strong `AUTH_SECRET`; run `prisma migrate deploy` (never `migrate dev`/`db push`/`migrate reset` against staging/production).
+- Set PostgreSQL `DATABASE_URL` (runtime/pooled role) + `DIRECT_URL` (migration/direct role) and a strong `AUTH_SECRET`; run `prisma migrate deploy` (never `migrate dev`/`db push`/`migrate reset` against staging/production). If the provider's root CA is not in Node's trust store, set `DATABASE_SSL_CA_BASE64` to the base64-encoded CA certificate so TLS stays certificate-verified.
 - PostgreSQL is the single source of truth - verify `pg_dump`/`pg_restore` into a separate rehearsal database before cutover. The old SQLite history is archived under `prisma/migrations-sqlite-archive/` (forensic only, never replayed).
 - Data initialization is one explicit mode: FRESH_START (empty target + approved roster import) or PRESERVE_SOURCE (frozen source, validated transfer, reconciled counts/hashes). Never delete the source artifact by assumption; never migrate demo/faker data or known passwords.
 - Rate limiting is in-memory (single instance); use a shared store if you

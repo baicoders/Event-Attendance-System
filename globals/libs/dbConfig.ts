@@ -94,7 +94,7 @@ export function requiresTls(url: string): boolean {
  * pg Pool SSL config: remote hosts verify certificates against the host trust
  * chain. Never disable validation to "fix" configuration.
  */
-export function sslForUrl(url: string): { rejectUnauthorized: true } | undefined {
+export function sslForUrl(url: string): { rejectUnauthorized: true; ca?: string } | undefined {
   if (!requiresTls(url)) return undefined;
   try {
     const parsed = new URL(url);
@@ -108,7 +108,9 @@ export function sslForUrl(url: string): { rejectUnauthorized: true } | undefined
     if (error instanceof Error && error.message.startsWith("Refusing insecure")) throw error;
     // URL already validated by assertPostgresUrl; ignore parse noise here.
   }
-  return { rejectUnauthorized: true };
+  const encodedCa = process.env.DATABASE_SSL_CA_BASE64;
+  const ca = encodedCa ? Buffer.from(encodedCa, "base64").toString("utf8") : undefined;
+  return { rejectUnauthorized: true, ...(ca ? { ca } : {}) };
 }
 
 /** Redacted host/db label for logs — never prints credentials. */
