@@ -4,8 +4,7 @@ import { Pool } from 'pg';
 import {
   RUNTIME_POOL_TUNING,
   getRuntimeDatabaseUrl,
-  getRuntimePoolConnectionString,
-  sslForUrl,
+  getPgPoolConfig,
 } from './dbConfig';
 
 const globalForPrisma = globalThis as unknown as {
@@ -15,16 +14,11 @@ const globalForPrisma = globalThis as unknown as {
 function createPrismaClient() {
   // Fail fast: a misconfigured deployment must fail loudly instead of
   // silently running against the wrong database.
-  const connectionString = getRuntimeDatabaseUrl();
-  const poolConnectionString = getRuntimePoolConnectionString(connectionString);
-  const ssl = sslForUrl(connectionString);
-
   const pool = new Pool({
-    connectionString: poolConnectionString,
+    ...getPgPoolConfig(getRuntimeDatabaseUrl()),
     max: RUNTIME_POOL_TUNING.max,
     connectionTimeoutMillis: RUNTIME_POOL_TUNING.connectionTimeoutMillis,
     idleTimeoutMillis: RUNTIME_POOL_TUNING.idleTimeoutMillis,
-    ...(ssl ? { ssl } : {}),
   });
   pool.on('error', (error) => {
     // Pool-level errors (idle client failures, restarts) are logged, not

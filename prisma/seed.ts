@@ -14,20 +14,17 @@ import { Pool } from "pg";
 import { HOUSES, SHS_STRANDS } from "../globals/constants/groups";
 import { slugify } from "../globals/utils/text";
 import {
-  getMigrationDatabaseUrl,
+  getDirectDatabaseUrl,
+  getPgPoolConfig,
   RUNTIME_POOL_TUNING,
-  sslForUrl,
 } from "../globals/libs/dbConfig";
 
 // Fail fast rather than silently seeding the wrong database.
-const connectionString = getMigrationDatabaseUrl();
-const ssl = sslForUrl(connectionString);
 const pool = new Pool({
-  connectionString,
+  ...getPgPoolConfig(getDirectDatabaseUrl()),
   max: RUNTIME_POOL_TUNING.max,
   connectionTimeoutMillis: RUNTIME_POOL_TUNING.connectionTimeoutMillis,
   idleTimeoutMillis: RUNTIME_POOL_TUNING.idleTimeoutMillis,
-  ...(ssl ? { ssl } : {}),
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
