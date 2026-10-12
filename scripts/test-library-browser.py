@@ -1,4 +1,5 @@
 """Optional real-browser checks; all writes target the API runner's disposable DB."""
+import base64
 import json
 import sys
 from playwright.sync_api import sync_playwright, expect
@@ -45,11 +46,54 @@ with sync_playwright() as playwright:
     page.get_by_role("button", name="Save Employee", exact=True).click()
     expect(page.get_by_role("heading", name="Visitor QR Code", exact=True)).to_be_visible()
     expect(page.locator("[role=dialog] .student-qr-code svg")).to_be_visible()
+    camera_qr = base64.b64encode(page.locator("[role=dialog] .student-qr-code").screenshot()).decode()
     assert "YEAR_1" not in page.get_by_role("dialog", name="Visitor QR Code").inner_text()
     page.emulate_media(media="print")
     expect(page.locator(".student-qr-print-area")).to_be_visible()
     page.emulate_media(media="screen")
     page.get_by_role("button", name="Close", exact=True).click()
+
+    # Feed an actual application-generated QR through the camera/decoder path.
+    page.evaluate("""async png => {
+        const image = new Image();
+        image.src = 'data:image/png;base64,' + png;
+        await image.decode();
+        window.cameraQrVisible = true;
+        navigator.mediaDevices.getUserMedia = async () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 720;
+            const stream = canvas.captureStream(30);
+            const [track] = stream.getVideoTracks();
+            const draw = () => {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 720, 720);
+                if (window.cameraQrVisible) ctx.drawImage(image, 180, 180, 360, 360);
+                if (track.readyState === 'live') requestAnimationFrame(draw);
+            };
+            draw();
+            return stream;
+        };
+    }""", camera_qr)
+    scanner = page.get_by_role("region", name="Library scanner")
+    page.get_by_role("button", name="Open Camera", exact=True).click()
+    expect(scanner.get_by_text("TIME IN RECORDED", exact=True)).to_be_visible(timeout=30000)
+    expect(scanner.get_by_text("Processing...", exact=True)).not_to_be_visible()
+    expect(scanner.locator("video")).to_have_count(0)
+    expect(page.get_by_role("button", name="Manual Search", exact=True)).to_be_disabled()
+    expect(scanner.get_by_role("button", name="Next visitor", exact=True)).to_be_visible()
+    assert len(writes) == 2
+    page.evaluate("window.cameraQrVisible = false")
+    scanner.get_by_role("button", name="Next visitor", exact=True).click()
+    expect(page.get_by_text("Scanner: Ready", exact=True)).to_be_visible()
+    page.evaluate("window.cameraQrVisible = true")
+    expect(scanner.get_by_text("Duplicate scan: wait 10 seconds after the last scan.", exact=True)).to_be_visible()
+    expect(scanner.get_by_text("Processing...", exact=True)).not_to_be_visible()
+    assert len(writes) == 2, "camera cooldown sent another toggle"
+    page.evaluate("window.cameraQrVisible = false")
+    scanner.get_by_role("button", name="Next visitor", exact=True).click()
+    expect(scanner.locator("video")).to_have_count(1)
+    scanner.get_by_role("button", name="Close camera", exact=True).click()
 
     page.get_by_role("button", name="Close Forgotten Visits", exact=False).click()
     expect(page.get_by_text("These visits will receive a Time Out", exact=False)).to_be_visible()
@@ -122,4 +166,4 @@ with sync_playwright() as playwright:
     mobile.screenshot(path="/tmp/library-mobile.png", full_page=True)
     assert errors == [], errors
     browser.close()
-print("Library browser passed: manual scan, cooldown, employee registration/QR print, bulk/individual correction, history/CSV, uncertain result, demo view and mobile navigation.")
+print("Library browser passed: camera scan/acknowledgement/cooldown, manual scan, employee registration/QR print, bulk/individual correction, history/CSV, uncertain result, demo view and mobile navigation.")
