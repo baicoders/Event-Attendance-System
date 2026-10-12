@@ -1,0 +1,2 @@
+# Use Vercel environment variables; never upload local credentials.
+.env*
