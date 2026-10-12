@@ -138,7 +138,7 @@ export const useFetchStudents = (filters: Record<string, string | undefined> = {
 // Roster changes affect student counts, event eligibility (event stats), and
 // report records - all of which live under separate query keys - so invalidate
 // them together, not just ["students"].
-const invalidateStudentDependents = (queryClient: QueryClient) => {
+export const invalidateStudentDependents = (queryClient: QueryClient) => {
   queryClient.invalidateQueries({ queryKey: queryKeys.audience.all() });
   queryClient.invalidateQueries({ queryKey: queryKeys.students.all() });
   queryClient.invalidateQueries({ queryKey: ["stats", "students"] });

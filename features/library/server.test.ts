@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { before, after, test } from "node:test";
 import type { PrismaClient } from "@prisma/client";
 import { createDisposableDb, createTestClient, type DisposableDb } from "@/globals/libs/testDb";
-import { recordLibraryScan, closeForgottenVisits, registerEmployee, readLibraryVisits } from "./server";
+import { recordLibraryScan, closeForgottenVisits, registerEmployee, registerLibraryStudent, readLibraryVisits } from "./server";
 import { buildEventStudentFilter } from "@/globals/utils/buildEventStudentFilter";
 
 let disposable: DisposableDb, db: PrismaClient, disconnect: () => Promise<void>;
@@ -156,11 +156,44 @@ test("database rejects duplicate opens and impossible dates independently of app
   await assert.rejects(db.libraryVisit.create({ data: { ...data, visitDay: "2026-10-13" } }));
   await assert.rejects(db.libraryVisit.updateMany({ where: { studentId: p.id }, data: { timeOut: at("07:00:00") } }));
 });
-test("revoked actors, non-admin onboarding, invalid identifiers and unknown people cannot write", async () => {
+test("library student registration keeps academic fields, rejects collisions and produces a scannable student identity", async () => {
+  const organizer = await db.user.create({ data: { name: "Student librarian", email: "student-org@example.test", password: "test", status: "ACTIVE" } });
+  const librarian = { id: organizer.id, credentialVersion: 0 };
+  for (const [slug, category] of [["section", "SECTION"], ["house", "HOUSE"], ["dept", "DEPARTMENT"], ["program", "PROGRAM"]] as const) {
+    await db.group.create({ data: { slug, name: slug, category } });
+  }
+  const payload = { id: "LIBSTUD0001", firstName: "Library", lastName: "Student", schoolLevel: "COLLEGE", yearLevel: "YEAR_2", section: "section", house: "house", department: "dept", program: "program" } as const;
+  const created = await registerLibraryStudent(db, payload, librarian);
+  assert.equal(created.yearLevel, "YEAR_2");
+  assert.deepEqual(created.groups.map(g => g.slug).sort(), ["dept", "house", "program", "section"]);
+  assert.equal((await scan(created.id, at("15:00:00"))).visit.personType, "STUDENT");
+  assert.equal(await db.student.count({ where: { id: created.id, ...buildEventStudentFilter({ category: "ALL", includedGroups: [] }) } }), 1);
+  for (const id of [created.id, "EMP00000001"]) {
+    await assert.rejects(registerLibraryStudent(db, { ...payload, id, firstName: "Overwrite" }, librarian), { code: "ID_EXISTS" });
+  }
+  assert.equal((await db.student.findUniqueOrThrow({ where: { id: created.id } })).firstName, "Library");
+  await assert.rejects(registerLibraryStudent(db, { ...payload, id: "LIBSTUD0002", section: "house" }, librarian), { code: "INVALID_GROUPS" });
+  await assert.rejects(registerLibraryStudent(db, { ...payload, id: "LIBSTUD0002", section: "employees" }, librarian));
+  await db.user.update({ where: { id: organizer.id }, data: { mustChangePassword: true } });
+  await assert.rejects(registerLibraryStudent(db, { ...payload, id: "LIBSTUD0002" }, librarian), { code: "UNAUTHORIZED" });
+  assert.equal(await db.student.count({ where: { id: "LIBSTUD0002" } }), 0);
+});
+test("active organizer librarians can register employees and classify existing identities", async () => {
+  const organizer = await db.user.create({ data: { name: "Librarian organizer", email: "org@example.test", password: "test", status: "ACTIVE" } });
+  const librarian = { id: organizer.id, credentialVersion: 0 };
+  const employee = await registerEmployee(db, { id: "EMP00000002", firstName: "A", lastName: "B" }, librarian);
+  assert.ok(employee.groups.some(g => g.slug === "employees"));
+  const existing = await person("LIBEXIST001");
+  const classified = await registerEmployee(db, { id: existing.id, assignExisting: true }, librarian);
+  assert.equal(classified.firstName, existing.firstName);
+  assert.ok(classified.groups.some(g => g.slug === "employees"));
+  await assert.rejects(registerEmployee(db, { id: existing.id, firstName: "Overwrite", lastName: "Attempt" }, librarian), { code: "ID_EXISTS" });
+  await db.user.update({ where: { id: organizer.id }, data: { status: "PENDING" } });
+  await assert.rejects(registerEmployee(db, { id: "EMP00000003", firstName: "A", lastName: "B" }, librarian), { code: "UNAUTHORIZED" });
+});
+test("revoked actors, invalid identifiers and unknown people cannot write", async () => {
   await assert.rejects(scan("missing0000", at("08:00:00")), { code: "PERSON_NOT_FOUND" });
   await assert.rejects(scan("invalid", at("08:00:00")));
-  const organizer = await db.user.create({ data: { name: "Organizer", email: "org@example.test", password: "test", status: "ACTIVE" } });
-  await assert.rejects(registerEmployee(db, { id: "EMP00000002", firstName: "A", lastName: "B" }, { id: organizer.id, credentialVersion: 0 }), { code: "FORBIDDEN" });
   await db.user.update({ where: { id: actor.id }, data: { status: "REJECTED" } });
   await assert.rejects(scan("00000000001", at("18:00:00")), { code: "UNAUTHORIZED" });
   await assert.rejects(closeForgottenVisits(db, actor), { code: "UNAUTHORIZED" });

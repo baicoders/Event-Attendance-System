@@ -1,6 +1,8 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { studentIdSchema } from "@/globals/schemas/studentId";
+import { studentSchema, type StudentFormValues } from "@/globals/schemas/studentSchema";
+import { validateStudentGroupSlugs } from "@/globals/utils/studentGroups";
 import { takeCommandLock, takeRecordPairLock, takeRosterSharedLock, takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 import { closingTime, EMPLOYEES_GROUP_SLUG, libraryDay, libraryRange, LIBRARY_SCAN_COOLDOWN_MS, visitStatus } from "./time";
 
@@ -35,13 +37,12 @@ export function personSearch(search: string): Prisma.StudentWhereInput {
 
 
 // Recheck inside each write transaction, as the event recorder does.
-async function guardActor(tx: Prisma.TransactionClient, actor: Actor, admin = false) {
+async function guardActor(tx: Prisma.TransactionClient, actor: Actor) {
   await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} FOR SHARE`;
   const user = await tx.user.findUnique({ where: { id: actor.id } });
   if (!user || user.status !== "ACTIVE" || user.mustChangePassword || user.credentialVersion !== actor.credentialVersion) {
     throw new LibraryError("Session is no longer active", 401, "UNAUTHORIZED");
   }
-  if (admin && user.role !== "ADMIN") throw new LibraryError("Administrator access required", 403, "FORBIDDEN");
 }
 
 export async function recordLibraryScan(db: PrismaClient, raw: z.input<typeof scanSchema>, actor: Actor, clock = () => new Date()) {
@@ -89,7 +90,7 @@ export async function recordLibraryScan(db: PrismaClient, raw: z.input<typeof sc
 export async function registerEmployee(db: PrismaClient, raw: z.input<typeof employeeSchema>, actor: Actor) {
   const input = employeeSchema.parse(raw);
   return db.$transaction(async tx => {
-    await guardActor(tx, actor, true);
+    await guardActor(tx, actor);
     await takeRosterExclusiveLock(tx);
     const group = await tx.group.upsert({ where: { slug: EMPLOYEES_GROUP_SLUG }, update: {}, create: { name: "Employees", slug: EMPLOYEES_GROUP_SLUG, category: "SECTION" } });
     const existing = await tx.student.findUnique({ where: { id: input.id } });
@@ -100,6 +101,25 @@ export async function registerEmployee(db: PrismaClient, raw: z.input<typeof emp
     return tx.student.create({ data: {
       id: input.id, firstName: input.firstName!, lastName: input.lastName!, middleName: input.middleName || null,
       schoolLevel: "COLLEGE", yearLevel: "YEAR_1", groups: { connect: { id: group.id } },
+    }, include: { groups: true } });
+  });
+}
+
+export async function registerLibraryStudent(db: PrismaClient, raw: StudentFormValues, actor: Actor) {
+  const input = studentSchema.parse(raw);
+  return db.$transaction(async tx => {
+    await guardActor(tx, actor);
+    await takeRosterExclusiveLock(tx);
+    if (await tx.student.findUnique({ where: { id: input.id }, select: { id: true } })) {
+      throw new LibraryError("ID already exists. Use Manual Search to find the existing visitor.", 409, "ID_EXISTS");
+    }
+    const resolution = await validateStudentGroupSlugs([input], tx);
+    if (!resolution.ok) throw new LibraryError(resolution.error, 400, "INVALID_GROUPS");
+    const groups = [input.section, input.house, input.department, input.program, input.strand]
+      .filter(Boolean).map(slug => ({ id: resolution.slugToId.get(slug!)! }));
+    return tx.student.create({ data: {
+      id: input.id, firstName: input.firstName, lastName: input.lastName, middleName: input.middleName || null,
+      schoolLevel: input.schoolLevel, yearLevel: input.yearLevel, groups: { connect: groups },
     }, include: { groups: true } });
   });
 }

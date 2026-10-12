@@ -61,10 +61,28 @@ try {
   const out = await request("/api/library/scan", { cookie: orgCookie, method: "POST", body: { ...scanBody, requestId: randomUUID() } });
   assert.equal(out.result.data.operation, "TIME_OUT");
   const employeeBody = { id: "EMP00000001", firstName: "Maria", lastName: "Santos" };
-  assert.equal((await request("/api/library/people", { cookie: orgCookie, method: "POST", body: employeeBody })).response.status, 403);
   assert.equal((await request("/api/library/people", { cookie: adminCookie, method: "POST", body: employeeBody })).response.status, 200);
   assert.equal((await request("/api/library/people", { cookie: adminCookie, method: "POST", body: { ...employeeBody, id: student.id } })).response.status, 409);
   const academicGroups = await Promise.all([ ["sec", "SECTION"], ["house", "HOUSE"], ["dept", "DEPARTMENT"], ["program", "PROGRAM"] ].map(([slug, category]) => db.group.create({ data: { name: slug, slug, category } })));
+  const studentBody = { personType: "STUDENT", id: "LIBSTUD0001", firstName: "Library", lastName: "Student", schoolLevel: "COLLEGE", yearLevel: "YEAR_2", section: "sec", house: "house", department: "dept", program: "program" };
+  const newStudent = await request("/api/library/people", { cookie: adminCookie, method: "POST", body: studentBody });
+  assert.equal(newStudent.response.status, 200, JSON.stringify(newStudent.result));
+  assert.equal(newStudent.result.data.yearLevel, "YEAR_2");
+  assert.deepEqual(newStudent.result.data.groups.map(g => g.slug).sort(), ["dept", "house", "program", "sec"]);
+  assert.equal((await request("/api/library/people", { cookie: orgCookie, method: "POST", body: { ...employeeBody, id: "EMPORG00001" } })).response.status, 200);
+  for (const id of [studentBody.id, student.id, employeeBody.id]) {
+    assert.equal((await request("/api/library/people", { cookie: orgCookie, method: "POST", body: { ...studentBody, id, firstName: "Overwrite" } })).response.status, 409);
+  }
+  assert.equal((await db.student.findUniqueOrThrow({ where: { id: student.id } })).firstName, "Juan");
+  assert.equal((await db.student.findUniqueOrThrow({ where: { id: employeeBody.id } })).firstName, "Maria");
+  for (const invalid of [{ department: "" }, { section: "employees" }, { section: "house" }, { program: "unknown" }, { personType: "UNKNOWN" }]) {
+    assert.equal((await request("/api/library/people", { cookie: orgCookie, method: "POST", body: { ...studentBody, id: "LIBSTUD0002", ...invalid } })).response.status, 400);
+  }
+  assert.equal((await request("/api/library/people", { method: "POST", body: studentBody })).response.status, 401);
+  assert.equal((await request("/api/library/people", { cookie: pendingCookie, method: "POST", body: studentBody })).response.status, 403);
+  const competingCreates = await Promise.all([orgCookie, adminCookie].map(cookie => request("/api/library/people", { cookie, method: "POST", body: { ...studentBody, id: "LIBSTUD0003" } })));
+  assert.deepEqual(competingCreates.map(r => r.response.status).sort(), [200, 409]);
+  assert.equal(await db.student.count({ where: { id: "LIBSTUD0003" } }), 1);
   const academic = { id: employeeBody.id, firstName: "Wrong", lastName: "Overwrite", schoolLevel: "COLLEGE", yearLevel: "YEAR_1", section: "sec", house: "house", department: "dept", program: "program" };
   assert.equal((await request("/api/students", { cookie: orgCookie, method: "POST", body: academic })).response.status, 409);
   assert.equal((await db.student.findUniqueOrThrow({ where: { id: employeeBody.id } })).firstName, "Maria");
@@ -112,7 +130,7 @@ try {
       { studentId: "00000000002", personType: "STUDENT", visitDay: "2026-08-03", timeIn: new Date("2026-08-03T08:00:00+08:00") },
       { studentId: "00000000002", personType: "STUDENT", visitDay: "2026-08-04", timeIn: new Date("2026-08-04T17:15:00+08:00") },
     ] });
-    const browser = spawnSync("python3", ["scripts/test-library-browser.py", base, admin.email], { env, encoding: "utf8" });
+    const browser = spawnSync("python3", ["scripts/test-library-browser.py", base, organizer.email], { env, encoding: "utf8" });
     assert.equal(browser.status, 0, browser.stderr + browser.stdout); console.log(browser.stdout.trim());
   }
   await db.user.update({ where: { id: organizer.id }, data: { status: "REJECTED" } });
