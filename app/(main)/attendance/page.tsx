@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import AttendancePageHeader from "@/features/attendance/components/AttendancePageHeader";
@@ -21,6 +22,7 @@ const AttendancePageInner = () => {
   return (
     <section className={`${page.surface} min-h-svh`}>
       <div className={page.containerWide}>
+        <Link href="/library" className="self-start rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 font-semibold text-indigo-700 hover:bg-indigo-100">Library Attendance →</Link>
         <AttendancePageHeader
           selectedEvent={selectedEvent}
           onSelectEventId={selectEventId}

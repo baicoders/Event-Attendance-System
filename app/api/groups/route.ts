@@ -18,6 +18,7 @@ export async function GET(_req: NextRequest) {
 
     // Fetch all groups from the database
     const groups = await prisma.group.findMany({
+      where: { slug: { not: "employees" } },
       orderBy: { name: "asc" },
     });
 

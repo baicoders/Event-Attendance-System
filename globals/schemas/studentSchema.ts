@@ -25,7 +25,7 @@ export const studentSchema = z
 
     // Step 2 & 3
     schoolLevel: z.enum(SchoolLevel),
-    section: z.string().min(1, "Section is required"),
+    section: z.string().min(1, "Section is required").refine(value => value.trim().toLowerCase() !== "employees", "Employees is reserved for Library Attendance registration."),
     house: z.string().min(1, "House is required"),
 
     // Conditional fields

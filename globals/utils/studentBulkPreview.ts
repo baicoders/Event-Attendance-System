@@ -126,6 +126,11 @@ export function buildBulkPreviewRows(input: {
       };
     };
 
+    if (target.slug === "employees" || student.groups.some(group => group.slug === "employees")) {
+      rows.push(fail("Employee membership is reserved for Library Attendance.", "INVALID_CANDIDATE"));
+      continue;
+    }
+
     if (inTargetCategory.length > 1) {
       rows.push(
         fail(
