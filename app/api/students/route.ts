@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     // Single-student roster write freezes eligibility (exclusive form).
     const student = await prisma.$transaction(async (tx) => {
       await takeRosterExclusiveLock(tx);
+      if (await tx.student.findFirst({ where: { id: validatedData.id, groups: { some: { slug: "employees" } } } })) return null;
       return tx.student.upsert({
         where: { id: validatedData.id },
         update: {
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
       });
     });
 
+    if (!student) return NextResponse.json(err("Employee identities are reserved for Library Attendance. This student write was not applied.", "EMPLOYEE_ID_RESERVED"), { status: 409 });
     return NextResponse.json(ok(student), { status: 200 });
   } catch (error) {
     // A repeat student ID is a user error, not a 500.

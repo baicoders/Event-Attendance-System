@@ -95,3 +95,27 @@ Plus sample students, events, and attendance records.
   `AUTH_SECRET` and force sign-in before reopening service. Rolling back to a
   build that ignores credential versions would revive old cookies — rotate the
   secret before running such an older build.
+
+## Library Attendance (compliance MVP)
+
+Apply the additive migration with `pnpm db:deploy`, then `pnpm db:generate` and rebuild the application. No library seed or scheduler is required. Active organizers (librarians) and admins open **Library Attendance** in the sidebar, or follow the Library Attendance link on the mobile Attendance screen.
+
+- Open Camera and scan an existing student QR, or use **Manual Search → Record scan**. Scans start or end a visit session, allow repeat visits, and use the server's Asia/Manila date. The same visitor has a **10-second cooldown across devices**. Acknowledgement enables the next scan. If the connection fails, refresh and check saved history before scanning intentionally again; never blindly retry an uncertain toggle.
+- Active organizers (librarians) and admins can **Register Employee** with a unique **11-character ID**, first/last name and optional middle name, then view/print the existing QR card. For an existing directory identity, use **Manual Search → Classify as Employee** and confirm. Colliding IDs are never overwritten. Membership in the reserved `employees` group (`Employees`, category `SECTION`) determines employee classification and excludes the identity from ordinary event audiences. The migration provisions the group; registration also provisions it idempotently. Ordinary student forms/imports cannot assign or strip this reserved membership, and group maintenance cannot delete it.
+- Use **Add Student** on the Library page to open the existing student registration form. Enter the real academic details and existing groups, save, then view/print the QR card. Library registration only creates new identities: an existing student or employee ID is rejected without changing that person. Use Manual Search for existing visitors.
+- **Daily**, **Weekly** (Monday–Sunday) and **Monthly** history filter by entry date. Filter Students/Employees and search name/ID; CSV exports all matching rows in Manila time, including correction metadata. Visit type is snapshotted on entry: changing group membership affects subsequent visits only.
+- Closing time is **5:00 PM Asia/Manila every day, including weekends**. Before then, today's open visits count as Currently Inside. At/after closing, they require review; prior-day visits never count as inside. Refresh updates the displayed counts. There is **no automatic closure**. **Close Forgotten Visits → Confirm Close** sets eligible open visits to 5 PM on each entry date and records the librarian and correction time. Already completed visits are preserved. Entries after 5 PM are excluded; use **Review visit end** to enter a valid confirmed timestamp. Reports label these exits **Closed by librarian**, rather than suggesting an observed QR departure.
+
+For an October 14 showcase: migrate, log in, start a test student visit, acknowledge, wait 10 seconds and end the visit, then wait and start another visit. Register a test employee and use its printed QR. Show weekly/monthly filters and the confirmed forgotten-visit workflow. Camera access requires HTTPS or localhost and browser permission; Manual Search works without a camera.
+
+Optional historical examples, **local development only** (requires one existing test student):
+
+```bash
+NODE_ENV=development pnpm library:demo --confirm-demo
+```
+
+This non-destructive, repeatable script adds visits across previous days, weeks and months, including employees, repeated sessions, missing exits, after-hours entries and librarian closures. It never runs the full destructive seed. Every generated visit has `isDemo=true`: ordinary reports/counts exclude them. Select **View simulated demonstration data only** to inspect/export or correct these examples; the UI labels them SIMULATED and disables live scanning. Use a development database, not the school database.
+
+Verification: `pnpm test:library`, `pnpm test:library-api` (after build), `pnpm test:operator`, `pnpm lint`, `pnpm build`. Database tests require `TEST_DATABASE_URL` pointing to a PostgreSQL maintenance database and create/drop only disposable `test_*` databases. `LIBRARY_BROWSER_TEST=1 pnpm test:library-api` also checks desktop/mobile flows with the existing Python Playwright setup.
+
+Intentional debt: employees share `Student`, with `COLLEGE`/`YEAR_1` placeholders isolated to registration and never shown on library screens; closing time and timezone are fixed; correction actor IDs are scalar snapshots; reports use current names and entry-time visitor-type snapshots. There are no employee CRUD pages, queues or generalized attendance infrastructure. Existing event `Record` data and schema are unchanged.

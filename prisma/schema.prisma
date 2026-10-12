@@ -51,6 +51,7 @@ model Student {
   // Relations: Students can belong to multiple groups (House, Strand, etc.)
   groups  Group[]
   records Record[]
+  libraryVisits LibraryVisit[]
   attendanceChanges AttendanceChange[]
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
@@ -62,6 +63,30 @@ model Student {
   @@index([updatedAt, id])
   @@index([lastName, firstName, id])
   @@index([schoolLevel, yearLevel, lastName, firstName, id])
+}
+
+// One row per library session. Scalar actor IDs retain correction attribution.
+model LibraryVisit {
+  id                         String    @id @default(cuid())
+  studentId                  String
+  student                    Student   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  visitDay                   String    @db.VarChar(10)
+  personType                 String    @db.VarChar(8)
+  timeIn                     DateTime  @db.Timestamptz(3)
+  timeOut                    DateTime? @db.Timestamptz(3)
+  recordedById               String?
+  timeOutRecordedById         String?
+  // Durable identities for the two scan operations; retries replay the result.
+  timeInRequestId             String?   @unique @db.Uuid
+  timeOutRequestId            String?   @unique @db.Uuid
+  administrativelyClosedAt   DateTime? @db.Timestamptz(3)
+  administrativelyClosedById  String?
+  isDemo                     Boolean   @default(false)
+  createdAt                  DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([studentId, visitDay])
+  @@index([visitDay])
+  // Partial unique open-visit index and timestamp checks live in SQL migration.
 }
 
 model Record {

@@ -41,6 +41,7 @@ const MobileBottomNav = () => {
   const pathname = usePathname();
 
   const currentRoute = (route: string): "page" | "location" | undefined => {
+    if (route === "/attendance" && pathname === "/library") return "location";
     if (pathname === route) return "page";
     if (pathname.startsWith(`${route}/`)) return "location";
     return undefined;

@@ -13,7 +13,11 @@ import { Pool } from "pg";
 // seed runs under tsx, and groups.ts has no dependencies of its own).
 import { HOUSES, SHS_STRANDS } from "../globals/constants/groups";
 import { slugify } from "../globals/utils/text";
-import { getMigrationDatabaseUrl, RUNTIME_POOL_TUNING, sslForUrl } from "../globals/libs/dbConfig";
+import {
+  getMigrationDatabaseUrl,
+  RUNTIME_POOL_TUNING,
+  sslForUrl,
+} from "../globals/libs/dbConfig";
 
 // Fail fast rather than silently seeding the wrong database.
 const connectionString = getMigrationDatabaseUrl();
@@ -51,25 +55,31 @@ const GROUP_DATA: Partial<
 // selection boards (which read the same file) always find these groups. Slugs
 // match each board's query value: HOUSES.slug for houses, slugify(code) for
 // strands - so no HUMSS/GAS drift.
-const DERIVED_GROUPS: { name: string; slug: string; category: EventCategory }[] =
-  [
-    ...HOUSES.map((h) => ({
-      name: h.name,
-      slug: h.slug,
-      category: "HOUSE" as EventCategory,
-    })),
-    ...SHS_STRANDS.map((s) => ({
-      name: s.name,
-      slug: slugify(s.code),
-      category: "STRAND" as EventCategory,
-    })),
-  ];
+const DERIVED_GROUPS: {
+  name: string;
+  slug: string;
+  category: EventCategory;
+}[] = [
+  ...HOUSES.map((h) => ({
+    name: h.name,
+    slug: h.slug,
+    category: "HOUSE" as EventCategory,
+  })),
+  ...SHS_STRANDS.map((s) => ({
+    name: s.name,
+    slug: slugify(s.code),
+    category: "STRAND" as EventCategory,
+  })),
+];
 
 async function main() {
   // This seed wipes every table before inserting demo data. Guard it so it
   // can never erase a real database: allow only outside production, unless
   // SEED_FORCE=true is explicitly set.
-  if (process.env.NODE_ENV === "production" && process.env.SEED_FORCE !== "true") {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.SEED_FORCE !== "true"
+  ) {
     throw new Error(
       "Refusing to run destructive seed in production. Set SEED_FORCE=true to override.",
     );
@@ -122,6 +132,16 @@ async function main() {
       name: "Organizer",
       email: "organizer@example.com",
       password: "password",
+      role: "ORGANIZER",
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.user.create({
+    data: {
+      name: "Librarian",
+      email: "librarian@gmail.com",
+      password: "librarian",
       role: "ORGANIZER",
       status: "ACTIVE",
     },

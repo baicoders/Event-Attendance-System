@@ -7,11 +7,11 @@ import { Student } from "../types/students";
 export const buildEventStudentFilter = (
   event: { category: EventCategory; includedGroups: { slug: string }[] },
 ): Prisma.StudentWhereInput => {
-  const where: Prisma.StudentWhereInput = {};
+  const where: Prisma.StudentWhereInput = { groups: { none: { slug: "employees" } } };
 
   // Categories that map to enums remain the same
-  if (event.category === "COLLEGE") return { schoolLevel: SchoolLevel.COLLEGE };
-  if (event.category === "SHS") return { schoolLevel: SchoolLevel.SHS };
+  if (event.category === "COLLEGE") return { ...where, schoolLevel: SchoolLevel.COLLEGE };
+  if (event.category === "SHS") return { ...where, schoolLevel: SchoolLevel.SHS };
   if (event.category === "ALL") return where;
 
   // For everything else, we query the 'groups' relation by slug
@@ -27,6 +27,7 @@ export const buildEventStudentFilter = (
   }
 
   where.groups = {
+    none: { slug: "employees" },
     some: {
       slug: { in: includedSlugs },
     },
@@ -43,6 +44,7 @@ export const isStudentInEvent = (
   student: Pick<Student, "schoolLevel"> & { groups?: ReadonlyArray<{ slug: string }> },
   event: { category: EventCategory; includedGroups: ReadonlyArray<{ slug: string }> },
 ): boolean => {
+  if (student.groups?.some(group => group.slug === "employees")) return false;
   const category = event.category;
   if (category === "ALL") return true;
   if (category === "COLLEGE") return student.schoolLevel === "COLLEGE";

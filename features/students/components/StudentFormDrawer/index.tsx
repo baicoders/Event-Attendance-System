@@ -30,7 +30,7 @@ const FIELDS_TO_VALIDATE: Record<Step, (keyof StudentFormValues)[]> = {
 interface Props {
   student?: Student;
   isOpen: boolean;
-  onViewQR: () => void;
+  onViewQR?: () => void;
   onClose: () => void;
   onSubmit: (validatedFormData: StudentFormValues) => Promise<void> | void;
   saveError?: string | null;
@@ -138,7 +138,7 @@ export default function StudentFormDrawer({
               </SheetTitle>
               <div className="flex justify-between items-center gap-2 mt-2">
                 <StepIndicator current={step} />
-                <Button type="button" onClick={onViewQR} disabled={isSaving}>View QR</Button>
+                {onViewQR && <Button type="button" onClick={onViewQR} disabled={isSaving}>View QR</Button>}
               </div>
             </SheetHeader>
 

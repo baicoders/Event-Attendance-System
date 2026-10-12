@@ -19,6 +19,8 @@ type ScannerCameraProps = {
   eventId?: string;
   mode?: "TIME_IN" | "TIME_OUT";
   onError?: (error: unknown) => void;
+  /** Disabling tracking also reduces this scanner version's decode rate to 2 Hz. */
+  showTracker?: boolean;
 };
 
 /**
@@ -34,6 +36,7 @@ const ScannerCamera = ({
   eventId,
   mode,
   onError,
+  showTracker = true,
 }: ScannerCameraProps) => {
   const scanGate = useRef(createScanGate());
 
@@ -58,7 +61,7 @@ const ScannerCamera = ({
         <QRScanner
           components={{
             finder: false,
-            tracker: centerText,
+            tracker: showTracker ? centerText : undefined,
             onOff: true,
           }}
           onScan={handleScan}

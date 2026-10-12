@@ -75,6 +75,7 @@ export async function DELETE(
       select: {
         id: true,
         name: true,
+        slug: true,
         category: true,
         students: { select: { id: true } },
         events: { select: { id: true, title: true, status: true } },
@@ -85,6 +86,10 @@ export async function DELETE(
       return NextResponse.json(err("Group not found.", "NOT_FOUND"), {
         status: 404,
       });
+    }
+
+    if (group.slug === "employees") {
+      return NextResponse.json(err("The Employees group is reserved for Library Attendance.", "RESERVED_GROUP"), { status: 409 });
     }
 
     if (group.events.length > 0) {
@@ -110,7 +115,7 @@ export async function DELETE(
 
       const target = await prisma.group.findUnique({
         where: { id: reassignToGroupId },
-        select: { id: true, category: true },
+        select: { id: true, category: true, slug: true },
       });
 
       if (!target) {
@@ -123,6 +128,10 @@ export async function DELETE(
       // A student's group must match the category of the column that references
       // it, so a cross-category move would produce a roster the student write
       // path then rejects.
+      if (target.slug === "employees") {
+        return NextResponse.json(err("Use Library Attendance to classify employees individually.", "RESERVED_GROUP"), { status: 409 });
+      }
+
       if (target.category !== group.category) {
         return NextResponse.json(
           err(
