@@ -45,7 +45,6 @@ export default function LibraryPage() {
   const [search, setSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
-  const [demo, setDemo] = useState(false);
   const [camera, setCamera] = useState(false);
   const [cameraSession, setCameraSession] = useState(0);
   const [pending, setPending] = useState(false);
@@ -66,14 +65,14 @@ export default function LibraryPage() {
   const [correctionClock, setCorrectionClock] = useState("");
   const [classifyPerson, setClassifyPerson] = useState<Person | null>(null);
 
-  const query = new URLSearchParams({ date, period, type, search: historySearch, page: String(pageNumber), demo: String(demo) }).toString();
+  const query = new URLSearchParams({ date, period, type, search: historySearch, page: String(pageNumber), demo: "false" }).toString();
   const { data, isFetching, error, refetch } = useQuery({
     queryKey: ["library", query], staleTime: 0, queryFn: ({ signal }) => fetchApi<LibraryData>(`/api/library/visits?${query}`, { signal }), retry: false,
   });
   const write = <T,>(path: string, body: unknown) => fetchApi<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
   async function recordScan(raw: string) {
-    if (scanBlocked.current || pending || demo) return;
+    if (scanBlocked.current || pending) return;
     scanBlocked.current = true;
     setManual(false);
     setNotice("");
@@ -106,7 +105,7 @@ export default function LibraryPage() {
       const saved = await fetchApi<LibraryData>(`/api/library/visits?${params}`);
       const checkedQuery = new URLSearchParams({ date: saved.today, period: "daily", type: "ALL", search: feedback.studentId, page: "1", demo: "false" }).toString();
       queryClient.setQueryData(["library", checkedQuery], saved);
-      setDate(saved.today); setPeriod("daily"); setType("ALL"); setDemo(false);
+      setDate(saved.today); setPeriod("daily"); setType("ALL");
       setSearch(feedback.studentId); setHistorySearch(feedback.studentId); setPageNumber(1); setCamera(false);
       const latest = saved.visits.find(v => v.studentId === feedback.studentId);
       const details = latest ? `Latest saved visit: Start ${clock(latest.timeIn)}, End ${clock(latest.timeOut)}, ${visitCopy(latest.status)}.` : "No saved visit today for this ID.";
@@ -160,7 +159,7 @@ export default function LibraryPage() {
   async function closeVisits() {
     setPending(true); setNotice("");
     try {
-      const body = reviewVisit ? { demo, visitId: reviewVisit.id, timeOut: new Date(`${correctionClock}:00+08:00`).toISOString() } : { demo };
+      const body = reviewVisit ? { visitId: reviewVisit.id, timeOut: new Date(`${correctionClock}:00+08:00`).toISOString() } : {};
       const result = await write<{ count: number }>("/api/library/close-forgotten", body);
       setCloseDialog(false); setReviewVisit(null); setNotice(`${result.count} visit(s) closed by librarian.`); void refetch();
     } catch (error) { setNotice(error instanceof Error ? error.message : "Correction failed. Refresh history before trying again."); }
@@ -171,7 +170,7 @@ export default function LibraryPage() {
       const response = await fetch(`/api/library/visits?${query}&format=csv`);
       if (!response.ok) throw new Error("Export failed. Refresh or sign in again.");
       const url = URL.createObjectURL(await response.blob());
-      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `library-${data?.range.start}-${data?.range.end}${demo ? "-DEMO" : ""}.csv`; anchor.click(); URL.revokeObjectURL(url);
+      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `library-${data?.range.start}-${data?.range.end}.csv`; anchor.click(); URL.revokeObjectURL(url);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Export failed"); }
   }
 
@@ -179,7 +178,7 @@ export default function LibraryPage() {
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="flex items-center gap-2 text-3xl font-bold"><BookOpen aria-hidden="true" />Library Attendance</h1>
         <p className="mt-2 text-slate-600">{data ? new Date(`${data.today}T12:00:00+08:00`).toLocaleDateString("en-US", { timeZone: REPORT_TIME_ZONE, weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "Loading library date…"}</p>
-        <p className="mt-1 text-sm font-medium">Scanner: {demo ? "Disabled in demonstration view" : pending ? "Processing" : feedback ? "Awaiting acknowledgement" : "Ready"}</p>
+        <p className="mt-1 text-sm font-medium">Scanner: {pending ? "Processing" : feedback ? "Awaiting acknowledgement" : "Ready"}</p>
       </div>
       <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void refetch()} disabled={isFetching}><RefreshCw />Refresh</Button>
         <Button variant="outline" disabled={pending || !!feedback} onClick={() => { setNotice(""); setCamera(false); setEmployeeForm(true); }}><UserPlus />Register Employee</Button>
@@ -188,15 +187,13 @@ export default function LibraryPage() {
     </header>
     {notice && <p role="status" className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm">{visitCopy(notice)}</p>}
     {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">History unavailable: {error.message}. Refresh before relying on the displayed counts.</p>}
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={demo} onChange={e => { setDemo(e.target.checked); setPageNumber(1); setCamera(false); }} />View simulated demonstration data only</label>
-    {demo && <p className="rounded-lg bg-amber-100 p-3 font-medium">DEMONSTRATION DATA — simulated visits, excluded from ordinary library reports. Live scanning is disabled in this view.</p>}
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {[["Visits Today", data?.summary.visitsToday], ["Currently Inside", data?.summary.currentlyInside], ["Unclosed Visits", data?.summary.unclosedVisits]].map(([label, count]) => <div className={panel} key={label}><p className="text-sm text-slate-600">{label}</p><p className="mt-1 text-3xl font-bold">{count ?? "—"}</p></div>)}
     </div>
     {data && <p className="-mt-3 text-xs text-slate-500">As of {clock(data.now)} Asia/Manila. Refresh to update. Open visits become unclosed at 5:00 PM every day.</p>}
     <div className="grid items-start gap-5 lg:grid-cols-2">
       <section className={panel} aria-label="Library scanner"><h2 className="text-xl font-semibold">Scan Student / Employee QR Code</h2><p className="mt-1 text-sm text-slate-600">Each scan starts or ends a visit session. Multiple visits per day are allowed. Wait 10 seconds between scans for the same person.</p>
-        <div className="my-4 flex flex-wrap gap-2"><Button onClick={() => setCamera(true)} disabled={pending || !!feedback || demo}><Camera />Open Camera</Button><Button variant="outline" onClick={() => { setManual(true); setLookupDone(false); setPeople([]); setLookup(""); setNotice(""); }} disabled={pending || !!feedback || demo}><Search />Manual Search</Button></div>
+        <div className="my-4 flex flex-wrap gap-2"><Button onClick={() => setCamera(true)} disabled={pending || !!feedback}><Camera />Open Camera</Button><Button variant="outline" onClick={() => { setManual(true); setLookupDone(false); setPeople([]); setLookup(""); setNotice(""); }} disabled={pending || !!feedback}><Search />Manual Search</Button></div>
         {/* Show the acknowledgement in place of the camera after a scan finishes. */}
         {camera && !feedback && <div className="aspect-square max-h-[420px] overflow-hidden rounded-xl bg-slate-950"><ScannerCamera key={cameraSession} onRead={id => void recordScan(id)} isPending={pending} onClose={() => setCamera(false)} eventId="library" showTracker={false} onError={() => { setCamera(false); setNotice("Camera unavailable. Check camera permission or use Manual Search."); }} /></div>}
         {feedback && <div role="status" aria-live="assertive" className={`mt-4 rounded-xl border-2 p-5 ${feedback.result ? "border-emerald-500 bg-emerald-50" : "border-amber-500 bg-amber-50"}`}>
@@ -216,7 +213,7 @@ export default function LibraryPage() {
         <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm">Search name or ID<Input value={search} onChange={e => setSearch(e.target.value)} maxLength={100} placeholder="Name or visitor ID" /></label><Button type="submit" variant="outline">Search history</Button>
       </form>
       <p className="mb-3 text-sm text-slate-500">{data?.range.start} – {data?.range.end} · {data?.total ?? 0} visits · Asia/Manila{isFetching ? " · Updating…" : ""}</p>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b bg-slate-50"><tr>{["Name", "Type", "Date", "Visit start", "Visit end", "Status"].map(c => <th className="whitespace-nowrap px-3 py-3" key={c}>{c}</th>)}</tr></thead><tbody>{data?.visits.map(v => <tr className="border-b border-slate-100" key={v.id}><td className="px-3 py-3 font-medium">{fullName(v.student)}<span className="block text-xs font-normal text-slate-500">{v.studentId}</span></td><td className={`px-3 py-3 ${v.personType === "EMPLOYEE" ? "font-medium text-violet-700" : ""}`}>{personType(v.personType)}</td><td className="whitespace-nowrap px-3 py-3">{v.visitDay}</td><td className="whitespace-nowrap px-3 py-3">{clock(v.timeIn)}</td><td className="whitespace-nowrap px-3 py-3">{clock(v.timeOut)}</td><td className="px-3 py-3">{visitCopy(v.status)}{v.isDemo && <span className="block text-xs font-semibold text-amber-700">SIMULATED</span>}{v.administrativelyClosedAt && <span className="block text-xs text-slate-500">Corrected {formatReportDateTime(v.administrativelyClosedAt)}</span>}</td></tr>)}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b bg-slate-50"><tr>{["Name", "Type", "Date", "Visit start", "Visit end", "Status"].map(c => <th className="whitespace-nowrap px-3 py-3" key={c}>{c}</th>)}</tr></thead><tbody>{data?.visits.map(v => <tr className="border-b border-slate-100" key={v.id}><td className="px-3 py-3 font-medium">{fullName(v.student)}<span className="block text-xs font-normal text-slate-500">{v.studentId}</span></td><td className={`px-3 py-3 ${v.personType === "EMPLOYEE" ? "font-medium text-violet-700" : ""}`}>{personType(v.personType)}</td><td className="whitespace-nowrap px-3 py-3">{v.visitDay}</td><td className="whitespace-nowrap px-3 py-3">{clock(v.timeIn)}</td><td className="whitespace-nowrap px-3 py-3">{clock(v.timeOut)}</td><td className="px-3 py-3">{visitCopy(v.status)}{v.administrativelyClosedAt && <span className="block text-xs text-slate-500">Corrected {formatReportDateTime(v.administrativelyClosedAt)}</span>}</td></tr>)}</tbody></table></div>
       {data?.visits.length === 0 && <p className="py-6 text-center text-slate-500">No visits match these filters.</p>}
       <div className="mt-4 flex items-center justify-end gap-3"><Button variant="outline" disabled={pageNumber <= 1 || isFetching} onClick={() => setPageNumber(v => v - 1)}>Previous</Button><span className="text-sm">Page {pageNumber}</span><Button variant="outline" disabled={!data || pageNumber * 50 >= data.total || isFetching} onClick={() => setPageNumber(v => v + 1)}>Next</Button></div>
     </section>

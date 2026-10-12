@@ -1,6 +1,7 @@
 """Optional real-browser checks; all writes target the API runner's disposable DB."""
 import base64
 import json
+import re
 import sys
 from playwright.sync_api import sync_playwright, expect
 
@@ -19,6 +20,9 @@ with sync_playwright() as playwright:
     page.get_by_role("link", name="Library Attendance", exact=True).click()
     expect(page.get_by_role("heading", name="Library Attendance", exact=True)).to_be_visible()
     page.wait_for_load_state("networkidle")
+    expect(page.get_by_role("checkbox", name="View simulated demonstration data only")).to_have_count(0)
+    expect(page.get_by_text(re.compile(r"SIMULATED|DEMONSTRATION DATA|Disabled in demonstration view"))).to_have_count(0)
+    expect(page.get_by_role("button", name="Open Camera", exact=True)).to_be_enabled()
     expect(page.get_by_text("Missing visit end", exact=False).first).to_be_visible()
     writes = []
     page.on("request", lambda req: writes.append(json.loads(req.post_data)) if req.method == "POST" and req.url.endswith("/api/library/scan") else None)
@@ -217,9 +221,8 @@ with sync_playwright() as playwright:
     page.get_by_role("button", name="Record scan", exact=True).click()
     expect(scanner.get_by_text("VISIT ENDED", exact=True)).to_be_visible()
     page.get_by_role("button", name="Next visitor", exact=True).click()
-    page.get_by_label("View simulated demonstration data only").check()
-    expect(page.get_by_role("button", name="Open Camera", exact=True)).to_be_disabled()
-    expect(page.get_by_text("DEMONSTRATION DATA — simulated visits", exact=False)).to_be_visible()
+    expect(page.get_by_text("Scanner: Ready", exact=True)).to_be_visible()
+    expect(page.get_by_role("button", name="Open Camera", exact=True)).to_be_enabled()
 
     mobile = context.new_page()
     mobile.set_viewport_size({"width": 390, "height": 844})
@@ -228,8 +231,10 @@ with sync_playwright() as playwright:
     expect(mobile.get_by_role("heading", name="Library Attendance", exact=True)).to_be_visible()
     expect(mobile.get_by_role("button", name="Manual Search", exact=True)).to_be_visible()
     mobile.wait_for_load_state("networkidle")
+    expect(mobile.get_by_role("checkbox", name="View simulated demonstration data only")).to_have_count(0)
+    expect(mobile.get_by_text(re.compile(r"SIMULATED|DEMONSTRATION DATA"))).to_have_count(0)
     assert mobile.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "mobile viewport overflow"
     mobile.screenshot(path="/tmp/library-mobile.png", full_page=True)
     assert errors == [], errors
     browser.close()
-print("Library browser passed: organizer employee/student onboarding with collision protection, QR print, visit terminology, paced camera decoding with live history filters, camera scan/acknowledgement/cooldown, manual scan, bulk/individual correction, history/CSV, uncertain result, demo view and mobile navigation.")
+print("Library browser passed: organizer employee/student onboarding with collision protection, QR print, visit terminology, paced camera decoding with live history filters, camera scan/acknowledgement/cooldown, manual scan, bulk/individual correction, history/CSV, uncertain result, operational copy and mobile navigation.")
