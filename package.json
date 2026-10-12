@@ -27,6 +27,8 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "test:db-config": "node --import tsx --test globals/libs/dbConfig.test.ts",
+    "test:db-tls": "node --import tsx --test scripts/test-database-tls.mjs",
     "benchmark:roster": "tsx scripts/benchmark/generate-roster.ts",
     "benchmark:probe": "tsx scripts/benchmark/direct-transaction.ts",
     "benchmark:import": "tsx scripts/benchmark/http-import-benchmark.ts",

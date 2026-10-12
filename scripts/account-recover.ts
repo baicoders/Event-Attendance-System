@@ -18,7 +18,7 @@ import "dotenv/config";
 import { createInterface } from "node:readline";
 
 import { prisma } from "@/globals/libs/prisma";
-import { describeDatabaseUrl, getMigrationDatabaseUrl } from "@/globals/libs/dbConfig";
+import { describeDatabaseUrl, getDirectDatabaseUrl } from "@/globals/libs/dbConfig";
 import {
   applyAdminPasswordReset,
   generateTemporaryPassword,
@@ -74,7 +74,7 @@ async function main() {
 
   // Fail closed on missing/non-PostgreSQL maintenance targets. DIRECT_URL is
   // preferred (non-pooled); DATABASE_URL is the local-dev fallback.
-  const maintenanceUrl = getMigrationDatabaseUrl();
+  const maintenanceUrl = getDirectDatabaseUrl();
 
   // Verify the maintenance target identity before any write: confirm we can
   // connect, the server is PostgreSQL, and the database matches the URL.
