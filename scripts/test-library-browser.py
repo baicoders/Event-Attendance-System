@@ -87,7 +87,16 @@ with sync_playwright() as playwright:
         const image = new Image();
         image.src = 'data:image/png;base64,' + png;
         await image.decode();
-        window.cameraQrVisible = true;
+        window.cameraQrVisible = false;
+        window.decoderFrameReads = 0;
+        for (const Context of [window.CanvasRenderingContext2D, window.OffscreenCanvasRenderingContext2D]) {
+            if (!Context) continue;
+            const read = Context.prototype.getImageData;
+            Context.prototype.getImageData = function (...args) {
+                window.decoderFrameReads++;
+                return read.apply(this, args);
+            };
+        }
         navigator.mediaDevices.getUserMedia = async () => {
             const canvas = document.createElement('canvas');
             canvas.width = canvas.height = 720;
@@ -106,6 +115,18 @@ with sync_playwright() as playwright:
     }""", camera_qr)
     scanner = page.get_by_role("region", name="Library scanner")
     page.get_by_role("button", name="Open Camera", exact=True).click()
+    # Wait past camera and WASM decoder initialization before measuring steady work.
+    page.wait_for_function("window.decoderFrameReads >= 3", timeout=30000)
+    reads_before = page.evaluate("window.decoderFrameReads")
+    page.wait_for_timeout(2000)
+    decoder_reads = page.evaluate("window.decoderFrameReads") - reads_before
+    print(f"Library camera decoded {decoder_reads} frames in 2 seconds.", flush=True)
+    assert 1 <= decoder_reads <= 6, "idle camera must keep scanning without excessive main-thread decoding"
+    page.get_by_label("Visitor type", exact=False).select_option("EMPLOYEE")
+    expect(scanner.locator("video")).to_have_count(1)
+    assert len(writes) == 1, "blank camera recorded attendance"
+    page.get_by_label("Visitor type", exact=False).select_option("ALL")
+    page.evaluate("window.cameraQrVisible = true")
     expect(scanner.get_by_text("VISIT STARTED", exact=True)).to_be_visible(timeout=30000)
     expect(scanner.get_by_text("Processing...", exact=True)).not_to_be_visible()
     expect(scanner.locator("video")).to_have_count(0)
@@ -211,4 +232,4 @@ with sync_playwright() as playwright:
     mobile.screenshot(path="/tmp/library-mobile.png", full_page=True)
     assert errors == [], errors
     browser.close()
-print("Library browser passed: organizer employee/student onboarding with collision protection, QR print, visit terminology, camera scan/acknowledgement/cooldown, manual scan, bulk/individual correction, history/CSV, uncertain result, demo view and mobile navigation.")
+print("Library browser passed: organizer employee/student onboarding with collision protection, QR print, visit terminology, paced camera decoding with live history filters, camera scan/acknowledgement/cooldown, manual scan, bulk/individual correction, history/CSV, uncertain result, demo view and mobile navigation.")
