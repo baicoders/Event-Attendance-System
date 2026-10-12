@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { getMigrationDatabaseUrl, sslForUrl } from "./dbConfig";
+import { Client } from "pg";
+import {
+  getMigrationDatabaseUrl,
+  getRuntimePoolConnectionString,
+  sslForUrl,
+} from "./dbConfig";
 
 test("remote database TLS trusts the configured CA and still verifies certificates", () => {
   const original = process.env.DATABASE_SSL_CA_BASE64;
@@ -10,6 +15,35 @@ test("remote database TLS trusts the configured CA and still verifies certificat
 
   try {
     assert.deepEqual(sslForUrl("postgresql://db.example.com/postgres"), {
+      ca,
+      rejectUnauthorized: true,
+    });
+  } finally {
+    if (original === undefined) delete process.env.DATABASE_SSL_CA_BASE64;
+    else process.env.DATABASE_SSL_CA_BASE64 = original;
+  }
+});
+
+test("runtime pool keeps the configured CA when the URL includes SSL parameters", () => {
+  const original = process.env.DATABASE_SSL_CA_BASE64;
+  const ca = "-----BEGIN CERTIFICATE-----\nexample-root\n-----END CERTIFICATE-----\n";
+  const url =
+    "postgresql://user:password@db.example.com/postgres?sslmode=require&sslrootcert=%2Fprovider%2Froot.pem&application_name=library";
+  process.env.DATABASE_SSL_CA_BASE64 = Buffer.from(ca).toString("base64");
+
+  try {
+    const poolUrl = new URL(getRuntimePoolConnectionString(url));
+    assert.equal(poolUrl.searchParams.has("sslmode"), false);
+    assert.equal(poolUrl.searchParams.has("sslrootcert"), false);
+    assert.equal(poolUrl.searchParams.get("application_name"), "library");
+
+    const client = new Client({
+      connectionString: poolUrl.toString(),
+      ssl: sslForUrl(url),
+    });
+    const ssl = (client as unknown as { connectionParameters: { ssl: unknown } })
+      .connectionParameters.ssl;
+    assert.deepEqual(ssl, {
       ca,
       rejectUnauthorized: true,
     });

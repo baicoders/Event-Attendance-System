@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import {
   RUNTIME_POOL_TUNING,
   getRuntimeDatabaseUrl,
+  getRuntimePoolConnectionString,
   sslForUrl,
 } from './dbConfig';
 
@@ -15,10 +16,11 @@ function createPrismaClient() {
   // Fail fast: a misconfigured deployment must fail loudly instead of
   // silently running against the wrong database.
   const connectionString = getRuntimeDatabaseUrl();
+  const poolConnectionString = getRuntimePoolConnectionString(connectionString);
   const ssl = sslForUrl(connectionString);
 
   const pool = new Pool({
-    connectionString,
+    connectionString: poolConnectionString,
     max: RUNTIME_POOL_TUNING.max,
     connectionTimeoutMillis: RUNTIME_POOL_TUNING.connectionTimeoutMillis,
     idleTimeoutMillis: RUNTIME_POOL_TUNING.idleTimeoutMillis,

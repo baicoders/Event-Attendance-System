@@ -75,6 +75,21 @@ export function getRuntimeDatabaseUrl(): string {
   return assertPostgresUrl(url, "DATABASE_URL");
 }
 
+/**
+ * pg lets SSL options from a connection string replace the explicit `ssl`
+ * object. When a custom CA is configured, remove URL SSL options so the pool
+ * uses the verified CA object returned by `sslForUrl()`.
+ */
+export function getRuntimePoolConnectionString(url: string): string {
+  if (!process.env.DATABASE_SSL_CA_BASE64 || isLocalPostgresUrl(url)) return url;
+
+  const poolUrl = new URL(url);
+  for (const option of ["sslmode", "sslrootcert", "sslcert", "sslkey"]) {
+    poolUrl.searchParams.delete(option);
+  }
+  return poolUrl.toString();
+}
+
 export function getMigrationDatabaseUrl(): string {
   // Migrate/maintenance prefers DIRECT_URL, falls back to the runtime URL in
   // local development where both point at the same server.
