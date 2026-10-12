@@ -40,6 +40,6 @@ async function main() {
       }
     }
   }
-  console.log(`Added ${count} SIMULATED library visits; existing data was preserved. In /library, select “View simulated demonstration data only” and use weekly/monthly filters. Normal reports exclude these records.`);
+  console.log(`Added ${count} SIMULATED library visits; existing data was preserved. Sign in and inspect them through the authenticated /api/library/visits?demo=true endpoint, setting date to a generated visit day and period to weekly or monthly. Normal reports exclude these records.`);
 }
 main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

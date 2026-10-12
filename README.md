@@ -119,7 +119,7 @@ Optional historical examples, **local development only** (requires one existing 
 NODE_ENV=development pnpm library:demo --confirm-demo
 ```
 
-This non-destructive, repeatable script adds visits across previous days, weeks and months, including employees, repeated sessions, missing exits, after-hours entries and librarian closures. It never runs the full destructive seed. Every generated visit has `isDemo=true`: ordinary reports/counts exclude them. Select **View simulated demonstration data only** to inspect/export or correct these examples; the UI labels them SIMULATED and disables live scanning. Use a development database, not the school database.
+This non-destructive, repeatable script adds visits across previous days, weeks and months, including employees, repeated sessions, missing exits, after-hours entries and librarian closures. It never runs the full destructive seed. Every generated visit has `isDemo=true`: ordinary reports/counts exclude them. The library page shows operational attendance only. Development tooling can inspect these isolated examples through the authenticated `/api/library/visits?demo=true` endpoint; CSV exports from that endpoint retain the SIMULATED label. Use a development database, not the school database.
 
 Verification: `pnpm test:library`, `pnpm test:library-api` (after build), `pnpm test:operator`, `pnpm lint`, `pnpm build`. Database tests require `TEST_DATABASE_URL` pointing to a PostgreSQL maintenance database and create/drop only disposable `test_*` databases. `LIBRARY_BROWSER_TEST=1 pnpm test:library-api` also checks desktop/mobile flows with the existing Python Playwright setup.
 

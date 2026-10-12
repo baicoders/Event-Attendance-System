@@ -121,6 +121,8 @@ try {
   // Optional tooling itself must be non-destructive and idempotent.
   const runDemo = () => spawnSync("pnpm", ["library:demo", "--confirm-demo"], { env: { ...env, NODE_ENV: "development" }, encoding: "utf8" });
   const demoResult = runDemo(); assert.equal(demoResult.status, 0, demoResult.stderr + demoResult.stdout);
+  assert.ok(demoResult.stdout.includes("authenticated /api/library/visits?demo=true"));
+  assert.ok(!demoResult.stdout.includes("View simulated demonstration data only"));
   const demoCount = await db.libraryVisit.count({ where: { isDemo: true } });
   assert.ok(demoCount >= 20); assert.equal(runDemo().status, 0); assert.equal(await db.libraryVisit.count({ where: { isDemo: true } }), demoCount);
   assert.equal(await db.record.count(), 1);
