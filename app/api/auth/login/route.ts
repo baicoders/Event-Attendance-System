@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
 import { respondWithError } from "@/globals/utils/httpError";
+import { databaseErrorLog } from "@/globals/utils/databaseErrorLog";
 import { setAuthSession } from "@/globals/utils/auth";
 import {
   hashPassword,
@@ -127,6 +128,7 @@ export async function POST(req: Request) {
       headers: NO_STORE,
     });
   } catch (error) {
+    console.error("[auth/login] request failed", databaseErrorLog(error));
     return respondWithError(error);
   }
 }
