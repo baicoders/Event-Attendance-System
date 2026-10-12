@@ -13,7 +13,25 @@
  * opening a local file or in-memory fallback.
  */
 
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+let migrationCaPath: string | undefined;
+
+function getMigrationCaPath(encodedCa: string): string {
+  if (migrationCaPath) return migrationCaPath;
+
+  const directory = mkdtempSync(join(tmpdir(), "event-attendance-db-ca-"));
+  migrationCaPath = join(directory, "root-ca.pem");
+  writeFileSync(migrationCaPath, Buffer.from(encodedCa, "base64"), {
+    flag: "wx",
+    mode: 0o600,
+  });
+  process.once("exit", () => rmSync(directory, { recursive: true, force: true }));
+  return migrationCaPath;
+}
 
 export function isPostgresUrl(url: string): boolean {
   return (
@@ -66,7 +84,14 @@ export function getMigrationDatabaseUrl(): string {
       "Neither DIRECT_URL nor DATABASE_URL is set. Set DATABASE_URL (and DIRECT_URL for pooled production) to PostgreSQL URLs.",
     );
   }
-  return assertPostgresUrl(url, process.env.DIRECT_URL ? "DIRECT_URL" : "DATABASE_URL");
+  const validatedUrl = assertPostgresUrl(url, process.env.DIRECT_URL ? "DIRECT_URL" : "DATABASE_URL");
+  const encodedCa = process.env.DATABASE_SSL_CA_BASE64;
+  if (!encodedCa || isLocalPostgresUrl(validatedUrl)) return validatedUrl;
+
+  const migrationUrl = new URL(validatedUrl);
+  migrationUrl.searchParams.set("sslmode", "verify-full");
+  migrationUrl.searchParams.set("sslrootcert", getMigrationCaPath(encodedCa));
+  return migrationUrl.toString();
 }
 
 export type PgPoolTuning = {
