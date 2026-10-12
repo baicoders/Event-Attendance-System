@@ -13,7 +13,7 @@
  * opening a local file or in-memory fallback.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -134,14 +134,17 @@ export function requiresTls(url: string): boolean {
  * pg Pool SSL config: remote hosts verify certificates against the host trust
  * chain. Never disable validation to "fix" configuration.
  */
-export function sslForUrl(url: string): { rejectUnauthorized: true; ca?: string } | undefined {
+export function sslForUrl(
+  url: string,
+): { rejectUnauthorized: true; ca?: string; cert?: string; key?: string } | undefined {
   if (!requiresTls(url)) return undefined;
+  let parsedUrl: URL | undefined;
   try {
-    const parsed = new URL(url);
-    const sslmode = parsed.searchParams.get("sslmode");
+    parsedUrl = new URL(url);
+    const sslmode = parsedUrl.searchParams.get("sslmode");
     if (sslmode === "disable" || sslmode === "allow" || sslmode === "prefer") {
       throw new Error(
-        `Refusing insecure sslmode=${sslmode} for remote PostgreSQL host ${parsed.hostname}. Use verify-full (or verify-ca with documented trust).`,
+        `Refusing insecure sslmode=${sslmode} for remote PostgreSQL host ${parsedUrl.hostname}. Use verify-full (or verify-ca with documented trust).`,
       );
     }
   } catch (error) {
@@ -150,7 +153,16 @@ export function sslForUrl(url: string): { rejectUnauthorized: true; ca?: string 
   }
   const encodedCa = process.env.DATABASE_SSL_CA_BASE64;
   const ca = encodedCa ? Buffer.from(encodedCa, "base64").toString("utf8") : undefined;
-  return { rejectUnauthorized: true, ...(ca ? { ca } : {}) };
+  const certPath = encodedCa ? parsedUrl?.searchParams.get("sslcert") : undefined;
+  const keyPath = encodedCa ? parsedUrl?.searchParams.get("sslkey") : undefined;
+  const cert = certPath ? readFileSync(certPath, "utf8") : undefined;
+  const key = keyPath ? readFileSync(keyPath, "utf8") : undefined;
+  return {
+    rejectUnauthorized: true,
+    ...(ca ? { ca } : {}),
+    ...(cert ? { cert } : {}),
+    ...(key ? { key } : {}),
+  };
 }
 
 /** Redacted host/db label for logs — never prints credentials. */
