@@ -134,16 +134,16 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
       {!inSheet && <h2 className="text-lg font-semibold">Manual attendance</h2>}
       {onReturnToScanner && <Button type="button" variant="outline" onClick={onReturnToScanner}>Return to scanner</Button>}
     </div>
-    <label htmlFor="manual-attendance-search" className="mb-1 block text-sm font-medium">Search name or student ID</label>
+    <label htmlFor="manual-attendance-search" className="mb-1 block text-sm font-medium">Search name, USN or LRN</label>
     <input id="manual-attendance-search" ref={inputRef} type="search" value={query} maxLength={100} autoComplete="off"
       className="w-full rounded-md border px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-slate-500"
-      placeholder="Search name or student ID" onFocus={() => { setResultsOpen(true); onFocusSearch?.(); }}
+      placeholder="Search name, USN or LRN" onFocus={() => { setResultsOpen(true); onFocusSearch?.(); }}
       onChange={(event) => { setQuery(event.target.value.slice(0, 100)); setVisible(10); setResultsOpen(true); }}
       onKeyDown={(event) => {
         if (event.key === "ArrowDown" && resultsOpen && matches.length) { event.preventDefault(); firstDetailRef.current?.focus(); }
         if (event.key === "Escape") { event.preventDefault(); setResultsOpen(false); onSelect(null); inputRef.current?.blur(); }
       }} />
-    <p className="mt-1 text-xs text-slate-600">Type at least 2 characters. Student IDs remain text.</p>
+    <p className="mt-1 text-xs text-slate-600">Type at least 2 characters. USN and LRN keep their leading zeros.</p>
     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
       <span>{roster.dataUpdatedAt ? "Roster checked " + new Date(roster.dataUpdatedAt).toLocaleTimeString() : "Roster not yet loaded"}</span>
       <Button type="button" size="sm" variant="outline" onClick={() => void roster.refetch()} disabled={roster.isFetching}>Refresh roster</Button>

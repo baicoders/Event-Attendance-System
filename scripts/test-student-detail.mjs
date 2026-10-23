@@ -1,7 +1,7 @@
 /** Disposable production API/browser fixture. Run after build. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -152,6 +152,25 @@ async function browserCheck(cookie) {
     await until('document.querySelector("[role=dialog]") === null');
     const partial = await db.student.findUniqueOrThrow({where:{id:partialStudentId}});
     assert.equal(partial.schoolLevel,null);assert.equal(partial.yearLevel,null);
+    await db.student.update({where:{id:partialStudentId},data:{schoolLevel:"COLLEGE",yearLevel:"YEAR_2"}});
+    await command("Page.reload");
+    await until('document.body.innerText.includes("College")');
+    await until('[...document.querySelectorAll("button")].some(button=>button.textContent?.includes("Edit student")&&!button.disabled)');
+    await evaluate('[...document.querySelectorAll("button")].find(button=>button.textContent?.includes("Edit student")).click()');
+    await until('document.querySelector(\'[role=dialog] input[name="usn"]\') !== null');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Academic Standing")');
+    await evaluate('document.querySelector(\'[role=dialog] [role=combobox]\').click()');
+    await until('[...document.querySelectorAll(\'[role=option]\')].some(option=>option.textContent?.trim()==="Not provided")');
+    await evaluate('[...document.querySelectorAll(\'[role=option]\')].find(option=>option.textContent?.trim()==="Not provided").click()');
+    assert.ok(await evaluate('document.querySelectorAll(\'[role=dialog] [role=combobox]\')[1]?.textContent.includes("2nd Year")'));
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Group Assignments")');
+    assert.equal(await evaluate('document.querySelectorAll(\'[role=dialog] [role=combobox]\').length'),5);
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.includes("Save Changes")).click()');
+    await until('document.querySelector("[role=dialog]") === null');
+    const clearedLevel=await db.student.findUniqueOrThrow({where:{id:partialStudentId}});
+    assert.equal(clearedLevel.schoolLevel,null);assert.equal(clearedLevel.yearLevel,"YEAR_2");
     await db.student.update({where:{id:partialStudentId},data:{schoolLevel:"COLLEGE",yearLevel:"YEAR_2",groups:{connect:[{id:"dept"},{id:"program"},{id:"house"}]}}});
     await command("Page.reload");
     await until('document.body.innerText.includes("College")');
@@ -173,8 +192,17 @@ async function browserCheck(cookie) {
     await command("Page.navigate",{url:`${origin}/students/issues?issue=MISSING_HOUSE&q=00000123460`});
     await until('document.querySelector("h1")?.textContent?.includes("Address Student Record Issues")');
     await until('document.body.innerText.includes("2 matching students")');
+    if(process.argv.includes('--screenshots')) {
+      for(const [suffix,width,height,mobile] of [['mobile',375,812,true],['desktop',1440,1000,false]]) {
+        await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile});
+        const screenshot=await command('Page.captureScreenshot',{captureBeyondViewport:true,fromSurface:true});
+        writeFileSync(`/tmp/student-issues-review-${suffix}.png`,Buffer.from(screenshot.data,'base64'));
+      }
+      await command('Emulation.setDeviceMetricsOverride',{width:375,height:812,deviceScaleFactor:1,mobile:true});
+    }
+
     assert.ok(await evaluate('document.querySelector(\'[aria-label="Student record summary"]\')?.textContent?.includes("Missing House")'));
-    await evaluate(`[...document.querySelectorAll("a")].find(link=>link.getAttribute("href")?.startsWith(${JSON.stringify(`/students/${issueStudentId}?`)})).click()`);
+    await evaluate(`[...document.querySelectorAll("a")].find(link=>link.offsetParent!==null&&link.getAttribute("href")?.startsWith(${JSON.stringify(`/students/${issueStudentId}?`)})).click()`);
     await until('document.querySelector("h1")?.textContent?.includes("Synthetic Partial")');
     await until('document.querySelector(\'[aria-label="Student record issues"]\')?.textContent?.includes("Missing House")');
     await until('[...document.querySelectorAll("button")].some(button=>button.textContent?.includes("Edit student")&&!button.disabled)');
@@ -196,6 +224,12 @@ async function browserCheck(cookie) {
     await until('document.body.innerText.includes("1 matching students")');
     assert.equal(await evaluate(`document.querySelector('a[href^="/students/${issueStudentId}?"]') === null`),true);
     assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'),false);
+    await command("Page.navigate",{url:`${origin}/students/issues?program=bsit`});
+    await until('document.querySelector("h1")?.textContent?.includes("Address Student Record Issues")');
+    await db.student.update({where:{id:form.id},data:{groups:{disconnect:{id:"program"}}}});
+    await command("Page.reload");
+    await until('[...document.querySelectorAll("label")].some(label=>label.textContent?.trim()==="Program"&&label.control?.textContent?.includes("no current assignments"))');
+    await db.student.update({where:{id:form.id},data:{groups:{connect:{id:"program"}}}});
     const attendanceEvent=await db.event.create({data:{title:"Synthetic partial attendance",category:"ALL",status:"APPROVED",start:new Date(Date.now()-60000),end:new Date(Date.now()+3600000),createdById:"admin"}});
     await command("Page.navigate",{url:`${origin}/attendance?eventId=${attendanceEvent.id}`});
     await until('document.querySelector("#manual-attendance-search") !== null');

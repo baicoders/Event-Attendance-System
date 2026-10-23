@@ -19,7 +19,7 @@ def login(page):
     page.wait_for_url("**/dashboard")
     page.goto(base + "/attendance?eventId=" + event_id)
     page.wait_for_load_state("networkidle")
-    expect(page.get_by_label("Search name or student ID")).to_be_visible()
+    expect(page.get_by_label("Search name, USN or LRN")).to_be_visible()
 
 
 with sync_playwright() as playwright:
@@ -46,7 +46,7 @@ with sync_playwright() as playwright:
         body=json.dumps({"success": False, "message": "Read unavailable"})
     ) if route.request.method == "GET" else route.continue_())
 
-    search = desktop.get_by_label("Search name or student ID")
+    search = desktop.get_by_label("Search name, USN or LRN")
     with desktop.expect_response(lambda response: "/api/students?eventId=" in response.url):
         search.fill("0")
     desktop.wait_for_load_state("networkidle")
@@ -112,7 +112,7 @@ with sync_playwright() as playwright:
     panel = desktop.get_by_label("Manual attendance")
     expect(panel).to_be_visible()
     assert desktop.locator('[data-slot="sheet-overlay"]').count() == 0, "Desktop manual entry should be inline"
-    panel_search = panel.get_by_label("Search name or student ID")
+    panel_search = panel.get_by_label("Search name, USN or LRN")
     expect(panel_search).to_be_focused()
     panel_search.fill("00000000011")
     panel.get_by_role("button", name="Record time in for Test Student 10, 00000000011").click()
@@ -154,7 +154,7 @@ with sync_playwright() as playwright:
     mobile.on("response", lambda response: mobile_record_responses.append((response.status, response.url))
               if response.request.method == "POST" and response.url.endswith("/api/records") else None)
     login(mobile)
-    mobile_search = mobile.get_by_label("Search name or student ID")
+    mobile_search = mobile.get_by_label("Search name, USN or LRN")
     mobile_search.fill("00000000010")
     mobile_action = mobile.get_by_role("button", name="Record time in for Test Student 9, 00000000010")
     expect(mobile_action).to_be_visible()

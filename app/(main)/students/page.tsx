@@ -3,9 +3,12 @@
 import StudentStatsBoard from "@/features/students/components/StudentStatsBoard";
 import Link from "next/link";
 import { QrCode } from "lucide-react";
+import { useAuth } from "@/globals/contexts/AuthContext";
+import { Button } from "@/globals/components/shad-cn/button";
 import { page } from "@/globals/constants/designTokens";
 
 const StudentsPage = () => {
+  const { user } = useAuth();
   return (
     <section className={page.surface + " min-h-svh"}>
       <div className={page.containerWide}>
@@ -22,7 +25,7 @@ const StudentsPage = () => {
           </p>
           <Link href="/students/qr-codes?category=ALL&source=directory" className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/50 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"><QrCode className="size-4" /> Manage / Print QR Codes</Link>
         </header>
-        <Link href="/students/issues" className="my-5 inline-flex rounded-full border border-indigo-300 bg-white px-5 py-3 font-semibold text-indigo-700">Address Student Record Issues</Link>
+        {user?.role === "ADMIN" && user.status === "ACTIVE" && <Button asChild variant="outline" className="self-start"><Link href="/students/issues">Address Student Record Issues</Link></Button>}
         <StudentStatsBoard />
       </div>
     </section>
