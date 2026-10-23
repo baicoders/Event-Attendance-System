@@ -4,6 +4,64 @@ Only usable ADMIN accounts can open `/students/import`, preview or commit. Deplo
 its UI and API together. Older direct clients receive `410 REVIEW_REQUIRED` from
 `POST /api/bulk-import/students`; that endpoint performs no roster writes.
 
+## Partial records and dual identifiers (contract v2)
+
+New imports use `v: 2`. Download the updated template from the application.
+Recommended headers:
+
+```text
+usn,lrn,lastName,firstName,middleName,schoolLevel,yearLevel,section,house,program,department,strand
+```
+
+Only `firstName`, `lastName`, and at least one identifier per row are required.
+Optional columns may be omitted. USN retains the existing eleven-character text
+rule; LRN is twelve digits. Preserve leading zeros by keeping spreadsheet cells as
+text. Invalid formats are reported, never padded or truncated. The old `id` column
+is accepted as a deprecated USN alias, and must equal `usn` if both are supplied.
+It never selects a new internal primary key.
+
+Matching checks USN, LRN and legacy QR IDs against the canonical roster. Both codes
+must resolve to the same student; a split match, duplicate incoming code, repeated
+canonical target or attempted replacement of an already known identifier blocks
+review. Names never match identities. New students receive generated internal IDs;
+existing IDs, QR codes and attendance history remain attached to the same student.
+
+**Blank optional fields mean preserve existing information.** First and last name remain mandatory on every CSV row; blank names block review and never erase stored names. The review shows merged values
+and exact changes. Missing House, section, program and other group cells preserve
+that category's membership. Unknown group slugs block review; no group is created
+or guessed automatically. Intentional clearing is available in the profile editor,
+not through ordinary CSV blanks. Ambiguous memberships and employee records require
+separate manual review. Missing academics do not prevent import or ALL attendance.
+
+The v2 review binds every matched canonical student and both identifier namespaces,
+including previously absent matches. Existing authentication, actor/command/roster
+locks, stale preview rejection, transaction budgets, atomic writes and receipt
+insertion/validation remain in place. Unchanged rows are never written. Identifier-only
+updates do not rewrite memberships or unrelated scalar fields.
+
+Old v1 receipts remain readable and exact v1 commands remain replayable after expiry
+without roster reads or writes. Old first executions/previews require a new v2 review;
+v1 replacement semantics are not allowed to erase data after this upgrade. New
+receipts have contractVersion/result version 2 and retain generated canonical IDs.
+The earlier sections describe the historical v1 format and replacement semantics;
+this section supersedes those input/update rules for new imports.
+
+School USN formats, missing House assignments and unresolved academic mappings still
+need school confirmation using the actual enrollment files. No school dataset has
+been committed or imported as part of development.
+
+Deploy migration `20261023000200_student_import_v2` before the coordinated UI/API
+build. It allows receipt versions 1 and 2 while retaining version agreement, JSON
+structure, row counts and the 10 MiB JSONB byte bound. It does not rewrite receipts.
+Disable imports before any application downgrade; prefer a forward fix.
+
+
+## Import safeguards and historical v1 reference
+
+The following input format and full replacement rules describe v1 only. New imports
+use the v2 rules above; the authorization, review, transaction, receipt, and replay
+safeguards below continue to apply.
+
 Upload canonical UTF-8 CSV with exactly these eleven headers (order may vary):
 
 ```text

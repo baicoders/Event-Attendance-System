@@ -270,7 +270,7 @@ with sync_playwright() as p:
       const bytes = new TextEncoder().encode(csv);
       const hash = await crypto.subtle.digest('SHA-256', bytes);
       const sourceHash = [...new Uint8Array(hash)].map(value => value.toString(16).padStart(2, '0')).join('');
-      const source = {v:1,fileName:'browser-history.csv',sourceHash,csv};
+      const source = {v:2,fileName:'browser-history.csv',sourceHash,csv};
       const preview = await fetch('/api/students/imports/preview', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(source)}).then(response => response.json());
       if (!preview.success || preview.data.counts.unchanged !== 1) throw new Error('history seed must be one unchanged real Student');
       for(let index=0;index<22;index++) {
@@ -418,21 +418,40 @@ with sync_playwright() as p:
     page.wait_for_timeout(250)
     expect(page.get_by_label("Import receipt", exact=True)).to_have_count(0)
     expect(page.get_by_text("mixed-browser.csv", exact=True)).to_have_count(0)
+    context.add_cookies([{"name": name, "value": value, "url": base, "httpOnly": True, "sameSite": "Lax"}])
+    page.goto(base + "/students/import", wait_until="domcontentloaded")
+    expect(page.get_by_label("Choose CSV file")).to_be_enabled()
+    upload(page, "minimal-lrn.csv", "lrn,firstName,lastName\n000000129995,Synthetic,PartialBrowser")
+    review(page)
+    expect(page.get_by_label("Import review rows")).to_contain_text("000000129995")
+    confirm(page)
+    expect(page.get_by_role("heading", name="Import complete", exact=True)).to_be_visible(timeout=60000)
+    person = page.request.get(base + "/api/students?studentId=000000129995").json()["data"]
+    assert person["usn"] is None and person["schoolLevel"] is None and person["yearLevel"] is None and person["groups"] == []
+    page.get_by_role("button", name="Import another file", exact=True).click()
+    upload(page, "add-usn.csv", "usn,lrn,firstName,lastName\n00000123995,000000129995,Synthetic,PartialBrowser")
+    review(page)
+    expect(page.get_by_label("Import review rows")).to_contain_text("UPDATE")
+    confirm(page)
+    expect(page.get_by_role("heading", name="Import complete", exact=True)).to_be_visible(timeout=60000)
+    assert page.request.get(base + "/api/students?studentId=00000123995").json()["data"]["id"] == person["id"]
     context.close()
     browser.close()
     print("Import browser checks passed: reviewed import and receipt, exact frozen UUID/check/replay after real response loss, before-received missing check and exact retry, historical detail/filter/search, bounded history pagination, Group/Settings/source/account races, keyboard and 375px width.")
 `;
 
 export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) {
+  const unchanged=await db.student.findUniqueOrThrow({where:{id:"00000123457"},include:{groups:true}});
+  const unchangedRow=row(unchanged.id,{section:unchanged.groups.find(group=>group.category==="SECTION")?.slug ?? ""});
   const input = {
     base, cookie,
-    mixed: toCsv([row("00000123456", { firstName: "Browser Updated" }), row("00000123457"), row("00000123800"), row("00000123801", { section: "browser-created" })]),
+    mixed: toCsv([row("00000123456", { firstName: "Browser Updated" }), unchangedRow, row("00000123800"), row("00000123801", { section: "browser-created" })]),
     stale: toCsv([row("00000123802")]),
     lost: toCsv([row("00000123803")]),
     lostRetry: toCsv([row("00000123806")]),
     neverReceived: toCsv([row("00000123807")]),
     lateCheck: toCsv([row("00000123808")]),
-    history: toCsv([row("00000123457")]),
+    history: toCsv([unchangedRow]),
     raceA: toCsv([row("00000123804", { section: "browser-race-created" })]),
     raceB: toCsv([row("00000123805")]),
     raceOnly: process.argv.includes("--browser-race"),
@@ -467,11 +486,12 @@ export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) 
   // Python tracebacks contain UI assertions only, never auth values.
   assert.equal(code, 0, errors || output || "browser process failed");
   if (!input.raceOnly) {
-    assert.equal(await db.student.count({ where: { id: "00000123803" } }), 1, "response-loss command committed exactly one new Student");
-    assert.equal(await db.student.count({ where: { id: "00000123802" } }), 0, "simulated stale rejection never sent to mutation service");
+    assert.equal(await db.student.count({ where: { usn: "00000123803" } }), 1, "response-loss command committed exactly one new Student");
+    assert.equal(await db.student.count({ where: { usn: "00000123802" } }), 0, "simulated stale rejection never sent to mutation service");
     for (const id of ["00000123803", "00000123806", "00000123807", "00000123808"]) {
-      assert.equal(await db.student.count({ where: { id } }), 1);
-      const retained = await db.studentImportBatch.findMany({ where: { result: { path: ["rows", "0", "studentId"], equals: id } } });
+      const person = await db.student.findUniqueOrThrow({where:{usn:id}});
+      assert.ok(person.id);
+      const retained = await db.studentImportBatch.findMany({ where: { result: { path: ["rows", "0", "studentId"], equals: person.id } } });
       assert.equal(retained.length, 1, "lost/before-received command retains exactly one receipt");
     }
   }

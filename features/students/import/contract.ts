@@ -3,7 +3,7 @@ import { z } from "zod";
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 export const LARGE_IMPORT_ROWS = 2000;
 export const CSV_HEADERS = [
-  "id", "lastName", "firstName", "middleName", "schoolLevel", "yearLevel",
+  "id", "usn", "lrn", "lastName", "firstName", "middleName", "schoolLevel", "yearLevel",
   "section", "house", "program", "department", "strand",
 ] as const;
 
@@ -15,7 +15,7 @@ export type ImportGroupField = keyof typeof IMPORT_GROUP_FIELDS;
 export type ImportField = (typeof CSV_HEADERS)[number];
 
 const canonicalRowSchema = z.object({
-  id: z.string(), lastName: z.string(), firstName: z.string(), middleName: z.string(),
+  id: z.string(), usn: z.string().optional(), lrn: z.string().optional(), lastName: z.string(), firstName: z.string(), middleName: z.string(),
   schoolLevel: z.string(), yearLevel: z.string(), section: z.string(), house: z.string(),
   program: z.string(), department: z.string(), strand: z.string(),
 }).strict();
@@ -25,7 +25,7 @@ export type ImportCsvError = { csvRow?: number; code: string; message: string };
 export type ParsedStudentImport = { rows: ParsedImportRow[]; errors: ImportCsvError[] };
 
 export const importRequestSchema = z.object({
-  v: z.literal(1),
+  v: z.union([z.literal(1), z.literal(2)]),
   fileName: z.string().min(1).max(200)
     .refine((name) => name.trim().length > 0 && !/[\\/\u0000-\u001f\u007f]/.test(name) && name.trim() !== "." && name.trim() !== "..", "Use a display basename without paths or control characters"),
   sourceHash: z.string().regex(/^[a-fA-F0-9]{64}$/, "Expected SHA-256 hex digest"),
@@ -73,7 +73,7 @@ const unknownGroupSchema = z.object({
 export type UnknownImportGroup = z.infer<typeof unknownGroupSchema>;
 export type ImportReview = { rows: ImportReviewRow[]; counts: ImportCounts; unknownGroups: UnknownImportGroup[] };
 export const importPreviewSchema = z.object({
-  v: z.literal(1), rows: z.array(reviewRowSchema), counts: importCountsSchema,
+  v: z.literal(2), rows: z.array(reviewRowSchema), counts: importCountsSchema,
   unknownGroups: z.array(unknownGroupSchema), previewToken: z.string().max(4096).nullable(),
   preparedAt: z.iso.datetime(), expiresAt: z.iso.datetime(),
 }).strict();

@@ -7,7 +7,7 @@ export function hasStructuralCsvErrors(result: ParsedStudentImport | ImportCsvEr
 }
 
 /** Strict RFC-style cells with source line identity, including quoted CRLF/newlines. */
-export function parseStudentImportCsv(csv: string): ParsedStudentImport {
+export function parseStudentImportCsv(csv: string, legacy = false): ParsedStudentImport {
   const errors: ImportCsvError[] = [];
   const fail = (code: string, message: string, csvRow?: number): ParsedStudentImport => ({ rows: [], errors: [...errors, { code, message, ...(csvRow === undefined ? {} : { csvRow }) }] });
   if (csv.length > MAX_IMPORT_BYTES || new TextEncoder().encode(csv).byteLength > MAX_IMPORT_BYTES) return fail("FILE_TOO_LARGE", "CSV exceeds the 10 MiB technical byte limit.");
@@ -61,28 +61,33 @@ export function parseStudentImportCsv(csv: string): ParsedStudentImport {
     seen.add(name);
     if (!(CSV_HEADERS as readonly string[]).includes(name)) errors.push({ csvRow: header.csvRow, code: "UNEXPECTED_HEADER", message: `Unexpected header: ${name}.` });
   }
-  for (const name of CSV_HEADERS) {
+  const requiredHeaders = legacy ? CSV_HEADERS.filter(name=>name!=="usn"&&name!=="lrn") : ["firstName","lastName"];
+  for (const name of requiredHeaders) {
     if (!seen.has(name)) errors.push({ csvRow: header.csvRow, code: "MISSING_HEADER", message: `Missing required header: ${name}.` });
   }
+  if (!legacy && !["id","usn","lrn"].some(name=>seen.has(name))) errors.push({csvRow:header.csvRow,code:"MISSING_HEADER",message:"Include a USN or LRN column."});
   if (errors.length) return { rows: [], errors };
   if (records.length === 1) return fail("EMPTY_CSV", "The CSV contains no student rows.");
   const rows: ParsedStudentImport["rows"] = [];
   for (const record of records.slice(1)) {
-    if (record.cells.length !== CSV_HEADERS.length) errors.push({ csvRow: record.csvRow, code: "COLUMN_COUNT", message: `Expected ${CSV_HEADERS.length} cells; found ${record.cells.length}.` });
-    else rows.push({ csvRow: record.csvRow, student: Object.fromEntries(header.cells.map((name, i) => [name, record.cells[i]])) as CanonicalRow });
+    if (record.cells.length !== header.cells.length) errors.push({ csvRow: record.csvRow, code: "COLUMN_COUNT", message: `Expected ${header.cells.length} cells; found ${record.cells.length}.` });
+    else {
+      const supplied = Object.fromEntries(header.cells.map((name,i)=>[name,record.cells[i]]));
+      rows.push({csvRow:record.csvRow,student:(legacy ? supplied : {...Object.fromEntries(CSV_HEADERS.map(name=>[name,""])),...supplied}) as CanonicalRow});
+    }
   }
   if (errors.length) return { rows: [], errors };
   const rowsById = new Map<string, number[]>();
   for (const row of rows) {
-    const id = row.student.id.trim();
-    const identities = rowsById.get(id) ?? [];
-    identities.push(row.csvRow); rowsById.set(id, identities);
-  }
-  for (const [id, csvRows] of rowsById) {
-    if (csvRows.length > 1) {
-      const message = `Student ID "${id}" appears ${csvRows.length} times (first CSV row ${csvRows[0]}).`;
-      for (const csvRow of csvRows) errors.push({ csvRow, code: "DUPLICATE_ID", message });
+    for (const [field,value] of [["usn",row.student.usn || row.student.id],["lrn",row.student.lrn]] as const) {
+      const code=value?.trim(); if(!code)continue;
+      const key=`${field}:${code}`;const identities=rowsById.get(key)??[];
+      identities.push(row.csvRow);rowsById.set(key,identities);
     }
+  }
+  for (const [id,csvRows] of rowsById) if(csvRows.length>1) {
+    const message=`Identifier "${id}" appears ${csvRows.length} times (first CSV row ${csvRows[0]}).`;
+    for(const csvRow of csvRows)errors.push({csvRow,code:"DUPLICATE_ID",message});
   }
   return { rows, errors };
 }

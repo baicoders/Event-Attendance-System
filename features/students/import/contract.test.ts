@@ -20,7 +20,7 @@ test("commit requires stable UUID identity and canonicalizes its textual case", 
 
 test("request rejects aliases, extra keys, path-like names and malformed hashes", () => {
   for (const invalid of [
-    { ...request, v: 2 }, { ...request, students: [] },
+    { ...request, v: 3 }, { ...request, students: [] },
     { ...request, fileName: "../students.csv" }, { ...request, fileName: "C:\\students.csv" },
     { ...request, fileName: "\n.csv" }, { ...request, fileName: "a".repeat(201) },
     { ...request, fileName: " " }, { ...request, sourceHash: "z".repeat(64) },
