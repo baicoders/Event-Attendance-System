@@ -22,6 +22,7 @@ const StudentsPage = () => {
           </p>
           <Link href="/students/qr-codes?category=ALL&source=directory" className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/50 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"><QrCode className="size-4" /> Manage / Print QR Codes</Link>
         </header>
+        <Link href="/students/issues" className="my-5 inline-flex rounded-full border border-indigo-300 bg-white px-5 py-3 font-semibold text-indigo-700">Address Student Record Issues</Link>
         <StudentStatsBoard />
       </div>
     </section>

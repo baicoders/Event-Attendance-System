@@ -61,3 +61,18 @@ Optional blanks preserve existing categories and scalar values; names remain
 mandatory per row. Only material scalar/group changes are written. Repeated codes,
 repeated canonical targets, split identities and known-identifier replacement block.
 All matched namespaces and previously absent matches participate in stale review.
+
+PR 3 submitted: https://github.com/baicoders/Event-Attendance-System/pull/109
+(d40b611), stacked on #108. 178 tests, production build, 17 HTTP safety checks and
+browser recovery/mobile/partial-identifier checks passed. No important review
+findings remain. Core workflow is reviewable without production data access.
+
+PR 4 derives completeness issues on read in features/students/issues/dataIssues.ts.
+No persisted flags or synchronization jobs. Either identifier is sufficient at
+both school levels; missing-identifier filters can still find legitimate gaps.
+House, section, school and year are completeness concerns, not ALL attendance
+requirements. College adds program/department; SHS adds strand. Unknown school
+level never guesses those conditional requirements. Employee rows are excluded.
+The issues page preserves filters through profile editing; saved detail badges and
+refetched summary/list values update immediately. Existing roster invalidation
+covers imports, edits and bulk assignments.

@@ -37,3 +37,12 @@ test("page route decodes one encoded URL segment, including encoded separators",
   assert.equal(decodeStudentPageId("abc%252F1234"), "abc%2F1234");
   assert.equal(decodeStudentPageId("abc%invalid"), "abc%invalid");
 });
+
+
+test("record issue return paths preserve filters and encoded search safely",()=>{
+  assert.equal(safeStudentReturnHref("/students/issues?issue=MISSING_HOUSE&q=Synthetic%20Student"),"/students/issues?q=Synthetic+Student&issue=MISSING_HOUSE");
+});
+
+test('record issue search can contain encoded separators without losing safe filters',()=>{
+  assert.equal(safeStudentReturnHref('/students/issues?issue=MISSING_HOUSE&q=12345%2F67890'),'/students/issues?q=12345%2F67890&issue=MISSING_HOUSE');
+});
