@@ -30,7 +30,7 @@ const AcademicSection = () => {
     control,
     watch,
     formState: { errors, isDirty },
-    resetField,
+    setValue,
   } = useFormContext<StudentFormValues>();
 
   const schoolLevel = watch("schoolLevel");
@@ -45,18 +45,17 @@ const AcademicSection = () => {
     if (!isDirty) return;
 
     if (schoolLevel === "COLLEGE") {
-      resetField("strand", { defaultValue: "" });
+      setValue("strand", null, { shouldDirty: true });
     } else if (schoolLevel === "SHS") {
-      resetField("department", { defaultValue: "" });
-      resetField("program", { defaultValue: "" });
+      setValue("department", null, { shouldDirty: true });
+      setValue("program", null, { shouldDirty: true });
     }
 
     // Always reset yearLevel when level changes to prevent "Grade 11"
     // being stuck in a "College" student's state
-    const defaultYearLevel: YearLevel =
-      schoolLevel === "COLLEGE" ? "YEAR_1" : "GRADE_11";
-    resetField("yearLevel", { defaultValue: defaultYearLevel });
-  }, [schoolLevel, resetField, isDirty]);
+    const defaultYearLevel = null;
+    setValue("yearLevel", defaultYearLevel, { shouldDirty: true });
+  }, [schoolLevel, setValue, isDirty]);
   return (
     <FieldSet className="animate-in fade-in slide-in-from-right-4 duration-300">
       <SectionHeading
@@ -66,6 +65,7 @@ const AcademicSection = () => {
 
       <FieldGroup className="grid grid-cols-1 gap-y-4">
         <FormSelect
+          clearable
           name="schoolLevel"
           label="School Level"
           placeholder="Select level"
@@ -76,6 +76,7 @@ const AcademicSection = () => {
 
         {schoolLevel && (
           <FormSelect
+            clearable
             name="yearLevel"
             label="Year Level"
             placeholder="Select year"

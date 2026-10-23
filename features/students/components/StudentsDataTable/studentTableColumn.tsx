@@ -40,6 +40,8 @@ export const getStudentColumns = ({
       <div className="text-center"><Link className="text-indigo-700 underline underline-offset-2" href={profileHref(row.original)}>{row.original.id}</Link></div>
     ),
   },
+  { accessorKey: "usn", header: "USN", cell: ({row}) => row.original.usn ?? "—" },
+  { accessorKey: "lrn", header: "LRN", cell: ({row}) => row.original.lrn ?? "—" },
   {
     accessorKey: "lastName",
     header: () => <div className="text-center">Last Name</div>,

@@ -57,6 +57,7 @@ export async function validateStudentGroupSlugs(
     }
   }
 
+  if ([...referenced].some(slug=>normalizeSlug(slug) === "employees")) return {ok:false,error:"Employees is reserved for employee registration."};
   if (referenced.size === 0) return { ok: true, slugToId: new Map() };
 
   const groups = await reader.group.findMany({

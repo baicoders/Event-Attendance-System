@@ -20,6 +20,7 @@ import { Info } from "lucide-react";
 interface FormSelectProps {
   /** Field name in the form schema. */
   name: string;
+  clearable?: boolean;
   /** Visible label. */
   label: string;
   placeholder?: string;
@@ -66,6 +67,7 @@ interface FormSelectProps {
  */
 const FormSelect = ({
   name,
+  clearable = false,
   label,
   placeholder,
   options,
@@ -86,7 +88,7 @@ const FormSelect = ({
       <FieldLabel className="text-[10px] uppercase font-bold text-slate-400 ml-1">
         {label}
       </FieldLabel>
-      <Select onValueChange={onChange} value={value ?? ""}>
+      <Select onValueChange={next => onChange(next === "__clear__" ? null : next)} value={value ?? ""}>
         <SelectTrigger
           ref={ref}
           className="border-slate-200 rounded-xl focus:ring-slate-900"
@@ -94,6 +96,7 @@ const FormSelect = ({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent className="rounded-xl border-slate-200">
+          {clearable && <SelectItem value="__clear__">Not provided (clear field)</SelectItem>}
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}

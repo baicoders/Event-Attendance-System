@@ -33,6 +33,7 @@ const GroupsSection = () => {
         {/* Universal Fields */}
         <div className="grid grid-cols-2 gap-4">
           <FormSelect
+            clearable
             name="section"
             label="Section"
             placeholder="Select Section"
@@ -41,6 +42,7 @@ const GroupsSection = () => {
             error={errors.section?.message}
           />
           <FormSelect
+            clearable
             name="house"
             label="House"
             placeholder="Select House"
@@ -54,6 +56,7 @@ const GroupsSection = () => {
         {schoolLevel === "COLLEGE" && (
           <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
             <FormSelect
+            clearable
               name="department"
               label="Department"
               placeholder="Select Department"
@@ -62,6 +65,7 @@ const GroupsSection = () => {
               error={errors.department?.message}
             />
             <FormSelect
+            clearable
               name="program"
               label="Program"
               placeholder="Select Program"
@@ -76,6 +80,7 @@ const GroupsSection = () => {
         {schoolLevel === "SHS" && (
           <div className="animate-in slide-in-from-top-2 duration-200">
             <FormSelect
+            clearable
               name="strand"
               label="Strand"
               placeholder="Select Strand"

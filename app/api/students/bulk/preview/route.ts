@@ -45,7 +45,7 @@ export async function POST(req: Request) {
         const students = await tx.student.findMany({
           where: { id: { in: orderedIds } },
           select: {
-            id: true,
+            id: true, usn: true, lrn: true,
             firstName: true,
             lastName: true,
             middleName: true,

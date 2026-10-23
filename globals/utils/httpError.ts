@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import z, { ZodError } from "zod";
 
+import { StudentIdentityError } from "./studentIdentity";
 import { err } from "@/globals/utils/api";
 import { AuthError } from "@/globals/utils/auth";
 import { handlePrismaError } from "@/globals/utils/prismaError";
 
 export function respondWithError(error: unknown) {
-  if (error instanceof AuthError) {
+  if (error instanceof AuthError || error instanceof StudentIdentityError) {
     return NextResponse.json(err(error.message, error.code), {
       status: error.status,
     });

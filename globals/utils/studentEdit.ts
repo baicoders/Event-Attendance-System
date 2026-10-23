@@ -1,12 +1,13 @@
 import type { PrismaClient } from "@prisma/client";
-import type { StudentFormValues } from "@/globals/schemas/studentSchema";
+import { studentSchema, type StudentPatchValues } from "@/globals/schemas/studentSchema";
 import { takeRosterExclusiveLock } from "./pgLocks";
 import { flattenStudentGroups } from "./students";
 import { studentEditVersion } from "./studentDetail";
 import { hasAmbiguousStudentGroups } from "./studentGroupReview";
+import { assertStudentIdentifiersAvailable, StudentIdentityError } from "./studentIdentity";
 import { validateStudentGroupSlugs } from "./studentGroups";
 
-export type StudentEditRequest = { expectedVersion: string; student: StudentFormValues; principalId?: string };
+export type StudentEditRequest = { expectedVersion: string; student: StudentPatchValues; principalId?: string };
 
 export async function updateStudentDetail(db: PrismaClient, id: string, request: StudentEditRequest) {
   return db.$transaction(async tx => {
@@ -21,7 +22,14 @@ export async function updateStudentDetail(db: PrismaClient, id: string, request:
     if (studentEditVersion(current) !== request.expectedVersion) return { kind: "conflict" as const };
     if (hasAmbiguousStudentGroups(current.groups)) return { kind: "group-review" as const };
 
-    const form = request.student;
+    if (current.groups.some(group => group.slug === "employees")) return { kind: "group-review" as const };
+    const groupFields = { section: "SECTION", house: "HOUSE", department: "DEPARTMENT", program: "PROGRAM", strand: "STRAND" } as const;
+    const priorGroups = Object.fromEntries(Object.entries(groupFields).map(([field,category]) => [field,current.groups.find(g=>g.category===category)?.slug ?? null]));
+    const patch = Object.fromEntries(Object.entries(request.student).filter(([,value])=>value!==undefined));
+    const form = studentSchema.parse({...current,...priorGroups,
+      usn: current.usn ?? (!current.lrn && /^\d{11}$/.test(current.id) ? current.id : null), ...patch});
+    try { await assertStudentIdentifiersAvailable(tx,form,id); }
+    catch(error) { if(error instanceof StudentIdentityError)return {kind:"identity-conflict" as const}; throw error; }
     const resolution = await validateStudentGroupSlugs([form], tx);
     if (!resolution.ok) return { kind: "invalid-groups" as const, message: resolution.error };
     const ids = [form.section, form.house, form.department, form.program, form.strand]
@@ -31,13 +39,15 @@ export async function updateStudentDetail(db: PrismaClient, id: string, request:
     const sameGroups = JSON.stringify(priorIds) === JSON.stringify([...ids].sort());
     const sameScalars = current.firstName === form.firstName && current.lastName === form.lastName &&
       (current.middleName ?? "") === (form.middleName ?? "") &&
-      current.schoolLevel === form.schoolLevel && current.yearLevel === form.yearLevel;
+      current.schoolLevel === (form.schoolLevel ?? null) && current.yearLevel === (form.yearLevel ?? null) &&
+      current.usn === (form.usn || null) && current.lrn === (form.lrn || null);
     if (sameGroups && sameScalars) {
       return { kind: "ok" as const, changed: false, student: { ...flattenStudentGroups(current), editVersion: studentEditVersion(current) } };
     }
     const updated = await tx.student.update({ where: { id }, data: {
       firstName: form.firstName, lastName: form.lastName, middleName: form.middleName || null,
-      schoolLevel: form.schoolLevel, yearLevel: form.yearLevel,
+      schoolLevel: form.schoolLevel ?? null, yearLevel: form.yearLevel ?? null,
+      usn: form.usn || null, lrn: form.lrn || null,
       groups: { set: ids.map(groupId => ({ id: groupId })) },
     }, include: { groups: true } });
     return { kind: "ok" as const, changed: true, student: { ...flattenStudentGroups(updated), editVersion: studentEditVersion(updated) } };

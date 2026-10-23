@@ -4,7 +4,7 @@ import type { BulkAction } from "../schemas/studentBulk";
 import type { BulkBlockedReasonCode, BulkPreviewRow } from "../types/studentBulk";
 
 export type PreviewStudentInput = {
-  id: string;
+  id: string; usn?: string | null; lrn?: string | null;
   firstName: string;
   lastName: string;
   middleName: string | null;
@@ -87,6 +87,7 @@ export function buildBulkPreviewRows(input: {
     }
 
     const projection = projectStudentContent({
+      usn: student.usn, lrn: student.lrn,
       id: student.id,
       firstName: student.firstName,
       lastName: student.lastName,
@@ -125,6 +126,11 @@ export function buildBulkPreviewRows(input: {
         reasonCode,
       };
     };
+
+    if (target.slug === "employees" || student.groups.some(group=>group.slug === "employees")) {
+      rows.push(fail("Employee classification must be managed through employee registration.", "INVALID_CANDIDATE"));
+      continue;
+    }
 
     if (inTargetCategory.length > 1) {
       rows.push(
@@ -168,6 +174,7 @@ export function buildBulkPreviewRows(input: {
     }
 
     const candidate = {
+      usn: student.usn ?? (!student.lrn && /^\d{11}$/.test(student.id) ? student.id : null), lrn: student.lrn,
       id: student.id,
       firstName: student.firstName,
       lastName: student.lastName,

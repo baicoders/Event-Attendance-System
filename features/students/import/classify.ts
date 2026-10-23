@@ -1,4 +1,4 @@
-import { studentSchema } from "@/globals/schemas/studentSchema";
+import { studentSchema } from "@/globals/schemas/legacyStudentSchema";
 import { hasAmbiguousStudentGroups } from "@/globals/utils/studentGroupReview";
 import {
   CSV_HEADERS, IMPORT_GROUP_FIELDS, type CanonicalRow, type ExistingImportStudent,
@@ -46,6 +46,9 @@ export function classifyStudentImport(input: {
   const unknown = new Map<string, UnknownImportGroup>();
   const rows: ImportReviewRow[] = normalizedRows.map(({ csvRow, student }) => {
     const reasons = domainReasons(student);
+    if (input.students.some(existing => existing.id !== student.id && (existing.usn === student.id || existing.lrn === student.id))) {
+      reasons.push({ code: "IDENTITY_CONFLICT", field: "id", message: "This legacy import ID belongs to a canonical student. Use the forthcoming USN/LRN reviewed import format; no duplicate will be created." });
+    }
     const groupIds: string[] = [];
     if (idCounts.get(student.id)! > 1) reasons.push({ code: "DUPLICATE_ID", field: "id", message: `Student ID "${student.id}" occurs more than once in this CSV.` });
     for (const field of groupFields) {
@@ -65,6 +68,7 @@ export function classifyStudentImport(input: {
     const before = students.get(student.id);
     const changes: ImportChange[] = [];
     if (before) {
+      if (before.groups.some(group=>group.slug === "employees")) reasons.push({code:"IDENTITY_CONFLICT",message:"Employee identities cannot be updated through student imports."});
       if (hasAmbiguousStudentGroups(before.groups)) {
         reasons.push({ code: "AMBIGUOUS_EXISTING_GROUPS", message: "Existing student has multiple groups in one category or unsupported memberships. Resolve the roster before importing." });
       } else {

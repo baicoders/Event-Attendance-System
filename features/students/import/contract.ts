@@ -40,6 +40,7 @@ export type ImportCommitRequest = z.infer<typeof commitRequestSchema>;
 
 export type ImportGroup = { id: string; slug: string; name: string; category: string };
 export type ExistingImportStudent = {
+  usn?: string | null; lrn?: string | null;
   id: string; firstName: string; lastName: string; middleName: string | null;
   schoolLevel: string | null; yearLevel: string | null; createdAt: Date | string; updatedAt: Date | string;
   groups: ImportGroup[];

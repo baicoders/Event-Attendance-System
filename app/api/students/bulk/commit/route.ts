@@ -70,7 +70,7 @@ export async function POST(req: Request) {
           const students = await tx.student.findMany({
             where: { id: { in: token.studentIds } },
             select: {
-              id: true,
+              id: true, usn: true, lrn: true,
               firstName: true,
               lastName: true,
               middleName: true,
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
           for (const s of students) {
             currentVersions[s.id] = contentVersion(
               projectStudentContent({
-                id: s.id,
+                id: s.id, usn: s.usn, lrn: s.lrn,
                 firstName: s.firstName,
                 lastName: s.lastName,
                 middleName: s.middleName,

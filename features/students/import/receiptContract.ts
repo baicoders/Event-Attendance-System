@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { studentSchema } from "@/globals/schemas/studentSchema";
+import { studentSchema } from "@/globals/schemas/legacyStudentSchema";
 import { normalizeStudentImportRow } from "./classify";
 import {
   CSV_HEADERS, MAX_IMPORT_BYTES, importCountsSchema, importPreviewSchema,
