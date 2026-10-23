@@ -1,9 +1,11 @@
 "use client";
 
 import { Printer } from "lucide-react";
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { Input } from "@/globals/components/shad-cn/input";
+import { NOTED_BY_MAX_LENGTH, resolveNotedBy } from "@/features/reports/utils/printSignatories";
 import { Switch } from "@/globals/components/shad-cn/switch";
 import { Label } from "@/globals/components/shad-cn/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/globals/components/shad-cn/select";
@@ -37,6 +39,10 @@ const PrintOptionsBar = () => {
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const summary = searchParams.get("view") === "summary";
+  const notedBy = resolveNotedBy(searchParams.has("notedBy") ? searchParams.get("notedBy") ?? "" : undefined);
+  const [notedByDraft, setNotedByDraft] = useState(notedBy);
+  useEffect(() => setNotedByDraft(notedBy), [notedBy]);
+  const hasNotedByChanges = !summary && notedByDraft !== notedBy;
   const columns = resolvePrintColumns(searchParams.has("columns") ? searchParams.getAll("columns") : undefined, searchParams.get("signature") ?? undefined);
 
   const navigate = (params: URLSearchParams) => {
@@ -118,9 +124,20 @@ const PrintOptionsBar = () => {
         </fieldset>
       ) : null}
 
+      {!summary ? <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(event) => { event.preventDefault(); const value = resolveNotedBy(notedByDraft); setNotedByDraft(value); setParam("notedBy", value); }}
+      >
+        <div className="space-y-1">
+          <Label htmlFor="print-noted-by" className="text-sm text-slate-600">Noted by</Label>
+          <Input id="print-noted-by" name="notedBy" value={notedByDraft} maxLength={NOTED_BY_MAX_LENGTH} disabled={pending} onChange={(event) => setNotedByDraft(event.target.value)} className="w-64" />
+        </div>
+        <button type="submit" disabled={pending || !hasNotedByChanges} className={pill.secondary}>Apply</button>
+      </form> : null}
+
       <button
         type="button"
-        disabled={pending}
+        disabled={pending || hasNotedByChanges}
         onClick={() => window.print()}
         className={`${pill.primary} ml-auto`}
       >

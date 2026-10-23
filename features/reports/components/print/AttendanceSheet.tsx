@@ -1,4 +1,3 @@
-import Image from "next/image";
 import * as React from "react";
 
 import { labelForGroup } from "@/globals/constants/groups";
@@ -11,10 +10,12 @@ import { formatReportClock, formatReportDateTime, formatReportEventDate } from "
 import { capitalizeLabel } from "@/globals/utils/text";
 import { PRINT_COLUMNS, type PrintColumnKey } from "@/features/reports/utils/printColumns";
 
+import { DEFAULT_NOTED_BY } from "@/features/reports/utils/printSignatories";
 import type { SheetGrouping } from "@/features/reports/utils/printGrouping";
 
 export type SheetOptions = {
   includeAbsentees: boolean;
+  notedBy?: string;
   groupBy: SheetGrouping;
   columns: readonly PrintColumnKey[];
 };
@@ -95,7 +96,7 @@ const RosterTable = ({
  * The official, printable attendance sheet.
  *
  * A school office needs a document it can file and sign, which the previous plain
- * table was not: it had no letterhead, no signature column, no signatory block,
+ * table was not: it had no signature column, no signatory block,
  * no per-section subtotals, and restarted its row numbering in every section.
  *
  * A server component — none of this needs to ship to the browser, and rendering
@@ -150,27 +151,8 @@ export default function AttendanceSheet({
 
   return (
     <div className="mx-auto w-full max-w-4xl bg-white p-8 text-black print:max-w-none print:p-0">
-      {/* ================= Letterhead ================= */}
-      <header className="print-break-inside-avoid mb-6 border-b-2 border-black pb-4 text-center">
-        <div className="flex items-center justify-center gap-4">
-          <Image
-            src="/logos/school/aclc.png"
-            alt=""
-            width={64}
-            height={64}
-            priority
-            className="h-16 w-16 object-contain"
-          />
-          <div>
-            <p className="text-lg font-bold uppercase tracking-wide">
-              ACLC College of Ormoc City
-            </p>
-            <p className="text-sm">Office of Student Affairs</p>
-          </div>
-        </div>
-        <h1 className="mt-3 text-xl font-bold uppercase tracking-[0.15em]">
-          Event Attendance Sheet
-        </h1>
+      <header className="print-break-inside-avoid mb-6 text-center">
+        <h1 className="text-xl font-bold uppercase tracking-[0.15em]">Event Attendance Sheet</h1>
       </header>
 
       {/* ================= Event details ================= */}
@@ -273,7 +255,7 @@ export default function AttendanceSheet({
               }
             >
               {grouped ? (
-                <h3 className="print-break-inside-avoid mb-1 mt-4 border-b border-gray-400 pb-1 text-sm font-bold print:mt-0">
+                <h3 className="print-break-inside-avoid mb-1 mt-4 text-sm font-bold print:mt-0">
                   {group.title}
                 </h3>
               ) : null}
@@ -309,22 +291,13 @@ export default function AttendanceSheet({
           <p className="border-t border-black pt-1 text-center font-semibold">
             &nbsp;
           </p>
-          <p className="text-center text-xs">Office of Student Affairs</p>
+          <p className="text-center text-xs">{options.notedBy ?? DEFAULT_NOTED_BY}</p>
         </div>
       </section>
 
       {/* ================= Footer ================= */}
       <footer className="mt-8 border-t border-gray-400 pt-2 text-[10px] text-gray-600">
         <p>Prepared {formatReportDateTime(report.evaluatedAt)} Asia/Manila (UTC+08:00).</p>
-        {/*
-          Eligibility is recomputed from the current roster on every read, so two
-          printings of the same event can legitimately differ. Saying so on the
-          paper is what makes a filed copy defensible (audit DATA-06 / #45).
-        */}
-        <p>
-          Reflects the student roster as of the time of printing. Roster changes
-          made after an event will alter subsequent printings of this report.
-        </p>
       </footer>
     </div>
   );

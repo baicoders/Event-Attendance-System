@@ -71,3 +71,13 @@ test("custom grouping omits empty groups when absentees are hidden and retains w
   assert.equal(html.includes("Absent group"), false);
   assert.match(html, /<strong>Eligible:<\/strong> 2/);
 });
+
+test("custom Noted by text appears safely in the simplified printed sheet", () => {
+  const html = renderToStaticMarkup(createElement(AttendanceSheet, { report, options: { includeAbsentees: true, groupBy: "CUSTOM", columns: ["name"], notedBy: "Dean <Student Affairs>" } }));
+  assert.match(html, /Dean &lt;Student Affairs&gt;/);
+  assert.equal(html.includes("ACLC College of Ormoc City"), false);
+  assert.equal(html.includes("/logos/school/"), false);
+  assert.equal(html.includes("Reflects the student roster"), false);
+  assert.equal(html.includes("Office of Student Affairs"), false);
+  assert.match(html, /<h1[^>]*>Event Attendance Sheet<\/h1>/);
+});

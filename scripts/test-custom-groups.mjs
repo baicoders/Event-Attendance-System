@@ -215,6 +215,17 @@ try {
   assert.equal(await evaluate('document.body.innerText.includes("Synthetic Team subtotal: 1 of 1 attended")'), true);
   assert.equal(await evaluate('document.body.innerText.includes("Synthetic USWAG subtotal: 1 of 1 attended")'), true);
   assert.deepEqual(await evaluate('[...document.querySelectorAll(".print-table tbody tr")].map(tr=>tr.cells[0].textContent)'), ['1', '2']);
+  await fill('document.querySelector("#print-noted-by")', '  Dean of Students  ');
+  assert.equal(await evaluate('[...document.querySelectorAll("button")].find(button=>button.textContent.trim()==="Print").disabled'), true);
+  await click('Apply');
+  await until('new URL(location.href).searchParams.get("notedBy") === "Dean of Students" && [...document.querySelectorAll("section p")].some(p=>p.textContent==="Dean of Students")');
+  await until('![...document.querySelectorAll("button")].find(button=>button.textContent.trim()==="Print").disabled');
+  assert.equal(await evaluate('document.querySelector("header").innerText.trim()'), 'EVENT ATTENDANCE SHEET');
+  assert.equal(await evaluate('Boolean(document.querySelector("header img"))'), false);
+  assert.equal(await evaluate('document.body.innerText.includes("Reflects the student roster")'), false);
+  assert.equal(await evaluate('[...document.querySelectorAll("h3")].every(h=>getComputedStyle(h).borderBottomWidth==="0px")'), true);
+  await command('Page.reload');
+  await until('document.querySelector("#print-noted-by")?.value === "Dean of Students" && document.querySelectorAll(".print-table").length === 2');
   await evaluate('document.fonts.ready.then(()=>true)');
   const pdf = Buffer.from((await command('Page.printToPDF', { printBackground: true, preferCSSPageSize: true })).data, 'base64');
   assert.equal(pdf.subarray(0, 4).toString(), '%PDF');

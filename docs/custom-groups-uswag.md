@@ -6,7 +6,7 @@ Custom Groups is a separate sidebar page (mobile: account menu). Active users ca
 
 Calendar creation/editing offers **Custom Groups** and the existing Included Groups selector. Eligibility is the union of live memberships in those groups. Roster, QR lookup, manual check-in, progress, reports, and correction eligibility use the existing central predicate. Removing a member does not touch their attendance records or audit history. Current-roster reports omit former members; existing attendance review and student history retain recorded attendance outside the current scope.
 
-Report → Export → Printable attendance sheet provides checkbox column selection, including USN/LRN, custom group, position, status and time-in. Position is shown on the report table too. Empty positions display an em dash. The grouping selector offers no grouping, academic section, or custom group, with group headings and subtotals. Print options live in the URL; order is fixed and calculations/filtering remain unchanged.
+Report → Export → Printable attendance sheet provides checkbox column selection, including USN/LRN, custom group, position, status and time-in. Position is shown on the report table too. Empty positions display an em dash. The grouping selector offers no grouping, academic section, or custom group, with group headings and subtotals. The Noted by field can be edited in the print controls; click Apply before printing. Print options live in the URL; order is fixed and calculations/filtering remain unchanged.
 
 ## Local database and migrations
 
