@@ -11,6 +11,7 @@ import AttendanceSheet, {
 } from "@/features/reports/components/print/AttendanceSheet";
 import PrintOptionsBar from "@/features/reports/components/print/PrintOptionsBar";
 import EventSummarySheet from "@/features/reports/components/print/EventSummarySheet";
+import { resolvePrintColumns } from "@/features/reports/utils/printColumns";
 
 type PrintPageProps = {
   params: Promise<{ id: string }>;
@@ -66,7 +67,7 @@ export default async function PrintPage({
   const options: SheetOptions = {
     includeAbsentees: isEnabled(query.absentees),
     groupBySection: isEnabled(query.grouped),
-    includeSignature: isEnabled(query.signature),
+    columns: resolvePrintColumns(query.columns, query.signature),
   };
 
   return (

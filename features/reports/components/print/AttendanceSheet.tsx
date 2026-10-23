@@ -1,4 +1,5 @@
 import Image from "next/image";
+import * as React from "react";
 
 import { labelForGroup } from "@/globals/constants/groups";
 import type { EventReport, ReportRow } from "@/globals/types/reports";
@@ -6,13 +7,14 @@ import {
   ATTENDANCE_OUTCOME_LABEL,
   formatAttendanceRate,
 } from "@/globals/utils/attendance";
-import { formatReportDateTime, formatReportEventDate } from "@/globals/utils/reportTime";
+import { formatReportClock, formatReportDateTime, formatReportEventDate } from "@/globals/utils/reportTime";
 import { capitalizeLabel } from "@/globals/utils/text";
+import { PRINT_COLUMNS, type PrintColumnKey } from "@/features/reports/utils/printColumns";
 
 export type SheetOptions = {
   includeAbsentees: boolean;
   groupBySection: boolean;
-  includeSignature: boolean;
+  columns: readonly PrintColumnKey[];
 };
 
 type AttendanceSheetProps = {
@@ -20,21 +22,22 @@ type AttendanceSheetProps = {
   options: SheetOptions;
 };
 
-const time = (value: string | null) => value ? formatReportDateTime(value).slice(5, 16) : "—";
+const cell = "border border-gray-400 px-2 py-1 align-top break-words";
 
-/**
- * Column widths, as percentages summing to 100.
- *
- * Each section renders its own `<table>`, and independently-sized tables would
- * pick different column widths per section — visibly jittering down a filed
- * document. Fixed layout plus a shared `<colgroup>` keeps every page identical.
- */
-const COLUMN_WIDTHS = {
-  withSignature: ["5%", "14%", "26%", "10%", "11%", "11%", "10%", "13%"],
-  withoutSignature: ["5%", "14%", "32%", "11%", "12%", "12%", "14%"],
-} as const;
-
-const cell = "border border-gray-400 px-2 py-1";
+function columnValue(row: ReportRow, key: PrintColumnKey): string {
+  switch (key) {
+    case "name": return row.fullName;
+    case "identifier": return [row.usn, row.lrn].filter(Boolean).join(" / ") || "—";
+    case "group": return row.customGroup || "—";
+    case "position": return row.position || "—";
+    case "status": return ATTENDANCE_OUTCOME_LABEL[row.outcome];
+    case "timein": return formatReportClock(row.timein);
+    case "year": return labelForGroup("YEAR", row.yearLevel);
+    case "timeout": return formatReportClock(row.timeout);
+    case "method": return row.method ? row.method === "SCANNED" ? "Scanned" : "Manual" : "—";
+    case "signature": return "";
+  }
+}
 
 /**
  * One section's table: shared column widths, its own repeating header, its rows,
@@ -48,33 +51,28 @@ const cell = "border border-gray-400 px-2 py-1";
 const RosterTable = ({
   rows,
   startIndex,
-  includeSignature,
+  columns: selected,
 }: {
   rows: ReportRow[];
   startIndex: number;
-  includeSignature: boolean;
+  columns: readonly PrintColumnKey[];
 }) => {
-  const widths = includeSignature
-    ? COLUMN_WIDTHS.withSignature
-    : COLUMN_WIDTHS.withoutSignature;
+  const columns = PRINT_COLUMNS.filter((column) => selected.includes(column.key));
+  // The same weights are shared by every section so table widths stay aligned.
+  const totalWidth = 5 + columns.reduce((sum, column) => sum + column.width, 0);
 
   return (
     <table className="print-table w-full table-fixed border-collapse text-xs">
       <colgroup>
-        {widths.map((width, i) => (
-          <col key={i} style={{ width }} />
+        <col style={{ width: `${5 / totalWidth * 100}%` }} />
+        {columns.map((column) => (
+          <col key={column.key} style={{ width: `${column.width / totalWidth * 100}%` }} />
         ))}
       </colgroup>
       <thead>
         <tr className="bg-gray-200">
           <th className={`${cell} text-right`}>No.</th>
-          <th className={`${cell} text-left`}>Student No.</th>
-          <th className={`${cell} text-left`}>Name</th>
-          <th className={`${cell} text-left`}>Year</th>
-          <th className={cell}>Time In</th>
-          <th className={cell}>Time Out</th>
-          <th className={cell}>Status</th>
-          {includeSignature ? <th className={cell}>Signature</th> : null}
+          {columns.map((column) => <th key={column.key} className={`${cell} text-left`}>{column.label}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -83,21 +81,7 @@ const RosterTable = ({
             {/* Continuous across sections — a per-section restart made the sheet
                 useless for "how many attended in total". */}
             <td className={`${cell} text-right`}>{startIndex + index + 1}</td>
-            <td className={`${cell} font-mono`}>{row.studentId}</td>
-            <td className={cell}>{row.fullName}</td>
-            <td className={`${cell} whitespace-nowrap`}>
-              {labelForGroup("YEAR", row.yearLevel)}
-            </td>
-            <td className={`${cell} whitespace-nowrap text-center`}>
-              {time(row.timein)}
-            </td>
-            <td className={`${cell} whitespace-nowrap text-center`}>
-              {time(row.timeout)}
-            </td>
-            <td className={`${cell} text-center`}>
-              {ATTENDANCE_OUTCOME_LABEL[row.outcome]}
-            </td>
-            {includeSignature ? <td className={cell} /> : null}
+            {columns.map((column) => <td key={column.key} className={`${cell}${column.key === "identifier" ? " font-mono" : ""}`}>{columnValue(row, column.key)}</td>)}
           </tr>
         ))}
       </tbody>
@@ -123,7 +107,7 @@ const RosterTable = ({
 export default function AttendanceSheet({
   report,
   options,
-}: AttendanceSheetProps) {
+}: AttendanceSheetProps): React.JSX.Element {
   // The rate is re-derived from the same totals via the shared helper, which is
   // the identical computation `report.rate` already holds — so the sheet and the
   // screen can never print different percentages.
@@ -283,7 +267,7 @@ export default function AttendanceSheet({
               <RosterTable
                 rows={group.rows}
                 startIndex={startIndex}
-                includeSignature={options.includeSignature}
+                columns={options.columns}
               />
 
               {options.groupBySection ? (

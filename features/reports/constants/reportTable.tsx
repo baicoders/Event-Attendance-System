@@ -49,6 +49,22 @@ export const reportColumns: ColumnDef<ReportRow>[] = [
     ),
   },
   {
+    id: "identifier",
+    accessorFn: (row) => [row.usn, row.lrn].filter(Boolean).join(" / "),
+    header: "USN/LRN",
+    cell: ({ getValue }) => <span className="font-mono text-sm text-slate-700">{(getValue() as string) || "—"}</span>,
+  },
+  {
+    accessorKey: "customGroup",
+    header: "Group",
+    cell: ({ getValue }) => <span className="text-sm text-slate-600">{(getValue() as string) || "—"}</span>,
+  },
+  {
+    accessorKey: "position",
+    header: "Position",
+    cell: ({ getValue }) => <span className="text-sm text-slate-600">{(getValue() as string) || "—"}</span>,
+  },
+  {
     id: "yearLevel",
     accessorFn: (row) => labelForGroup("YEAR", row.yearLevel),
     header: "Year",
