@@ -46,7 +46,7 @@ export async function previewAudience(input: AudiencePreviewInput): Promise<Audi
 
     const total = await tx.student.count({ where });
     const matches = input.search ? await tx.student.count({ where: searchWhere }) : total;
-    if (!input.includeRoster) return { total, matches, page: [] as Array<{ id: string; firstName: string; lastName: string; schoolLevel: "COLLEGE" | "SHS"; yearLevel: string; groups: Array<{ name: string }> }> } as const;
+    if (!input.includeRoster) return { total, matches, page: [] as Array<{ id: string; firstName: string; lastName: string; schoolLevel: "COLLEGE" | "SHS" | null; yearLevel: string | null; groups: Array<{ name: string }> }> } as const;
     const page = await tx.student.findMany({
       where: searchWhere,
       select: {

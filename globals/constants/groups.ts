@@ -146,8 +146,9 @@ const YEAR_LABELS: Record<string, string> = {
  */
 export const labelForGroup = (
   type: string,
-  value: string
+  value: string | null
 ): string => {
+  if (!value) return "Not provided";
   switch (type) {
     case "DEPARTMENT":
       return DEPARTMENTS.find((d) => d.slug === value)?.name ?? value;

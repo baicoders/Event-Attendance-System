@@ -29,7 +29,7 @@ type Props = {
 };
 
 function identity(student: Student) {
-  const level = student.schoolLevel === "SHS" ? "SHS" : "College";
+  const level = student.schoolLevel === "SHS" ? "SHS" : student.schoolLevel === "COLLEGE" ? "College" : "Level not provided";
   const year = student.yearLevel?.replaceAll("_", " ") ?? "Year unspecified";
   const course = student.schoolLevel === "SHS" ? student.strand : student.program;
   return [level + " / " + year, course || "Group unspecified", student.section || "Section unspecified"].join(" · ");

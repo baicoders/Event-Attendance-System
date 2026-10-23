@@ -54,8 +54,8 @@ export type ReportRow = {
   recordId: string | null;
   studentId: string;
   fullName: string;
-  schoolLevel: SchoolLevel;
-  yearLevel: YearLevel;
+  schoolLevel: SchoolLevel | null;
+  yearLevel: YearLevel | null;
   /** `SECTION` group name, or null when the student has none. */
   section: string | null;
   sectionKey: string;

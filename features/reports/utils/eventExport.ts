@@ -57,8 +57,8 @@ function studentCells(row: ReportRow, expectsTimeout: boolean): Record<string, s
   return {
     "Student ID": row.studentId,
     Name: row.fullName,
-    "School level": row.schoolLevel,
-    "Year / grade": row.yearLevel.replace("_", " "),
+    "School level": row.schoolLevel ?? "",
+    "Year / grade": (row.yearLevel ?? "").replace("_", " "),
     "Section key": row.sectionKey,
     Section: row.section ?? "",
     Outcome: ATTENDANCE_OUTCOME_LABEL[row.outcome],

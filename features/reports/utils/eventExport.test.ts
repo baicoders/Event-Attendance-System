@@ -51,3 +51,9 @@ test("empty subset retains ordered headers and safe filename", () => {
   assert.equal(prepared.filenameBase.includes("/"), false);
   assert.equal(prepared.filenameBase.includes("\\"), false);
 });
+
+test('partial students export missing academics as empty cells', () => {
+  const partial={...report,rows:[{...report.rows[0],schoolLevel:null,yearLevel:null}]};
+  const row=prepareEventExport(partial,'full').rows[0];
+  assert.equal(row['School level'],''); assert.equal(row['Year / grade'],'');
+});

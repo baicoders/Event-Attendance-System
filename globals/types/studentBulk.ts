@@ -60,8 +60,8 @@ export type BulkExportRow = {
   lastName: string;
   firstName: string;
   middleName: string;
-  schoolLevel: string;
-  yearLevel: string;
+  schoolLevel: string | null;
+  yearLevel: string | null;
   sectionSlugs: string[];
   houseSlugs: string[];
   departmentSlugs: string[];

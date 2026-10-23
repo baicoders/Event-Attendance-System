@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import type { ProgressRow } from "@/globals/utils/attendanceProgress";
 
-const yearLabel = (value: string) => value.replace("YEAR_", "Year ").replace("GRADE_", "Grade ");
+const yearLabel = (value: string | null) => (value ?? "Not provided").replace("YEAR_", "Year ").replace("GRADE_", "Grade ");
 const clock = (value: string | null) => value ? new Date(value).toLocaleString() : "—";
 
 export const progressColumns: ColumnDef<ProgressRow>[] = [

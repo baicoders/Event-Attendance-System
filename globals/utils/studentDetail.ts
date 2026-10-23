@@ -4,7 +4,7 @@ type VersionGroup = { id: string; category: string; slug: string };
 type VersionStudent = {
   id: string; createdAt: Date | string; updatedAt: Date | string;
   firstName: string; lastName: string; middleName: string | null;
-  schoolLevel: string; yearLevel: string; groups: VersionGroup[];
+  schoolLevel: string | null; yearLevel: string | null; groups: VersionGroup[];
 };
 
 /** Content token for one authoritative student/group read. */
