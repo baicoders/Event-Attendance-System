@@ -12,6 +12,7 @@ import { hasAmbiguousStudentGroups } from "@/globals/utils/studentGroupReview";
 import { safeStudentReturnHref } from "@/globals/utils/studentReturn";
 import type { StudentDetail } from "@/globals/types/students";
 import type { StudentFormValues } from "@/globals/schemas/studentSchema";
+import StudentDataIssueBadges from "./StudentDataIssueBadges";
 import StudentFormDrawer from "./StudentFormDrawer";
 import { StudentQRCard } from "./StudentQRCard";
 import { StudentQrModal } from "./StudentQRModal";
@@ -167,6 +168,7 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
               <section className="min-w-0 rounded-2xl border bg-white p-5" aria-label="Current academic information">
                 <h2 className="text-lg font-semibold">Current academic information</h2>
+                <StudentDataIssueBadges student={student}/>
                 <p className="mt-3 text-sm"><strong>USN:</strong> {student.usn ?? "Not provided"}</p>
                 <p className="mt-1 text-sm"><strong>LRN:</strong> {student.lrn ?? "Not provided"}</p>
                 <p className="mt-3 text-sm"><strong>School level:</strong> {student.schoolLevel === "SHS" ? "Senior High School" : student.schoolLevel === "COLLEGE" ? "College" : "Not provided"}</p>

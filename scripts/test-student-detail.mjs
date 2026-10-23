@@ -1,7 +1,7 @@
 /** Disposable production API/browser fixture. Run after build. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,6 +22,7 @@ let server;
 let chrome;
 let db;
 let partialStudentId;
+let issueStudentId;
 const form = { id: "00000123456", usn: "00000123456", firstName: "Ana", lastName: "Lee", middleName: "",
   schoolLevel: "COLLEGE", yearLevel: "YEAR_2", section: "sec-a", house: "azul", department: "cs", program: "bsit", strand: "" };
 
@@ -51,7 +52,7 @@ async function browserCheck(cookie) {
   });
   const command = (method, params = {}) => new Promise((resolve, reject) => { const id = ++nextId; pending.set(id, { resolve, reject }); ws.send(JSON.stringify({ id, method, params })); });
   const evaluate = async expression => { const response = await command("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }); if (response.exceptionDetails) throw new Error(response.exceptionDetails.text); return response.result.value; };
-  const until = async expression => { for (let i = 0; i < 100; i++) { try { if (await evaluate(expression)) return; } catch { /* Navigation can replace the execution context. */ } await delay(100); } throw new Error(`Timed out: ${expression}; state=${JSON.stringify(await evaluate('({dialogs:[...document.querySelectorAll("[role=dialog]")].map(dialog => dialog.textContent?.slice(0,500)), cancel:[...document.querySelectorAll("[role=dialog] button")].filter(button => button.textContent?.includes("Cancel")).map(button => ({disabled:button.disabled,html:button.outerHTML.slice(0,300)}))})'))}`); };
+  const until = async expression => { for (let i = 0; i < 100; i++) { try { if (await evaluate(expression)) return; } catch { /* Navigation can replace the execution context. */ } await delay(100); } throw new Error(`Timed out: ${expression}; state=${JSON.stringify(await evaluate('({url:location.href,text:document.body.innerText.slice(-3000),dialogs:[...document.querySelectorAll("[role=dialog]")].map(dialog => dialog.textContent?.slice(0,500)), cancel:[...document.querySelectorAll("[role=dialog] button")].filter(button => button.textContent?.includes("Cancel")).map(button => ({disabled:button.disabled,html:button.outerHTML.slice(0,300)}))})'))}`); };
   try {
     await command("Page.enable");
     await command("Runtime.enable");
@@ -151,6 +152,25 @@ async function browserCheck(cookie) {
     await until('document.querySelector("[role=dialog]") === null');
     const partial = await db.student.findUniqueOrThrow({where:{id:partialStudentId}});
     assert.equal(partial.schoolLevel,null);assert.equal(partial.yearLevel,null);
+    await db.student.update({where:{id:partialStudentId},data:{schoolLevel:"COLLEGE",yearLevel:"YEAR_2"}});
+    await command("Page.reload");
+    await until('document.body.innerText.includes("College")');
+    await until('[...document.querySelectorAll("button")].some(button=>button.textContent?.includes("Edit student")&&!button.disabled)');
+    await evaluate('[...document.querySelectorAll("button")].find(button=>button.textContent?.includes("Edit student")).click()');
+    await until('document.querySelector(\'[role=dialog] input[name="usn"]\') !== null');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Academic Standing")');
+    await evaluate('document.querySelector(\'[role=dialog] [role=combobox]\').click()');
+    await until('[...document.querySelectorAll(\'[role=option]\')].some(option=>option.textContent?.trim()==="Not provided")');
+    await evaluate('[...document.querySelectorAll(\'[role=option]\')].find(option=>option.textContent?.trim()==="Not provided").click()');
+    assert.ok(await evaluate('document.querySelectorAll(\'[role=dialog] [role=combobox]\')[1]?.textContent.includes("2nd Year")'));
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Group Assignments")');
+    assert.equal(await evaluate('document.querySelectorAll(\'[role=dialog] [role=combobox]\').length'),5);
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.includes("Save Changes")).click()');
+    await until('document.querySelector("[role=dialog]") === null');
+    const clearedLevel=await db.student.findUniqueOrThrow({where:{id:partialStudentId}});
+    assert.equal(clearedLevel.schoolLevel,null);assert.equal(clearedLevel.yearLevel,"YEAR_2");
     await db.student.update({where:{id:partialStudentId},data:{schoolLevel:"COLLEGE",yearLevel:"YEAR_2",groups:{connect:[{id:"dept"},{id:"program"},{id:"house"}]}}});
     await command("Page.reload");
     await until('document.body.innerText.includes("College")');
@@ -169,6 +189,59 @@ async function browserCheck(cookie) {
     const switched=await db.student.findUniqueOrThrow({where:{id:partialStudentId},include:{groups:true}});
     assert.equal(switched.schoolLevel,"SHS"); assert.equal(switched.yearLevel,null);
     assert.deepEqual(switched.groups.map(group=>group.slug),["azul"]);
+    await command("Page.navigate",{url:`${origin}/students/issues?issue=MISSING_HOUSE&q=00000123460`});
+    await until('document.querySelector("h1")?.textContent?.includes("Address Student Record Issues")');
+    await until('document.body.innerText.includes("2 matching students")');
+    if(process.argv.includes('--screenshots')) {
+      for(const [suffix,width,height,mobile] of [['mobile',375,812,true],['desktop',1440,1000,false]]) {
+        await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile});
+        const screenshot=await command('Page.captureScreenshot',{captureBeyondViewport:true,fromSurface:true});
+        writeFileSync(`/tmp/student-issues-review-${suffix}.png`,Buffer.from(screenshot.data,'base64'));
+      }
+      await command('Emulation.setDeviceMetricsOverride',{width:375,height:812,deviceScaleFactor:1,mobile:true});
+    }
+
+    assert.ok(await evaluate('document.querySelector(\'[aria-label="Student record summary"]\')?.textContent?.includes("Missing House")'));
+    await evaluate(`[...document.querySelectorAll("a")].find(link=>link.offsetParent!==null&&link.getAttribute("href")?.startsWith(${JSON.stringify(`/students/${issueStudentId}?`)})).click()`);
+    await until('document.querySelector("h1")?.textContent?.includes("Synthetic Partial")');
+    await until('document.querySelector(\'[aria-label="Student record issues"]\')?.textContent?.includes("Missing House")');
+    await until('[...document.querySelectorAll("button")].some(button=>button.textContent?.includes("Edit student")&&!button.disabled)');
+    await evaluate('[...document.querySelectorAll("button")].find(button=>button.textContent?.includes("Edit student")).click()');
+    await until('document.querySelector(\'[role=dialog] input[name="usn"]\') !== null');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Academic Standing")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Group Assignments")');
+    await evaluate('document.querySelectorAll(\'[role=dialog] [role=combobox]\')[1].click()');
+    await until('[...document.querySelectorAll(\'[role=option]\')].some(option=>option.textContent?.trim()==="Azul")');
+    await evaluate('[...document.querySelectorAll(\'[role=option]\')].find(option=>option.textContent?.trim()==="Azul").click()');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.includes("Save Changes")).click()');
+    await until('document.querySelector("[role=dialog]") === null');
+    await until('!document.querySelector(\'[aria-label="Student record issues"]\')?.textContent?.includes("Missing House")');
+    const completedHouse=await db.student.findUniqueOrThrow({where:{id:issueStudentId},include:{groups:true}});
+    assert.equal(completedHouse.groups[0].slug,"azul");assert.equal(completedHouse.schoolLevel,null);assert.equal(completedHouse.yearLevel,null);
+    await command("Page.navigate",{url:`${origin}/students/issues?issue=MISSING_HOUSE&q=00000123460`});
+    await until('document.body.innerText.includes("1 matching students")');
+    assert.equal(await evaluate(`document.querySelector('a[href^="/students/${issueStudentId}?"]') === null`),true);
+    assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'),false);
+    await command("Page.navigate",{url:`${origin}/students/issues?program=bsit`});
+    await until('document.querySelector("h1")?.textContent?.includes("Address Student Record Issues")');
+    await db.student.update({where:{id:form.id},data:{groups:{disconnect:{id:"program"}}}});
+    await command("Page.reload");
+    await until('[...document.querySelectorAll("label")].some(label=>label.textContent?.trim()==="Program"&&label.control?.textContent?.includes("no current assignments"))');
+    await db.student.update({where:{id:form.id},data:{groups:{connect:{id:"program"}}}});
+    const attendanceEvent=await db.event.create({data:{title:"Synthetic partial attendance",category:"ALL",status:"APPROVED",start:new Date(Date.now()-60000),end:new Date(Date.now()+3600000),createdById:"admin"}});
+    await command("Page.navigate",{url:`${origin}/attendance?eventId=${attendanceEvent.id}`});
+    await until('document.querySelector("#manual-attendance-search") !== null');
+    const lrnOnly=await db.student.findUniqueOrThrow({where:{lrn:"000000123460"}});
+    for(const [code,canonicalId] of [["00000123460",issueStudentId],["000000123460",lrnOnly.id]]) {
+      await evaluate(`(()=>{const input=document.querySelector("#manual-attendance-search");input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,${JSON.stringify(code)});input.dispatchEvent(new Event("input",{bubbles:true}));})()`);
+      await until(`[...document.querySelectorAll("button")].some(button=>button.getAttribute("aria-label")?.endsWith(${JSON.stringify(", "+canonicalId)})&&button.textContent?.startsWith("Record time in")&&!button.disabled)`);
+      await evaluate(`[...document.querySelectorAll("button")].find(button=>button.getAttribute("aria-label")?.endsWith(${JSON.stringify(", "+canonicalId)})&&button.textContent?.startsWith("Record time in")).click()`);
+      await until(`(()=>{const result=document.querySelector('[aria-label="Manual attendance"] div[aria-live="polite"]');return result?.textContent?.includes("Time-in recorded")&&result.textContent.includes(${JSON.stringify(canonicalId)});})()`);
+      const recorded=await db.record.findUniqueOrThrow({where:{eventId_studentId:{eventId:attendanceEvent.id,studentId:canonicalId}}});
+      assert.equal(recorded.method,"MANUAL");assert.ok(recorded.timein);
+    }
     console.log("Browser fixture passed: direct mobile links including encoded separator, QR/modal stability after edit, dirty editor discard, saved edit, conflict reload failure preserves input, identity/groups, roster profile link, attendance tab, and 375px layout.");
   } finally { ws.close(); }
 }
@@ -195,12 +268,15 @@ try {
   for (const identifiers of [{usn:"00000123460"},{lrn:"000000123460"},{usn:"00000123461",lrn:"000000123461"}]) {
     const created=await create({...name,...identifiers}); assert.equal(created.status,200);
     const person=created.body.data; partialStudentId=person.id;
+    if(identifiers.usn&&!identifiers.lrn)issueStudentId=person.id;
     assert.equal(person.schoolLevel,null);assert.equal(person.yearLevel,null);assert.equal(person.groups.length,0);
     for (const code of Object.values(identifiers)) assert.equal((await request(`/api/students?studentId=${code}`,cookie)).body.data.id,person.id);
     assert.equal((await create({...name,...identifiers})).status,409);
   }
   assert.equal((await create(name)).status,400);
   assert.equal((await create({...name,lrn:"123"})).status,400);
+  const issuesPage=await fetch(`${origin}/students/issues`,{headers:{Cookie:cookie}});
+  assert.equal(issuesPage.status,200);assert.match(await issuesPage.text(),/Address Student Record Issues/);
   const get = await request(path, cookie);
   assert.equal(get.status, 200);
   assert.equal(get.cache, "private, no-store");
@@ -226,6 +302,10 @@ try {
   await db.group.update({ where: { id: "sec-b" }, data: { students: { disconnect: { id: form.id } } } });
   const inactiveLogin = await fetch(`${origin}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "inactive@example.test", password: "fixture-password-123" }) });
   const inactiveCookie = inactiveLogin.headers.get("set-cookie")?.split(";")[0];
+  const deniedIssues=await fetch(`${origin}/students/issues`,{headers:{Cookie:inactiveCookie}});
+  const deniedIssuesText=await deniedIssues.text();
+  assert.match(deniedIssuesText,/administrator account is required/);
+  assert.ok(!deniedIssuesText.includes('Address Student Record Issues'));
   await db.user.update({ where: { id: "inactive" }, data: { status: "PENDING" } });
   assert.equal((await request(path, inactiveCookie)).status, 403);
   const specialId = "12345/67890";
