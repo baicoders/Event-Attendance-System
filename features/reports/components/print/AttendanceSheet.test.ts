@@ -82,14 +82,16 @@ test("custom Noted by text appears safely in the simplified printed sheet", () =
   assert.match(html, /<h1[^>]*>Event Attendance Sheet<\/h1>/);
 });
 
-test("hiding the Late counter preserves late row statuses and attendance totals", () => {
-  const withLate = { ...report, totals: { ...report.totals, present: 0, late: 1 }, rows: [{ ...report.rows[0], outcome: "LATE" as const }, report.rows[1]] };
+test("hiding the Late counter folds late attendees into Present while preserving statuses and totals", () => {
+  const withLate = { ...report, totals: { ...report.totals, eligible: 3, present: 1, late: 1, attended: 2 }, rows: [...report.rows, { ...report.rows[0], studentId: "late-student", outcome: "LATE" as const }] };
   const options = { includeAbsentees: true, groupBy: "NONE" as const, columns: ["name", "status"] as const };
   const shown = renderToStaticMarkup(createElement(AttendanceSheet, { report: withLate, options }));
   const hidden = renderToStaticMarkup(createElement(AttendanceSheet, { report: withLate, options: { ...options, showLateCounter: false } }));
   assert.match(shown, /<strong>Late:<\/strong> 1/);
+  assert.match(shown, /<strong>Present:<\/strong> 1/);
+  assert.match(hidden, /<strong>Present:<\/strong> 2/);
   assert.equal(hidden.includes("<strong>Late:</strong>"), false);
   assert.ok(cells(hidden, "td").includes("Late"));
-  assert.match(hidden, /<strong>Eligible:<\/strong> 2/);
-  assert.match(hidden, /50\.0%/);
+  assert.match(hidden, /<strong>Eligible:<\/strong> 3/);
+  assert.match(hidden, /66\.7%/);
 });

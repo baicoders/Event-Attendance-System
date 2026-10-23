@@ -175,7 +175,7 @@ try {
   const audience = () => api('/api/events/audience-preview', { method: 'POST', body: { category: 'CUSTOM', includedGroups: groupIds, includeRoster: true } });
   assert.deepEqual((await audience()).students.map(s => s.id).sort(), students.slice(0, 2).map(s => s.id).sort());
   const eventInput = { title: 'Synthetic USWAG Event', location: null, description: null, category: 'CUSTOM',
-    includedGroups: [academic.id], start: new Date(Date.now() - 60000).toISOString(), end: new Date(Date.now() + 3600000).toISOString(), allDay: false };
+    includedGroups: [academic.id], start: new Date(Date.now() - 20 * 60000).toISOString(), end: new Date(Date.now() + 3600000).toISOString(), allDay: false };
   await api('/api/events', { method: 'POST', body: eventInput, status: 400 });
   await api('/api/events', { method: 'POST', body: { ...eventInput, category: 'SECTION', includedGroups: [groupId] }, status: 400 });
   const event = await db.event.create({ data: { title: eventInput.title, category: 'CUSTOM', status: 'APPROVED', createdById: admin.id,
@@ -229,9 +229,13 @@ try {
   assert.equal(await evaluate('getComputedStyle(document.querySelector("header")).borderBottomWidth'), '2px');
   assert.equal(await evaluate('document.querySelector("footer").innerText.includes("Made by Programmers Guild")'), true);
   await until('Object.keys(document.querySelector("#print-late")).some(key=>key.startsWith("__reactProps"))');
+  assert.equal(await evaluate('[...document.querySelectorAll("strong")].find(el=>el.textContent==="Present:").parentElement.textContent.trim()'), 'Present: 0');
+  assert.equal(await evaluate('[...document.querySelectorAll("strong")].find(el=>el.textContent==="Late:").parentElement.textContent.trim()'), 'Late: 2');
   await evaluate('document.querySelector("#print-late").click()');
   await until('new URL(location.href).searchParams.get("late") === "0" && ![...document.querySelectorAll("strong")].some(el=>el.textContent==="Late:")');
   assert.equal(await evaluate('[...document.querySelectorAll("strong")].some(el=>el.textContent==="Eligible:")'), true);
+  assert.equal(await evaluate('[...document.querySelectorAll("strong")].find(el=>el.textContent==="Present:").parentElement.textContent.trim()'), 'Present: 2');
+  assert.equal(await evaluate('[...document.querySelectorAll(".print-table tbody tr")].every(row=>row.textContent.includes("Late"))'), true);
   await evaluate('document.fonts.ready.then(()=>true)');
   const pdf = Buffer.from((await command('Page.printToPDF', { printBackground: true, preferCSSPageSize: true })).data, 'base64');
   assert.equal(pdf.subarray(0, 4).toString(), '%PDF');

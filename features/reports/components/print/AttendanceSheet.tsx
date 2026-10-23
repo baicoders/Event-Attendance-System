@@ -201,7 +201,7 @@ export default function AttendanceSheet({
             <strong>Eligible:</strong> {totals.eligible}
           </span>
           <span>
-            <strong>Present:</strong> {totals.present}
+            <strong>Present:</strong> {options.showLateCounter === false ? totals.present + totals.late : totals.present}
           </span>
           {options.showLateCounter !== false ? <span>
             <strong>Late:</strong> {totals.late}
