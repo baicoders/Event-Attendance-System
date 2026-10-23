@@ -229,6 +229,7 @@ export function buildEventReport(snapshot: EventReportSnapshot): EventReport {
       yearLevel: student.yearLevel,
       section: sectionName,
       sectionKey: key,
+      customGroupId: membership?.groupId ?? null,
       customGroup: membership?.group.name ?? null,
       position: membership?.position?.trim() || null,
       timein: record?.timein ? record.timein.toISOString() : null,

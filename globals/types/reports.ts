@@ -62,6 +62,7 @@ export type ReportRow = {
   section: string | null;
   sectionKey: string;
   /** Current custom membership, scoped to the included groups for CUSTOM events. */
+  customGroupId: string | null;
   customGroup: string | null;
   position: string | null;
   timein: string | null;

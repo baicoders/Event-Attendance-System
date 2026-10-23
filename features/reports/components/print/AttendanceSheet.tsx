@@ -11,9 +11,11 @@ import { formatReportClock, formatReportDateTime, formatReportEventDate } from "
 import { capitalizeLabel } from "@/globals/utils/text";
 import { PRINT_COLUMNS, type PrintColumnKey } from "@/features/reports/utils/printColumns";
 
+import type { SheetGrouping } from "@/features/reports/utils/printGrouping";
+
 export type SheetOptions = {
   includeAbsentees: boolean;
-  groupBySection: boolean;
+  groupBy: SheetGrouping;
   columns: readonly PrintColumnKey[];
 };
 
@@ -120,7 +122,19 @@ export default function AttendanceSheet({
   for (const section of report.bySection) sectionLabelCounts.set(section.name, (sectionLabelCounts.get(section.name) ?? 0) + 1);
 
   // Preserve the report's ordering inside each section rather than re-sorting.
-  const groups = options.groupBySection
+  const customGroups = new Map<string, { title: string; key: string; rows: ReportRow[] }>();
+  if (options.groupBy === "CUSTOM") {
+    for (const row of rows) {
+      const key = row.customGroupId ? `group:${row.customGroupId}` : row.customGroup ? `name:${row.customGroup}` : "none";
+      const group = customGroups.get(key) ?? { key, title: row.customGroup ?? "No custom group", rows: [] };
+      group.rows.push(row);
+      customGroups.set(key, group);
+    }
+  }
+  const grouped = options.groupBy !== "NONE";
+  const groups = options.groupBy === "CUSTOM"
+    ? [...customGroups.values()].sort((a, b) => Number(a.key === "none") - Number(b.key === "none") || a.title.localeCompare(b.title) || a.key.localeCompare(b.key))
+    : options.groupBy === "SECTION"
     ? report.bySection
         .map((section) => ({
           title: (sectionLabelCounts.get(section.name) ?? 0) > 1 ? `${section.name} (${section.key})` : section.name,
@@ -231,7 +245,7 @@ export default function AttendanceSheet({
       </section>
 
       {/* ================= Roster =================
-          Grouped: one block per section, each starting on a fresh sheet so a
+          Grouped: one block per selected group, each starting on a fresh sheet so a
           section heading is always at the top of a page. Ungrouped: a single
           continuous table. */}
       {rows.length === 0 ? (
@@ -253,12 +267,12 @@ export default function AttendanceSheet({
               // later one starts its own sheet, whatever blank space that leaves
               // behind.
               className={
-                options.groupBySection && groupIndex > 0
+                grouped && groupIndex > 0
                   ? "print-page-break-before"
                   : undefined
               }
             >
-              {options.groupBySection ? (
+              {grouped ? (
                 <h3 className="print-break-inside-avoid mb-1 mt-4 border-b border-gray-400 pb-1 text-sm font-bold print:mt-0">
                   {group.title}
                 </h3>
@@ -270,7 +284,7 @@ export default function AttendanceSheet({
                 columns={options.columns}
               />
 
-              {options.groupBySection ? (
+              {grouped ? (
                 <p className="print-break-inside-avoid border border-t-0 border-gray-400 bg-gray-50 px-2 py-1 text-right text-xs font-semibold">
                   {group.title} subtotal: {attended} of {group.rows.length}{" "}
                   attended

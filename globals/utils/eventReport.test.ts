@@ -18,6 +18,7 @@ const snapshot = {
 test("report rows carry external identifiers and membership positions while academic sections and totals stay intact", () => {
   const report = buildEventReport(snapshot);
   assert.equal(report.rows[0].usn, "00000123456");
+  assert.equal(report.rows[0].customGroupId, "custom-1");
   assert.equal(report.rows[0].customGroup, "Student Council");
   assert.equal(report.rows[0].position, "President");
   assert.equal(report.rows[0].section, "CS 1-A");

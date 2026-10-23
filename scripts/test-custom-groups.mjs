@@ -205,6 +205,16 @@ try {
     ['No.', 'Name', 'USN/LRN', 'Group', 'Position', 'Attendance Status', 'Check-in Time']);
   assert.equal(await evaluate('[...document.querySelectorAll(".print-table tbody tr")].every(tr=>tr.cells.length===7)'), true);
   await until('document.querySelector(".print-table").innerText.includes("Chair")');
+  await evaluate(`document.querySelector('[aria-label="Group attendance by"]').focus()`);
+  for (const key of ['ArrowDown', 'End', 'Enter']) {
+    await command('Input.dispatchKeyEvent', { type: 'keyDown', key });
+    await command('Input.dispatchKeyEvent', { type: 'keyUp', key });
+    await delay(150);
+  }
+  await until('new URL(location.href).searchParams.get("sheetGroupBy") === "CUSTOM" && document.querySelectorAll(".print-table").length === 2');
+  assert.equal(await evaluate('document.body.innerText.includes("Synthetic Team subtotal: 1 of 1 attended")'), true);
+  assert.equal(await evaluate('document.body.innerText.includes("Synthetic USWAG subtotal: 1 of 1 attended")'), true);
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".print-table tbody tr")].map(tr=>tr.cells[0].textContent)'), ['1', '2']);
   await evaluate('document.fonts.ready.then(()=>true)');
   const pdf = Buffer.from((await command('Page.printToPDF', { printBackground: true, preferCSSPageSize: true })).data, 'base64');
   assert.equal(pdf.subarray(0, 4).toString(), '%PDF');

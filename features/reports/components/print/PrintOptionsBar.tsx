@@ -9,6 +9,7 @@ import { Label } from "@/globals/components/shad-cn/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/globals/components/shad-cn/select";
 import { pill } from "@/globals/constants/designTokens";
 import { GROUP_DIMENSIONS } from "@/globals/utils/reportGroups";
+import { resolveSheetGrouping } from "@/features/reports/utils/printGrouping";
 import { PRINT_COLUMNS, resolvePrintColumns, setPrintColumn, type PrintColumnKey } from "@/features/reports/utils/printColumns";
 
 type Toggle = {
@@ -20,7 +21,6 @@ type Toggle = {
 
 const TOGGLES: Toggle[] = [
   { key: "absentees", label: "Include absentees", defaultOn: true },
-  { key: "grouped", label: "Group by section", defaultOn: true },
 ];
 
 /**
@@ -90,6 +90,15 @@ const PrintOptionsBar = () => {
           </Label>
         </div>
       ))}
+
+      {!summary ? <Select disabled={pending} value={resolveSheetGrouping(searchParams.get("sheetGroupBy") ?? undefined, searchParams.get("grouped") ?? undefined)} onValueChange={(value) => setParam("sheetGroupBy", value)}>
+        <SelectTrigger aria-label="Group attendance by" className="w-52"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="NONE">No grouping</SelectItem>
+          <SelectItem value="SECTION">Group by section</SelectItem>
+          <SelectItem value="CUSTOM">Group by custom group</SelectItem>
+        </SelectContent>
+      </Select> : null}
 
       {!summary ? (
         <fieldset disabled={pending} className="order-last flex w-full flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 pt-2">
