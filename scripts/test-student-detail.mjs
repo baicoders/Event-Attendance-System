@@ -196,6 +196,18 @@ async function browserCheck(cookie) {
     await until('document.body.innerText.includes("1 matching students")');
     assert.equal(await evaluate(`document.querySelector('a[href^="/students/${issueStudentId}?"]') === null`),true);
     assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'),false);
+    const attendanceEvent=await db.event.create({data:{title:"Synthetic partial attendance",category:"ALL",status:"APPROVED",start:new Date(Date.now()-60000),end:new Date(Date.now()+3600000),createdById:"admin"}});
+    await command("Page.navigate",{url:`${origin}/attendance?eventId=${attendanceEvent.id}`});
+    await until('document.querySelector("#manual-attendance-search") !== null');
+    const lrnOnly=await db.student.findUniqueOrThrow({where:{lrn:"000000123460"}});
+    for(const [code,canonicalId] of [["00000123460",issueStudentId],["000000123460",lrnOnly.id]]) {
+      await evaluate(`(()=>{const input=document.querySelector("#manual-attendance-search");input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,${JSON.stringify(code)});input.dispatchEvent(new Event("input",{bubbles:true}));})()`);
+      await until(`[...document.querySelectorAll("button")].some(button=>button.getAttribute("aria-label")?.endsWith(${JSON.stringify(", "+canonicalId)})&&button.textContent?.startsWith("Record time in")&&!button.disabled)`);
+      await evaluate(`[...document.querySelectorAll("button")].find(button=>button.getAttribute("aria-label")?.endsWith(${JSON.stringify(", "+canonicalId)})&&button.textContent?.startsWith("Record time in")).click()`);
+      await until(`(()=>{const result=document.querySelector('[aria-label="Manual attendance"] div[aria-live="polite"]');return result?.textContent?.includes("Time-in recorded")&&result.textContent.includes(${JSON.stringify(canonicalId)});})()`);
+      const recorded=await db.record.findUniqueOrThrow({where:{eventId_studentId:{eventId:attendanceEvent.id,studentId:canonicalId}}});
+      assert.equal(recorded.method,"MANUAL");assert.ok(recorded.timein);
+    }
     console.log("Browser fixture passed: direct mobile links including encoded separator, QR/modal stability after edit, dirty editor discard, saved edit, conflict reload failure preserves input, identity/groups, roster profile link, attendance tab, and 375px layout.");
   } finally { ws.close(); }
 }

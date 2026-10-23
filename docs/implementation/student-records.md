@@ -76,3 +76,10 @@ level never guesses those conditional requirements. Employee rows are excluded.
 The issues page preserves filters through profile editing; saved detail badges and
 refetched summary/list values update immediately. Existing roster invalidation
 covers imports, edits and bulk assignments.
+
+Final P0 audit also caught the manual roster's separate search index. PR 2 now
+indexes USN/LRN as well as internal IDs, preserves exact-match priority and unique
+canonical results, and includes external identifiers in QR roster search. The stack
+was rebased to include this correction before final delivery. Regression tests
+exercise both indexes; the final browser fixture records manual attendance by USN
+and LRN for students with generated canonical IDs.
