@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, Network } from "lucide-react";
 
 import { useAuth } from "@/globals/contexts/AuthContext";
 import { useLogout } from "@/globals/hooks/useLogout";
@@ -50,9 +50,8 @@ const MobileTopBar = () => {
         </p>
       </div>
 
-      {/* Catch-all account menu. Account-scoped actions belong here rather
-          than as more standalone icon buttons; Settings lives here instead of
-          in MobileBottomNav, which is already at its item budget. */}
+      {/* The account menu also carries destinations beyond the bottom nav's
+          item budget, including Settings and Custom Groups. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -72,6 +71,21 @@ const MobileTopBar = () => {
             {user?.name ?? "Organizer"}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link
+              href="/custom-groups"
+              aria-current={
+                pathname === "/custom-groups"
+                  ? "page"
+                  : pathname.startsWith("/custom-groups/")
+                    ? "location"
+                    : undefined
+              }
+            >
+              <Network aria-hidden="true" />
+              Custom Groups
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link
               href="/settings"

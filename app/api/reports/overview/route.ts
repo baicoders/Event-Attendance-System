@@ -1,3 +1,4 @@
+import { EventCategory } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -13,17 +14,7 @@ import { buildOverview } from "@/globals/utils/reportsOverview";
  * that is both the honest set and the safe one.
  */
 
-const eventCategoryEnum = z.enum([
-  "ALL",
-  "COLLEGE",
-  "SHS",
-  "DEPARTMENT",
-  "HOUSE",
-  "STRAND",
-  "PROGRAM",
-  "SECTION",
-  "YEAR",
-]);
+const eventCategoryEnum = z.enum(EventCategory);
 
 /**
  * A range this wide would fan out into an unbounded number of eligibility

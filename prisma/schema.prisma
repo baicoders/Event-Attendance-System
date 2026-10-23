@@ -52,6 +52,7 @@ model Student {
 
   // Relations: Students can belong to multiple groups (House, Strand, etc.)
   groups  Group[]
+  customMemberships CustomGroupMembership[]
   records Record[]
   attendanceChanges AttendanceChange[]
 
@@ -174,12 +175,30 @@ model Group {
 
   // Relations
   students Student[]
+  customMemberships CustomGroupMembership[]
   events   Event[]   @relation("EventGroups")
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([category])
+}
+
+// Academic memberships remain on Student.groups. CUSTOM is the explicit group
+// category; position belongs to this relation. Removing only studentId_key later
+// permits multiple custom groups without changing this model's identity.
+model CustomGroupMembership {
+  studentId String
+  groupId   String
+  position  String? @db.VarChar(160)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group     Group   @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@id([studentId, groupId])
+  @@unique([studentId])
+  @@index([groupId])
 }
 
 enum UserRole {
@@ -229,6 +248,7 @@ enum SchoolLevel {
 }
 
 enum EventCategory {
+  CUSTOM
   ALL
   COLLEGE
   SHS

@@ -17,6 +17,7 @@ import { pill, surface } from "@/globals/constants/designTokens";
 import { capitalizeLabel } from "@/globals/utils/text";
 
 const CATEGORIES: EventCategory[] = [
+  "CUSTOM",
   "ALL",
   "COLLEGE",
   "SHS",
@@ -97,7 +98,7 @@ const DateRangeControls = ({
             <SelectItem value={ANY_CATEGORY}>All categories</SelectItem>
             {CATEGORIES.map((value) => (
               <SelectItem key={value} value={value}>
-                {capitalizeLabel(value)}
+                {value === "CUSTOM" ? "Custom Groups" : capitalizeLabel(value)}
               </SelectItem>
             ))}
           </SelectContent>

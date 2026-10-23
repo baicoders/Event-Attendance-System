@@ -1,3 +1,4 @@
+import { EventCategory } from "@prisma/client";
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -27,17 +28,7 @@ const patchSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
     location: z.string().max(200).nullable().optional(),
-    category: z.enum([
-      "ALL",
-      "COLLEGE",
-      "SHS",
-      "DEPARTMENT",
-      "HOUSE",
-      "STRAND",
-      "PROGRAM",
-      "SECTION",
-      "YEAR",
-    ]),
+    category: z.enum(EventCategory),
     includedGroups: z.array(z.string()).nullable().optional(),
     description: z.string().max(2000).nullable().optional(),
     start: z.coerce.date(),

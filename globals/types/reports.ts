@@ -53,12 +53,18 @@ export type ReportEventAPI = Omit<
 export type ReportRow = {
   recordId: string | null;
   studentId: string;
+  usn: string | null;
+  lrn: string | null;
   fullName: string;
   schoolLevel: SchoolLevel | null;
   yearLevel: YearLevel | null;
   /** `SECTION` group name, or null when the student has none. */
   section: string | null;
   sectionKey: string;
+  /** Current custom membership, scoped to the included groups for CUSTOM events. */
+  customGroupId: string | null;
+  customGroup: string | null;
+  position: string | null;
   timein: string | null;
   timeout: string | null;
   /** Null for absent students — no record means no method. */

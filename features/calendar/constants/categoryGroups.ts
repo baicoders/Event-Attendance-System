@@ -10,7 +10,7 @@ import {
 
 export const EVENT_CHOICES: ComboBoxValue[] = Object.values(EventCategory).map((l) => ({
   value: l,
-  label: `${capitalizeLabel(l)} Event`,
+  label: l === "CUSTOM" ? "Custom Groups" : `${capitalizeLabel(l)} Event`,
 }));
 
 // Empty arrays means that the category itself is the group
@@ -21,6 +21,7 @@ export const EVENT_CHOICES: ComboBoxValue[] = Object.values(EventCategory).map((
 // Every value here matches what is stored on the Student row (see
 // globals/constants/groups.ts) so event group filters actually match students.
 export const CATEGORY_GROUPS: Record<EventCategory, ComboBoxValue[]> = {
+  CUSTOM: [],
   ALL: [],
   COLLEGE: [],
   SHS: [],

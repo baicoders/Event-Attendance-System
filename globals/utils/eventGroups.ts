@@ -4,6 +4,7 @@ import { prisma } from "@/globals/libs/prisma";
 // Categories that target specific groups. The global ones (ALL/COLLEGE/SHS)
 // scope by school level, not by an explicit group selection.
 const SCOPED_CATEGORIES: EventCategory[] = [
+  "CUSTOM",
   "DEPARTMENT",
   "HOUSE",
   "STRAND",

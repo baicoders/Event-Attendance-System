@@ -17,6 +17,7 @@ export async function GET() {
     requireRole(user, "ADMIN");
 
     const groups = await prisma.group.findMany({
+      where: { category: { not: "CUSTOM" } },
       orderBy: [{ category: "asc" }, { name: "asc" }],
       select: {
         id: true,

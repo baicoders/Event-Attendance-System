@@ -34,6 +34,10 @@ export async function PATCH(
       });
     }
 
+    if (existing.category === "CUSTOM") return NextResponse.json(
+      err("Manage this group on the Custom Groups page.", "CUSTOM_GROUP"), { status: 409 },
+    );
+
     const group = await prisma.group.update({
       where: { id: groupId },
       data: { name },
@@ -95,6 +99,10 @@ export async function DELETE(
           status: 404,
         });
       }
+
+      if (group.category === "CUSTOM") return NextResponse.json(
+        err("Manage custom memberships on the Custom Groups page. Custom group deletion is not supported.", "CUSTOM_GROUP"), { status: 409 },
+      );
 
       if (group.slug === "employees") {
         return NextResponse.json(

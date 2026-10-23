@@ -8,6 +8,7 @@ import {
 } from "@/globals/constants/groups";
 
 const SCOPED_CATEGORIES: EventCategory[] = [
+  "CUSTOM",
   "DEPARTMENT",
   "HOUSE",
   "STRAND",

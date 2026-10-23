@@ -1,4 +1,4 @@
-import Image from "next/image";
+import * as React from "react";
 
 import { labelForGroup } from "@/globals/constants/groups";
 import type { EventReport, ReportRow } from "@/globals/types/reports";
@@ -6,13 +6,19 @@ import {
   ATTENDANCE_OUTCOME_LABEL,
   formatAttendanceRate,
 } from "@/globals/utils/attendance";
-import { formatReportDateTime, formatReportEventDate } from "@/globals/utils/reportTime";
+import { formatReportClock, formatReportDateTime, formatReportEventDate } from "@/globals/utils/reportTime";
 import { capitalizeLabel } from "@/globals/utils/text";
+import { PRINT_COLUMNS, type PrintColumnKey } from "@/features/reports/utils/printColumns";
+
+import { DEFAULT_NOTED_BY } from "@/features/reports/utils/printSignatories";
+import type { SheetGrouping } from "@/features/reports/utils/printGrouping";
 
 export type SheetOptions = {
   includeAbsentees: boolean;
-  groupBySection: boolean;
-  includeSignature: boolean;
+  showLateCounter?: boolean;
+  notedBy?: string;
+  groupBy: SheetGrouping;
+  columns: readonly PrintColumnKey[];
 };
 
 type AttendanceSheetProps = {
@@ -20,21 +26,22 @@ type AttendanceSheetProps = {
   options: SheetOptions;
 };
 
-const time = (value: string | null) => value ? formatReportDateTime(value).slice(5, 16) : "—";
+const cell = "border border-gray-400 px-2 py-1 align-top break-words";
 
-/**
- * Column widths, as percentages summing to 100.
- *
- * Each section renders its own `<table>`, and independently-sized tables would
- * pick different column widths per section — visibly jittering down a filed
- * document. Fixed layout plus a shared `<colgroup>` keeps every page identical.
- */
-const COLUMN_WIDTHS = {
-  withSignature: ["5%", "14%", "26%", "10%", "11%", "11%", "10%", "13%"],
-  withoutSignature: ["5%", "14%", "32%", "11%", "12%", "12%", "14%"],
-} as const;
-
-const cell = "border border-gray-400 px-2 py-1";
+function columnValue(row: ReportRow, key: PrintColumnKey): string {
+  switch (key) {
+    case "name": return row.fullName;
+    case "identifier": return [row.usn, row.lrn].filter(Boolean).join(" / ") || "—";
+    case "group": return row.customGroup || "—";
+    case "position": return row.position || "—";
+    case "status": return ATTENDANCE_OUTCOME_LABEL[row.outcome];
+    case "timein": return formatReportClock(row.timein);
+    case "year": return labelForGroup("YEAR", row.yearLevel);
+    case "timeout": return formatReportClock(row.timeout);
+    case "method": return row.method ? row.method === "SCANNED" ? "Scanned" : "Manual" : "—";
+    case "signature": return "";
+  }
+}
 
 /**
  * One section's table: shared column widths, its own repeating header, its rows,
@@ -48,33 +55,28 @@ const cell = "border border-gray-400 px-2 py-1";
 const RosterTable = ({
   rows,
   startIndex,
-  includeSignature,
+  columns: selected,
 }: {
   rows: ReportRow[];
   startIndex: number;
-  includeSignature: boolean;
+  columns: readonly PrintColumnKey[];
 }) => {
-  const widths = includeSignature
-    ? COLUMN_WIDTHS.withSignature
-    : COLUMN_WIDTHS.withoutSignature;
+  const columns = PRINT_COLUMNS.filter((column) => selected.includes(column.key));
+  // The same weights are shared by every section so table widths stay aligned.
+  const totalWidth = 5 + columns.reduce((sum, column) => sum + column.width, 0);
 
   return (
     <table className="print-table w-full table-fixed border-collapse text-xs">
       <colgroup>
-        {widths.map((width, i) => (
-          <col key={i} style={{ width }} />
+        <col style={{ width: `${5 / totalWidth * 100}%` }} />
+        {columns.map((column) => (
+          <col key={column.key} style={{ width: `${column.width / totalWidth * 100}%` }} />
         ))}
       </colgroup>
       <thead>
         <tr className="bg-gray-200">
           <th className={`${cell} text-right`}>No.</th>
-          <th className={`${cell} text-left`}>Student No.</th>
-          <th className={`${cell} text-left`}>Name</th>
-          <th className={`${cell} text-left`}>Year</th>
-          <th className={cell}>Time In</th>
-          <th className={cell}>Time Out</th>
-          <th className={cell}>Status</th>
-          {includeSignature ? <th className={cell}>Signature</th> : null}
+          {columns.map((column) => <th key={column.key} className={`${cell} text-left`}>{column.label}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -83,21 +85,7 @@ const RosterTable = ({
             {/* Continuous across sections — a per-section restart made the sheet
                 useless for "how many attended in total". */}
             <td className={`${cell} text-right`}>{startIndex + index + 1}</td>
-            <td className={`${cell} font-mono`}>{row.studentId}</td>
-            <td className={cell}>{row.fullName}</td>
-            <td className={`${cell} whitespace-nowrap`}>
-              {labelForGroup("YEAR", row.yearLevel)}
-            </td>
-            <td className={`${cell} whitespace-nowrap text-center`}>
-              {time(row.timein)}
-            </td>
-            <td className={`${cell} whitespace-nowrap text-center`}>
-              {time(row.timeout)}
-            </td>
-            <td className={`${cell} text-center`}>
-              {ATTENDANCE_OUTCOME_LABEL[row.outcome]}
-            </td>
-            {includeSignature ? <td className={cell} /> : null}
+            {columns.map((column) => <td key={column.key} className={`${cell}${column.key === "identifier" ? " font-mono" : ""}`}>{columnValue(row, column.key)}</td>)}
           </tr>
         ))}
       </tbody>
@@ -109,7 +97,7 @@ const RosterTable = ({
  * The official, printable attendance sheet.
  *
  * A school office needs a document it can file and sign, which the previous plain
- * table was not: it had no letterhead, no signature column, no signatory block,
+ * table was not: it had no signature column, no signatory block,
  * no per-section subtotals, and restarted its row numbering in every section.
  *
  * A server component — none of this needs to ship to the browser, and rendering
@@ -123,7 +111,7 @@ const RosterTable = ({
 export default function AttendanceSheet({
   report,
   options,
-}: AttendanceSheetProps) {
+}: AttendanceSheetProps): React.JSX.Element {
   // The rate is re-derived from the same totals via the shared helper, which is
   // the identical computation `report.rate` already holds — so the sheet and the
   // screen can never print different percentages.
@@ -136,7 +124,19 @@ export default function AttendanceSheet({
   for (const section of report.bySection) sectionLabelCounts.set(section.name, (sectionLabelCounts.get(section.name) ?? 0) + 1);
 
   // Preserve the report's ordering inside each section rather than re-sorting.
-  const groups = options.groupBySection
+  const customGroups = new Map<string, { title: string; key: string; rows: ReportRow[] }>();
+  if (options.groupBy === "CUSTOM") {
+    for (const row of rows) {
+      const key = row.customGroupId ? `group:${row.customGroupId}` : row.customGroup ? `name:${row.customGroup}` : "none";
+      const group = customGroups.get(key) ?? { key, title: row.customGroup ?? "No custom group", rows: [] };
+      group.rows.push(row);
+      customGroups.set(key, group);
+    }
+  }
+  const grouped = options.groupBy !== "NONE";
+  const groups = options.groupBy === "CUSTOM"
+    ? [...customGroups.values()].sort((a, b) => Number(a.key === "none") - Number(b.key === "none") || a.title.localeCompare(b.title) || a.key.localeCompare(b.key))
+    : options.groupBy === "SECTION"
     ? report.bySection
         .map((section) => ({
           title: (sectionLabelCounts.get(section.name) ?? 0) > 1 ? `${section.name} (${section.key})` : section.name,
@@ -152,27 +152,8 @@ export default function AttendanceSheet({
 
   return (
     <div className="mx-auto w-full max-w-4xl bg-white p-8 text-black print:max-w-none print:p-0">
-      {/* ================= Letterhead ================= */}
       <header className="print-break-inside-avoid mb-6 border-b-2 border-black pb-4 text-center">
-        <div className="flex items-center justify-center gap-4">
-          <Image
-            src="/logos/school/aclc.png"
-            alt=""
-            width={64}
-            height={64}
-            priority
-            className="h-16 w-16 object-contain"
-          />
-          <div>
-            <p className="text-lg font-bold uppercase tracking-wide">
-              ACLC College of Ormoc City
-            </p>
-            <p className="text-sm">Office of Student Affairs</p>
-          </div>
-        </div>
-        <h1 className="mt-3 text-xl font-bold uppercase tracking-[0.15em]">
-          Event Attendance Sheet
-        </h1>
+        <h1 className="text-xl font-bold uppercase tracking-[0.15em]">Event Attendance Sheet</h1>
       </header>
 
       {/* ================= Event details ================= */}
@@ -220,11 +201,11 @@ export default function AttendanceSheet({
             <strong>Eligible:</strong> {totals.eligible}
           </span>
           <span>
-            <strong>Present:</strong> {totals.present}
+            <strong>Present:</strong> {options.showLateCounter === false ? totals.present + totals.late : totals.present}
           </span>
-          <span>
+          {options.showLateCounter !== false ? <span>
             <strong>Late:</strong> {totals.late}
-          </span>
+          </span> : null}
           <span>
             <strong>Absent:</strong> {totals.absent}
           </span>
@@ -247,7 +228,7 @@ export default function AttendanceSheet({
       </section>
 
       {/* ================= Roster =================
-          Grouped: one block per section, each starting on a fresh sheet so a
+          Grouped: one block per selected group, each starting on a fresh sheet so a
           section heading is always at the top of a page. Ungrouped: a single
           continuous table. */}
       {rows.length === 0 ? (
@@ -269,13 +250,13 @@ export default function AttendanceSheet({
               // later one starts its own sheet, whatever blank space that leaves
               // behind.
               className={
-                options.groupBySection && groupIndex > 0
+                grouped && groupIndex > 0
                   ? "print-page-break-before"
                   : undefined
               }
             >
-              {options.groupBySection ? (
-                <h3 className="print-break-inside-avoid mb-1 mt-4 border-b border-gray-400 pb-1 text-sm font-bold print:mt-0">
+              {grouped ? (
+                <h3 className="print-break-inside-avoid mb-1 mt-4 text-sm font-bold print:mt-0">
                   {group.title}
                 </h3>
               ) : null}
@@ -283,10 +264,10 @@ export default function AttendanceSheet({
               <RosterTable
                 rows={group.rows}
                 startIndex={startIndex}
-                includeSignature={options.includeSignature}
+                columns={options.columns}
               />
 
-              {options.groupBySection ? (
+              {grouped ? (
                 <p className="print-break-inside-avoid border border-t-0 border-gray-400 bg-gray-50 px-2 py-1 text-right text-xs font-semibold">
                   {group.title} subtotal: {attended} of {group.rows.length}{" "}
                   attended
@@ -311,22 +292,13 @@ export default function AttendanceSheet({
           <p className="border-t border-black pt-1 text-center font-semibold">
             &nbsp;
           </p>
-          <p className="text-center text-xs">Office of Student Affairs</p>
+          <p className="text-center text-xs">{options.notedBy ?? DEFAULT_NOTED_BY}</p>
         </div>
       </section>
 
       {/* ================= Footer ================= */}
       <footer className="mt-8 border-t border-gray-400 pt-2 text-[10px] text-gray-600">
-        <p>Prepared {formatReportDateTime(report.evaluatedAt)} Asia/Manila (UTC+08:00).</p>
-        {/*
-          Eligibility is recomputed from the current roster on every read, so two
-          printings of the same event can legitimately differ. Saying so on the
-          paper is what makes a filed copy defensible (audit DATA-06 / #45).
-        */}
-        <p>
-          Reflects the student roster as of the time of printing. Roster changes
-          made after an event will alter subsequent printings of this report.
-        </p>
+        <p>Made by Programmers Guild • Prepared at {formatReportDateTime(report.evaluatedAt)} Asia/Manila (UTC+08:00).</p>
       </footer>
     </div>
   );

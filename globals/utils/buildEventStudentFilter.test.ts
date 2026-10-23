@@ -29,3 +29,20 @@ test("client convenience eligibility follows the same category rules", () => {
   assert.equal(isStudentInEvent(student, scope("DEPARTMENT")), false);
   assert.equal(isStudentInEvent(student, scope("DEPARTMENT", ["cs", "business"])), true);
 });
+
+import type { EventCategory } from "@prisma/client";
+const event = { category: 'CUSTOM' as EventCategory, includedGroups: [{ slug: 'custom-ssc' }, { slug: 'custom-sslg' }] };
+test('custom audiences use live membership relations, never academic groups', () => {
+  assert.deepEqual(buildEventStudentFilter(event), { customMemberships: { some: { group: { category: 'CUSTOM', slug: { in: ['custom-ssc', 'custom-sslg'] } } } } });
+});
+test('custom eligibility projection follows custom membership removal', () => {
+  const student = { schoolLevel: null, groups: [{ slug: 'custom-ssc' }], customMemberships: [{ group: { slug: 'custom-sslg' } }] };
+  assert.equal(isStudentInEvent(student, event), true);
+  assert.equal(isStudentInEvent({ ...student, customMemberships: [] }, event), false);
+});
+test('system and global audiences preserve their existing predicates', () => {
+  assert.deepEqual(buildEventStudentFilter({ category: 'HOUSE', includedGroups: [{slug:'azul'}] }), { groups: { some: { slug: { in: ['azul'] } } } });
+  assert.deepEqual(buildEventStudentFilter({ category: 'ALL', includedGroups: [] }), {});
+  assert.deepEqual(buildEventStudentFilter({ category: 'COLLEGE', includedGroups: [] }), {schoolLevel:'COLLEGE'});
+  assert.deepEqual(buildEventStudentFilter({ category: 'CUSTOM' as EventCategory, includedGroups: [] }), { id: { in: [] } });
+});

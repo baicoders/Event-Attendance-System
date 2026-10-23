@@ -56,7 +56,15 @@ export const REPORT_EVENT_INCLUDE = {
   createdBy: { select: { id: true, name: true } },
 } as const;
 
-type ReportStudent = Student & { groups: Group[] };
+type ReportStudent = Student & {
+  groups: Group[];
+  customMemberships: {
+    studentId: string;
+    groupId: string;
+    position: string | null;
+    group: Pick<Group, "id" | "name" | "slug" | "category">;
+  }[];
+};
 export type EventReportSnapshot = {
   event: ReportEvent;
   students: ReportStudent[];
@@ -88,7 +96,7 @@ export async function loadAuthorizedEventReportSnapshot(
     }
     const students = await tx.student.findMany({
       where: eligibleFilter,
-      include: { groups: true },
+      include: { groups: true, customMemberships: { include: { group: true } } },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { middleName: "asc" }, { id: "asc" }],
       take: maxStudents === undefined ? undefined : maxStudents + 1,
     });
@@ -173,6 +181,9 @@ export function buildEventReport(snapshot: EventReportSnapshot): EventReport {
     const noTimeout = hasNoTimeout(record, expectsTimeout);
     const sectionBucket = bucketForStudent(student, "SECTION");
     const sectionName = sectionBucket.key === "none" ? null : sectionBucket.label;
+    const membership = student.customMemberships.find((membership) =>
+      event.category !== "CUSTOM" || event.includedGroups.some((group) => group.id === membership.groupId),
+    );
     const reviewFlags: string[] = [];
     if (record && !record.timein) reviewFlags.push("MISSING_TIME_IN");
     if (record?.timein && record.timeout && record.timeout < record.timein) reviewFlags.push("INVALID_TIME_ORDER");
@@ -206,6 +217,8 @@ export function buildEventReport(snapshot: EventReportSnapshot): EventReport {
     return {
       recordId: record?.id ?? null,
       studentId: student.id,
+      usn: student.usn,
+      lrn: student.lrn,
       fullName: fullName(
         student.firstName,
         student.middleName || "",
@@ -216,6 +229,9 @@ export function buildEventReport(snapshot: EventReportSnapshot): EventReport {
       yearLevel: student.yearLevel,
       section: sectionName,
       sectionKey: key,
+      customGroupId: membership?.groupId ?? null,
+      customGroup: membership?.group.name ?? null,
+      position: membership?.position?.trim() || null,
       timein: record?.timein ? record.timein.toISOString() : null,
       timeout: record?.timeout ? record.timeout.toISOString() : null,
       method: record?.method ?? null,

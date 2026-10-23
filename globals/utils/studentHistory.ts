@@ -9,6 +9,7 @@ export async function loadStudentHistory(studentId: string, query: ReturnType<ty
     const student = await tx.student.findUnique({ where: { id: studentId }, select: {
       id: true, firstName: true, lastName: true, middleName: true, schoolLevel: true,
       groups: { select: { slug: true, name: true, category: true } },
+      customMemberships: { select: { group: { select: { slug: true } } } },
     } });
     if (!student) return null;
     const events = await tx.event.findMany({ where: { status: "APPROVED",
