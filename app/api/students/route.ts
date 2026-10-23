@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
       }) : null;
 
       if (!rawStudent) {
-        return NextResponse.json(err("Student not found or ineligible"), {
+        return NextResponse.json(err("Student not found or not included in the groups selected for this event."), {
           status: 404,
         });
       }

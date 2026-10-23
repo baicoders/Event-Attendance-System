@@ -13,6 +13,7 @@ import {
   QrCode,
   Settings,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,6 +44,7 @@ const navigationItems: NavigationItem[] = [
   { text: "Dashboard", route: "/dashboard", icon: LayoutDashboard },
   { text: "Calendar", route: "/calendar", icon: CalendarDays },
   { text: "Students", route: "/students", icon: Users },
+  { text: "Custom Groups", route: "/custom-groups", icon: UsersRound },
   { text: "Attendance", route: "/attendance", icon: QrCode },
   { text: "Reports", route: "/reports", icon: BarChart3 },
   // Shown to everyone: organizers get their own account controls there, admins

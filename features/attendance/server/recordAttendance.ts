@@ -92,7 +92,9 @@ export async function recordAttendance(
           where: { id: studentId, ...buildEventStudentFilter(event) },
           select: { id: true },
         });
-        if (!student) throw new RecordingError("Student is not included in the event.", 404, "STUDENT_UNAVAILABLE");
+        if (!student) throw new RecordingError(event.category === "CUSTOM"
+          ? "Student is not a member of the custom groups selected for this event."
+          : "Student is not included in the event.", 404, "STUDENT_UNAVAILABLE");
 
         await takeRecordPairLock(tx, eventId, studentId);
 

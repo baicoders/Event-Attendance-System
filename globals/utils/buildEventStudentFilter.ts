@@ -26,6 +26,12 @@ export const buildEventStudentFilter = (
     return where;
   }
 
+  if (event.category === "CUSTOM") {
+    return { customMemberships: { some: { group: {
+      category: "CUSTOM", slug: { in: includedSlugs },
+    } } } };
+  }
+
   where.groups = {
     some: {
       slug: { in: includedSlugs },
@@ -40,7 +46,10 @@ export const buildEventStudentFilter = (
  * based on the event's category and included groups.
  */
 export const isStudentInEvent = (
-  student: Pick<Student, "schoolLevel"> & { groups?: ReadonlyArray<{ slug: string }> },
+  student: Pick<Student, "schoolLevel"> & {
+    groups?: ReadonlyArray<{ slug: string }>;
+    customMemberships?: ReadonlyArray<{ group: { slug: string } }>;
+  },
   event: { category: EventCategory; includedGroups: ReadonlyArray<{ slug: string }> },
 ): boolean => {
   const category = event.category;
@@ -49,5 +58,8 @@ export const isStudentInEvent = (
   if (category === "SHS") return student.schoolLevel === "SHS";
 
   const includedSlugs = event.includedGroups.map((group) => group.slug);
+  if (category === "CUSTOM") {
+    return student.customMemberships?.some(({ group }) => includedSlugs.includes(group.slug)) ?? false;
+  }
   return student.groups?.some((group) => includedSlugs.includes(group.slug)) ?? false;
 };
