@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Settings, UsersRound } from "lucide-react";
+import { LogOut, Settings, Network } from "lucide-react";
 
 import { useAuth } from "@/globals/contexts/AuthContext";
 import { useLogout } from "@/globals/hooks/useLogout";
@@ -82,7 +82,7 @@ const MobileTopBar = () => {
                     : undefined
               }
             >
-              <UsersRound aria-hidden="true" />
+              <Network aria-hidden="true" />
               Custom Groups
             </Link>
           </DropdownMenuItem>
