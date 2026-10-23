@@ -24,3 +24,26 @@ test("database diagnostics redact connection strings and exclude raw query error
   assert.deepEqual(databaseErrorLog(new Error("private query")), { name: "Error" });
   assert.deepEqual(databaseErrorLog(null), {});
 });
+
+test("database diagnostics omit query parameter values from driver and raw-query errors", () => {
+  // PostgreSQL 22P02 repeats the invalid parameter in its message; the installed
+  // Prisma pg adapter preserves it as originalMessage and meta.message.
+  const detail = 'invalid input syntax for type integer: "synthetic-private-value"';
+  const error = { name: "PrismaClientKnownRequestError", code: "P2010", meta: {
+    message: detail,
+    driverAdapterError: { cause: { kind: "InvalidInputValue", originalCode: "22P02", originalMessage: detail } },
+  } };
+  assert.deepEqual(databaseErrorLog(error), {
+    name: "PrismaClientKnownRequestError", code: "P2010", kind: "InvalidInputValue", driverCode: "22P02",
+  });
+  assert.deepEqual(databaseErrorLog({ code: "P2010", meta: { message: detail } }), { code: "P2010" });
+});
+
+test("connection diagnostics redact URLs containing literal quote characters", () => {
+  const error = { meta: { driverAdapterError: { cause: {
+    kind: "DatabaseNotReachable", originalMessage: "Cannot reach postgresql://user:s'cret@db.example.com/db",
+  } } } };
+  assert.deepEqual(databaseErrorLog(error), {
+    kind: "DatabaseNotReachable", detail: "Cannot reach [REDACTED_URL]",
+  });
+});
