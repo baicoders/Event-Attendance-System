@@ -23,6 +23,7 @@ type Toggle = {
 
 const TOGGLES: Toggle[] = [
   { key: "absentees", label: "Include absentees", defaultOn: true },
+  { key: "late", label: "Show Late counter", defaultOn: true },
 ];
 
 /**

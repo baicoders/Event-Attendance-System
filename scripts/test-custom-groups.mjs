@@ -226,6 +226,12 @@ try {
   assert.equal(await evaluate('[...document.querySelectorAll("h3")].every(h=>getComputedStyle(h).borderBottomWidth==="0px")'), true);
   await command('Page.reload');
   await until('document.querySelector("#print-noted-by")?.value === "Dean of Students" && document.querySelectorAll(".print-table").length === 2');
+  assert.equal(await evaluate('getComputedStyle(document.querySelector("header")).borderBottomWidth'), '2px');
+  assert.equal(await evaluate('document.querySelector("footer").innerText.includes("Made by Programmers Guild")'), true);
+  await until('Object.keys(document.querySelector("#print-late")).some(key=>key.startsWith("__reactProps"))');
+  await evaluate('document.querySelector("#print-late").click()');
+  await until('new URL(location.href).searchParams.get("late") === "0" && ![...document.querySelectorAll("strong")].some(el=>el.textContent==="Late:")');
+  assert.equal(await evaluate('[...document.querySelectorAll("strong")].some(el=>el.textContent==="Eligible:")'), true);
   await evaluate('document.fonts.ready.then(()=>true)');
   const pdf = Buffer.from((await command('Page.printToPDF', { printBackground: true, preferCSSPageSize: true })).data, 'base64');
   assert.equal(pdf.subarray(0, 4).toString(), '%PDF');

@@ -15,6 +15,7 @@ import type { SheetGrouping } from "@/features/reports/utils/printGrouping";
 
 export type SheetOptions = {
   includeAbsentees: boolean;
+  showLateCounter?: boolean;
   notedBy?: string;
   groupBy: SheetGrouping;
   columns: readonly PrintColumnKey[];
@@ -151,7 +152,7 @@ export default function AttendanceSheet({
 
   return (
     <div className="mx-auto w-full max-w-4xl bg-white p-8 text-black print:max-w-none print:p-0">
-      <header className="print-break-inside-avoid mb-6 text-center">
+      <header className="print-break-inside-avoid mb-6 border-b-2 border-black pb-4 text-center">
         <h1 className="text-xl font-bold uppercase tracking-[0.15em]">Event Attendance Sheet</h1>
       </header>
 
@@ -202,9 +203,9 @@ export default function AttendanceSheet({
           <span>
             <strong>Present:</strong> {totals.present}
           </span>
-          <span>
+          {options.showLateCounter !== false ? <span>
             <strong>Late:</strong> {totals.late}
-          </span>
+          </span> : null}
           <span>
             <strong>Absent:</strong> {totals.absent}
           </span>
@@ -298,6 +299,7 @@ export default function AttendanceSheet({
       {/* ================= Footer ================= */}
       <footer className="mt-8 border-t border-gray-400 pt-2 text-[10px] text-gray-600">
         <p>Prepared {formatReportDateTime(report.evaluatedAt)} Asia/Manila (UTC+08:00).</p>
+        <p>Made by Programmers Guild</p>
       </footer>
     </div>
   );

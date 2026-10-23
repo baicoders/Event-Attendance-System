@@ -68,6 +68,7 @@ export default async function PrintPage({
 
   const options: SheetOptions = {
     includeAbsentees: isEnabled(query.absentees),
+    showLateCounter: isEnabled(query.late),
     notedBy: resolveNotedBy(query.notedBy),
     groupBy: resolveSheetGrouping(query.sheetGroupBy, query.grouped),
     columns: resolvePrintColumns(query.columns, query.signature),
