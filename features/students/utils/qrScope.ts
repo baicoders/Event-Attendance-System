@@ -25,7 +25,7 @@ export function filterQRStudents(students: Student[], search: string, filters: P
   return students.filter((student) => {
     if (QR_FILTER_FIELDS.some((field) => filters[field] && String(student[field] || "") !== filters[field])) return false;
     if (!needle) return true;
-    return [student.id, student.firstName, student.middleName, student.lastName, student.schoolLevel, student.yearLevel, student.department, student.program, student.strand, student.house, student.section]
+    return [student.id, student.usn, student.lrn, student.firstName, student.middleName, student.lastName, student.schoolLevel, student.yearLevel, student.department, student.program, student.strand, student.house, student.section]
       .some((value) => String(value || "").toLocaleLowerCase().includes(needle));
   });
 }

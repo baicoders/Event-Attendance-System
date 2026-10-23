@@ -36,12 +36,12 @@ export function searchManualRoster(index: ManualEntry[], input: string): ManualE
   const nameQuery = normalizeName(raw);
   const tokens = nameQuery.split(" ").filter(Boolean);
   return index.map((entry) => {
-    const id = entry.student.id;
+    const identifiers = [entry.student.id, entry.student.usn, entry.student.lrn].filter((value): value is string => !!value);
     let tier = 0;
     let strength = 0;
-    if (id === raw) tier = 1;
-    else if (id.startsWith(raw)) tier = 2;
-    else if (id.includes(raw)) tier = 3;
+    if (identifiers.some(id => id === raw)) tier = 1;
+    else if (identifiers.some(id => id.startsWith(raw))) tier = 2;
+    else if (identifiers.some(id => id.includes(raw))) tier = 3;
     else if (entry.name === nameQuery || entry.alternateName === nameQuery) tier = 4;
     else if (tokens.every((token) => entry.words.some((word) => word.startsWith(token)))) {
       tier = 5;
