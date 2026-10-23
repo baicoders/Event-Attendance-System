@@ -16,7 +16,7 @@ import ImportResult, { type ConfirmedImportResult } from "./ImportResult";
 import { receiptCommitResponseSchema, receiptSchema, type Receipt } from "../import/receiptContract";
 
 const utf8Bytes = (value: string) => new TextEncoder().encode(value).byteLength;
-const payloadFor = (source: ImportSource) => ({ v: 1 as const, fileName: source.fileName, sourceHash: source.sourceHash, csv: source.csv });
+const payloadFor = (source: ImportSource) => ({ v: 2 as const, fileName: source.fileName, sourceHash: source.sourceHash, csv: source.csv });
 
 type FrozenImportCommand = { commandId: string; body: string; sourceHash: string; fileName: string; counts: ImportCounts };
 
@@ -245,7 +245,7 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
     }
   };
 
-  return <Card className="min-w-0"><CardHeader><CardTitle>Student masterlist import</CardTitle><CardDescription>Review an authoritative CSV before changing student records.</CardDescription></CardHeader><CardContent className="space-y-5">
+  return <Card className="min-w-0"><CardHeader><CardTitle>Student masterlist import</CardTitle><CardDescription>Review USN/LRN matches and exact changes before applying. Blank optional cells preserve existing information.</CardDescription></CardHeader><CardContent className="space-y-5">
     {error && <p role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">{error}</p>}
     {busy && <p role="status">{committing.current ? (outcome === "unknown" ? "Resolving this import. Leave this tab open…" : "Confirming import. Leave this tab open…") : "Preparing authoritative review…"}</p>}
     {outcome !== "source" && source ? <ImportResult result={outcome === "success" ? result : null} fileName={source.fileName} commandId={command?.commandId ?? null} busy={busy} onCheck={() => void checkResult()} onRetry={() => void retrySameCommand()} onAnother={() => void resetAfterOutcome()} /> : preview ? <ImportReviewStep preview={preview} busy={busy} expired={now >= Date.parse(preview.expiresAt)} onReview={() => void review()} onConfirm={() => void commit()} onReplace={reset} onCreateGroup={defaults => { if (source) setGroupDefaults({ ...defaults, generation: generation.current, source }); }} /> : <ImportSourceStep source={source} busy={busy || reading} reading={reading} largeAcknowledged={largeAcknowledged} onAcknowledge={() => setLargeAcknowledged(true)} onFile={file => void readFile(file)} onReset={reset} onReview={() => void review()} />}

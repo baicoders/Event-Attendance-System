@@ -66,9 +66,8 @@ test("all copies of duplicate IDs are blocked even when far apart", () => {
 test("shared domain validation blocks invalid level combinations and conditional memberships", () => {
   for (const [student, field] of [
     [{ yearLevel: "GRADE_11" }, "yearLevel"],
-    [{ program: "" }, "program"], [{ department: "" }, "department"],
     [{ schoolLevel: "SHS", yearLevel: "GRADE_11", strand: "stem" }, "department"],
-    [{ id: "short" }, "id"], [{ firstName: " " }, "firstName"],
+    [{ id: "short" }, "usn"], [{ firstName: " " }, "firstName"],
   ] as Array<[Partial<CanonicalRow>, string]>) {
     const result = classifyStudentImport({ rows: [row(student)], groups, students: [] });
     assert.equal(result.rows[0].status, "BLOCKED");
@@ -81,12 +80,11 @@ test("ambiguous or invalid existing relationships block rather than silently rep
   for (const student of [
     existing({ groups: [...existing().groups, groups[1]] }),
     existing({ groups: [...existing().groups, { id: "bad", slug: "all", name: "All", category: "ALL" }] }),
-    existing({ groups: existing().groups.filter((g) => g.category !== "HOUSE") }),
     existing({ groups: [...existing().groups, groups[5]] }),
   ]) {
     const review = classifyStudentImport({ rows: [row()], groups, students: [student] }).rows[0];
     assert.equal(review.status, "BLOCKED");
-    assert.ok(review.reasons.some((r) => r.code === "INVALID_EXISTING_STUDENT" || r.code === "AMBIGUOUS_EXISTING_GROUPS"));
+    assert.ok(review.reasons.some((r) => r.code === "INVALID_STUDENT" || r.code === "INVALID_EXISTING_STUDENT" || r.code === "AMBIGUOUS_EXISTING_GROUPS"));
   }
 });
 

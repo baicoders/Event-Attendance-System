@@ -15,7 +15,7 @@ test("BOM CRLF and multiline quotes preserve physical source rows and text IDs",
 
 test("missing duplicate and unexpected headers are structural errors", () => {
   const cases = [
-    [header.replace(",strand", ""), "MISSING_HEADER"],
+    [header.replace("firstName", "optionalName"), "MISSING_HEADER"],
     [header.replace("strand", "house"), "DUPLICATE_HEADER"],
     [header + ",registrar", "UNEXPECTED_HEADER"],
     [header.replace("firstName", "FirstName"), "UNEXPECTED_HEADER"],

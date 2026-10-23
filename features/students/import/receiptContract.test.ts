@@ -7,7 +7,7 @@ const student: CanonicalRow = { id: "00000000001", lastName: "Doe", firstName: "
 const changes = [{ field: "firstName" as const, before: "John", after: "Jane" }];
 const counts = { total: 3, create: 1, update: 1, unchanged: 1, blocked: 0 };
 const review = (): ImportReview => ({ counts: { ...counts }, unknownGroups: [], rows: [
-  { csvRow: 2, student: { ...student }, status: "CREATE", changes: [], reasons: [], groupIds: ["section", "house", "program", "department"] },
+  { csvRow: 2, student: { ...student, usn: student.id, lrn: "" }, status: "CREATE", changes: [], reasons: [], groupIds: ["section", "house", "program", "department"] },
   { csvRow: 4, student: { ...student, id: "00000000002" }, status: "UPDATE", changes: changes.map((change) => ({ ...change })), reasons: [], groupIds: ["section", "house", "program", "department"] },
   { csvRow: 5, student: { ...student, id: "00000000003" }, status: "UNCHANGED", changes: [], reasons: [], groupIds: ["section", "house", "program", "department"] },
 ] });
@@ -23,10 +23,10 @@ test("receipt builder retains creation projection and exact update changes but c
   const api = await contracts; assert.ok(api, "receipt contracts and builder must exist");
   const source = review();
   const built = api.buildImportReceiptResult(source);
-  assert.deepEqual(built, result());
+  assert.deepEqual(built, { ...result(), v: 2, rows: result().rows.map(row=>row.status === "CREATE" ? {...row,student:{...student,usn:student.id,lrn:""}}:row) });
   source.rows[0].student.firstName = "Changed later";
   source.rows[1].changes[0].after = "Changed later";
-  assert.deepEqual(built, result());
+  assert.deepEqual(built, { ...result(), v: 2, rows: result().rows.map(row=>row.status === "CREATE" ? {...row,student:{...student,usn:student.id,lrn:""}}:row) });
   assert.equal(JSON.stringify(built).includes("groupIds"), false);
 });
 
@@ -38,7 +38,7 @@ test("receipt builder rejects blocked, inconsistent or unnormalized reviews", as
   const unknown = review(); unknown.unknownGroups = [{ slug: "missing", category: "SECTION", referenceCount: 1 }]; invalid.push(unknown);
   const inconsistent = review(); inconsistent.counts.update = 0; inconsistent.counts.unchanged = 2; invalid.push(inconsistent);
   const wrongProjection = review(); wrongProjection.rows[0].student.firstName = " Jane "; invalid.push(wrongProjection);
-  const invalidDomain = review(); invalidDomain.rows[0].student.department = ""; invalid.push(invalidDomain);
+  const invalidDomain = review(); invalidDomain.rows[0].student.schoolLevel = "SHS"; invalid.push(invalidDomain);
   const wrongChange = review(); wrongChange.rows[1].changes[0].after = "Other name"; invalid.push(wrongChange);
   const noChange = review(); noChange.rows[1].changes = []; invalid.push(noChange);
   const fabricatedNoopChange = review(); fabricatedNoopChange.rows[2].changes = changes; invalid.push(fabricatedNoopChange);
@@ -93,7 +93,7 @@ test("metadata rejects paths, malformed hashes, identity and observation timesta
     { ...metadata(), actorNameSnapshot: " " }, { ...metadata(), commandId: "not-a-uuid" },
     { ...metadata(), sourceFileHash: "z".repeat(64) }, { ...metadata(), requestHash: "a".repeat(65) },
     { ...metadata(), createdAt: "invalid" }, { ...metadata(), committedAt: "2026-09-29T10:00:00.000Z" },
-    { ...metadata(), rawCsv: "source" }, { ...metadata(), v: 2 },
+    { ...metadata(), rawCsv: "source" }, { ...metadata(), v: 3 },
   ]) assert.equal(api.receiptMetadataSchema.safeParse(invalid).success, false);
 });
 

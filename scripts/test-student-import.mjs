@@ -23,7 +23,7 @@ const row = (id, extra = {}) => ({ id, lastName: "Import", firstName: "Student",
 const csvCell = (value) => /[",\r\n]/.test(String(value)) ? `"${String(value).replaceAll('"', '""')}"` : String(value);
 export const toCsv = (rows) => `${headers.join(",")}\n${rows.map((r) => headers.map((h) => csvCell(r[h] ?? "")).join(",")).join("\n")}\n`;
 const command = (rows, fileName = "reviewed-roster.csv") => fromCsv(toCsv(rows), fileName);
-const fromCsv = (csv, fileName = "reviewed-roster.csv") => ({ v: 1, fileName, sourceHash: createHash("sha256").update(csv, "utf8").digest("hex"), csv });
+const fromCsv = (csv, fileName = "reviewed-roster.csv") => ({ v: 2, fileName, sourceHash: createHash("sha256").update(csv, "utf8").digest("hex"), csv });
 const signedCookie = (user) => {
   const payload = Buffer.from(JSON.stringify({ session: { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status, rejectionReason: null, mustChangePassword: false, credentialVersion: user.credentialVersion }, exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url");
   return `event-attendance-auth=${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`;
@@ -48,7 +48,7 @@ async function preview(input, cookie) {
   assert.equal(response.result?.success, true);
   assert.equal(response.cache, "private, no-store");
   const data = response.result.data;
-  assert.equal(data.v, 1);
+  assert.equal(data.v, 2);
   assert.equal(data.counts.total, data.rows.length);
   assert.equal(data.counts.total, data.counts.create + data.counts.update + data.counts.unchanged + data.counts.blocked);
   assert.ok(Number.isFinite(Date.parse(data.preparedAt)) && Date.parse(data.expiresAt) > Date.parse(data.preparedAt));
@@ -111,7 +111,7 @@ try {
   const adminCookie = signedCookie(admins[0]), otherCookie = signedCookie(admins[1]), orgCookie = signedCookie(organizer);
   const groupData = [ ["section-a", "Section A", "SECTION"], ["section-b", "Section B", "SECTION"], ["azul", "Azul", "HOUSE"], ["bsit", "BSIT", "PROGRAM"], ["computer-studies", "Computer Studies", "DEPARTMENT"], ["stem", "STEM", "STRAND"] ].map(([slug, name, category]) => ({ id: slug, slug, name, category }));
   await db.group.createMany({ data: groupData });
-  const save = async (input) => db.student.create({ data: { id: input.id, firstName: input.firstName, lastName: input.lastName, middleName: input.middleName || null, schoolLevel: input.schoolLevel, yearLevel: input.yearLevel, groups: { connect: [input.section, input.house, input.program, input.department, input.strand].filter(Boolean).map((id) => ({ id })) } } });
+  const save = async (input) => db.student.create({ data: { id: input.id, usn: input.id, firstName: input.firstName, lastName: input.lastName, middleName: input.middleName || null, schoolLevel: input.schoolLevel, yearLevel: input.yearLevel, groups: { connect: [input.section, input.house, input.program, input.department, input.strand].filter(Boolean).map((id) => ({ id })) } } });
   const existing = row("00000123456"), identical = row("00000123457"), omitted = row("00000123458");
   await save(existing); await save(identical); await save(omitted);
   const event = await db.event.create({ data: { id: "import-event", title: "Import concurrency", category: "ALL", status: "APPROVED", createdById: admins[0].id, start: new Date(Date.now() - 3600000), end: new Date(Date.now() + 3600000) } });
@@ -339,7 +339,7 @@ try {
       await revoker.query("COMMIT");
       rejected(await request, change.status ? [403] : [401]);
       assert.equal(await studentWrites(), beforeWrites);
-      assert.equal(await db.student.count({ where: { id: "00000123830" } }), 0);
+      assert.equal(await db.student.count({ where: { usn: "00000123830" } }), 0);
       record("account revocation wins at actor lock barrier", { kind: change.status ? "deactivation" : "credential-version", actorGuardPid });
     } finally {
       await revoker.query("ROLLBACK"); await Promise.allSettled([request].filter(Boolean)); revoker.release();
@@ -357,12 +357,12 @@ try {
   const halfReceiptsBefore = await receiptCount();
   try {
     await controller.query("SELECT pg_advisory_lock($1)", [gateKey.toString()]);
-    await pool.query(`CREATE FUNCTION import_test_half() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.id = '00000123821' THEN PERFORM pg_advisory_xact_lock(${gateKey}); END IF; RETURN NEW; END; $$`);
+    await pool.query(`CREATE FUNCTION import_test_half() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.usn = '00000123821' THEN PERFORM pg_advisory_xact_lock(${gateKey}); END IF; RETURN NEW; END; $$`);
     await pool.query('CREATE TRIGGER import_test_half BEFORE INSERT ON "Student" FOR EACH ROW EXECUTE FUNCTION import_test_half()');
     halfCommit = commit(halfInput, halfReview, adminCookie);
     const waitingImportPid = await waitForAdvisoryWait(gateKey);
     assert.ok(waitingImportPid, "second Student INSERT reached the trigger barrier after the first tentative write");
-    assert.equal(await db.student.count({ where: { id: { in: ["00000123820", "00000123821"] } } }), 0, "unlocked independent reader sees no uncommitted half import");
+    assert.equal(await db.student.count({ where: { usn: { in: ["00000123820", "00000123821"] } } }), 0, "unlocked independent reader sees no uncommitted half import");
     assert.equal(await receiptCount(), halfReceiptsBefore);
     const inFlightCommandId = commandBody(halfInput, halfReview).commandId;
     const missingWhileInFlight = await api(`/api/students/imports/commands/${inFlightCommandId}`, undefined, adminCookie, { method: "GET" });
@@ -372,7 +372,7 @@ try {
     await reader.query("BEGIN");
     const readerPid = (await reader.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
     readerResult = reader.query("SELECT pg_advisory_xact_lock_shared($1)", [ROSTER_EXCLUSIVE_KEY.toString()]).then(async () => {
-      const result = await reader.query('SELECT COUNT(*)::int AS n FROM "Student" WHERE id=ANY($1::text[])', [["00000123820", "00000123821"]]);
+      const result = await reader.query('SELECT COUNT(*)::int AS n FROM "Student" WHERE usn=ANY($1::text[])', [["00000123820", "00000123821"]]);
       await reader.query("COMMIT"); return result.rows[0].n;
     });
     await waitForBlockedBackend(readerPid);
@@ -498,12 +498,37 @@ try {
         assert.ok([200, 201].includes(retry.status), JSON.stringify(retry.result));
         postCommitRetries.push({ status: retry.status, elapsedMs: Math.round(retry.elapsedMs) });
       }
-      assert.equal(await db.student.count({ where: { id: { in: rows.map((r) => r.id) } } }), count);
+      assert.equal(await db.student.count({ where: { usn: { in: rows.map((r) => r.id) } } }), count);
       const later = await preview(input, adminCookie); assert.equal(later.data.counts.unchanged, count);
       record("large reviewed import with durable receipt", { rows: count, csvBytes: Buffer.byteLength(input.csv), previewRequestBytes: Buffer.byteLength(JSON.stringify(input)), commitRequestBytes: Buffer.byteLength(JSON.stringify(commandBody(input, prepared))), previewMs: Math.round(prepared.elapsedMs), commitMs: Math.round(result.elapsedMs), dbTransactionObservedMs, dbTransactionSamplingIntervalMs: 25, receiptJsonbStoredBytes: receiptSize[0].stored_bytes, receiptJsonTextBytes: receiptSize[0].json_text_bytes, receiptResponseBytes, fixtureRssChangeBytes: process.memoryUsage().rss - memoryBefore, appRssChangeBytes: appMemoryAfterCommit - appMemoryBefore, importLockObserved, concurrentAttendance: scans.map((scan) => ({ status: scan.status, elapsedMs: Math.round(scan.elapsedMs) })), postCommitRetries });
     }
   }
   }
+  // Application-level partial-record milestone, using the same reviewed endpoints.
+  const priorPartial = await db.student.findUniqueOrThrow({where:{id:existing.id},include:{groups:true}});
+  const partialInput=fromCsv(`usn,lrn,firstName,lastName\n${existing.id},000000129901,${priorPartial.firstName},${priorPartial.lastName}\n,000000129900,Synthetic,LRN\n00000123990,,Synthetic,USN\n00000123991,000000129902,Synthetic,Dual`,'partial-students.csv');
+  const partialReview=await preview(partialInput,adminCookie);
+  assert.deepEqual(partialReview.data.counts,{total:4,create:3,update:1,unchanged:0,blocked:0});
+  const partialReceipt=accepted(await commit(partialInput,partialReview,adminCookie));
+  assert.equal(partialReceipt.v,2);
+  const afterPartial=await db.student.findUniqueOrThrow({where:{id:existing.id},include:{groups:true}});
+  assert.equal(afterPartial.lrn,'000000129901');
+  assert.deepEqual(afterPartial.groups.map(g=>g.id).sort(),priorPartial.groups.map(g=>g.id).sort());
+  const lrnStudent=await db.student.findUniqueOrThrow({where:{lrn:'000000129900'}});
+  assert.equal(lrnStudent.usn,null);assert.equal(lrnStudent.schoolLevel,null);assert.equal(lrnStudent.yearLevel,null);
+  assert.notEqual(lrnStudent.id,lrnStudent.lrn);
+  for(const code of [lrnStudent.id,lrnStudent.lrn]) {
+    const scan=await api('/api/records',{eventId:event.id,studentId:code,method:'SCANNED',expectedMode:'TIME_IN'},adminCookie);
+    assert.ok([200,201].includes(scan.status),JSON.stringify(scan.result));assert.equal(scan.result.data.studentId,lrnStudent.id);
+  }
+  const houseEvent=await db.event.create({data:{title:'Synthetic House',category:'HOUSE',status:'APPROVED',start:new Date(),end:new Date(),includedGroups:{connect:{id:'azul'}}}});
+  rejected(await api('/api/records',{eventId:houseEvent.id,studentId:lrnStudent.lrn,method:'MANUAL',expectedMode:'TIME_IN'},adminCookie),[404]);
+  const priorRepeat=await snapshot();const repeatPartial=await preview(partialInput,adminCookie);
+  assert.equal(repeatPartial.data.counts.unchanged,4);accepted(await commit(partialInput,repeatPartial,adminCookie));
+  assert.equal(await snapshot(),priorRepeat);
+  const splitPartial=await preview(fromCsv(`usn,lrn,firstName,lastName\n${existing.id},${lrnStudent.lrn},Synthetic,Conflict`),adminCookie);
+  assert.equal(splitPartial.data.counts.blocked,1);assert.equal(splitPartial.data.previewToken,null);
+  record('partial USN/LRN application upserts preserve groups, history and ALL attendance; scoped absence and split identity fail closed');
   if (process.argv.includes("--browser") || process.argv.includes("--browser-only") || process.argv.includes("--browser-race")) {
     const { runStudentImportBrowser } = await import("./student-import-browser.mjs");
     await runStudentImportBrowser({ base, cookie: adminCookie, toCsv, row, db });

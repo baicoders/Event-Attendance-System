@@ -48,3 +48,16 @@ import/receipt validator is frozen in legacyStudentSchema until PR 3 versions it
 POST now creates only (duplicates require explicit edit); PATCH merges omitted
 fields under the roster lock, supports explicit null clearing, and revalidates the
 complete candidate. USN/LRN conflicts include legacy internal-ID namespace matches.
+
+PR 2 submitted: https://github.com/baicoders/Event-Attendance-System/pull/108
+(e0a91cc), stacked on #107. 171 tests, production build and mobile/API/browser
+checks passed. Bulk employee classification and school-level-switch findings fixed.
+
+PR 3 uses request/receipt v2. V1 source normalization and signed-command hashing
+remain frozen for exact receipt replay; old first executions require v2 review.
+The receipt CHECK migration preserves structural/count/byte checks for both versions.
+New IDs are generated only inside commit and captured in immutable receipts.
+Optional blanks preserve existing categories and scalar values; names remain
+mandatory per row. Only material scalar/group changes are written. Repeated codes,
+repeated canonical targets, split identities and known-identifier replacement block.
+All matched namespaces and previously absent matches participate in stale review.

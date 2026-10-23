@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { AuthError, type AuthSession } from '@/globals/utils/auth';
-import { studentSchema } from '@/globals/schemas/legacyStudentSchema';
+import { studentSchema } from '@/globals/schemas/studentSchema';
 import { takeRosterExclusiveLock, takeImportCommandLock } from '@/globals/utils/pgLocks';
 import { parseStudentImportCsv, hasStructuralCsvErrors } from './csv';
 import { classifyStudentImport, normalizeStudentImportRow } from './classify';
@@ -23,25 +23,32 @@ const groupSelect = {id:true,slug:true,name:true,category:true} as const;
 const studentSelect = {id:true,usn:true,lrn:true,firstName:true,lastName:true,middleName:true,schoolLevel:true,yearLevel:true,createdAt:true,updatedAt:true,groups:{select:groupSelect}} as const;
 function chunks<T>(values:T[]) { const result:T[][]=[]; for(let i=0;i<values.length;i+=READ_CHUNK) result.push(values.slice(i,i+READ_CHUNK)); return result; }
 
+function normalizeLegacyRow(row: ParsedImportRow['student']) {
+  const result={...row};
+  for(const field of ['id','firstName','lastName','middleName'] as const)result[field]=row[field].trim();
+  for(const field of Object.keys(IMPORT_GROUP_FIELDS) as (keyof typeof IMPORT_GROUP_FIELDS)[])result[field]=row[field].trim().toLowerCase();
+  return result;
+}
+
 export function prepareImport(input: ImportRequest) {
   const sourceHash = createHash('sha256').update(input.csv,'utf8').digest('hex');
   if (sourceHash !== input.sourceHash.toLowerCase()) throw new ImportError('CSV source hash does not match this file. Replace the file.', 'SOURCE_HASH_MISMATCH');
-  const parsed = parseStudentImportCsv(input.csv);
+  const parsed = parseStudentImportCsv(input.csv, input.v === 1);
   if (hasStructuralCsvErrors(parsed)) throw new ImportError(parsed.errors.filter(e=>e.code!=='DUPLICATE_ID').slice(0,20).map(e=>e.message).join(' '), 'INVALID_CSV');
-  const rows = parsed.rows.map(r=>({csvRow:r.csvRow,student:normalizeStudentImportRow(r.student)}));
-  return {rows,sourceHash,normalizedInputHash:importHash({v:1,rows})};
+  const rows = parsed.rows.map(r=>({csvRow:r.csvRow,student:input.v === 1 ? normalizeLegacyRow(r.student) : normalizeStudentImportRow(r.student)}));
+  return {rows,sourceHash,normalizedInputHash:importHash({v:input.v,rows})};
 }
 
 /** Bounded set reads through this transaction's reader, never global Prisma. */
 export async function readImportState(tx: Prisma.TransactionClient, rows: ParsedImportRow[]) {
   const fields = Object.keys(IMPORT_GROUP_FIELDS) as (keyof typeof IMPORT_GROUP_FIELDS)[];
   const slugs = [...new Set(rows.flatMap(r=>fields.map(f=>r.student[f]).filter(Boolean)))].sort();
-  const ids = [...new Set(rows.map(r=>r.student.id))].sort();
+  const ids = [...new Set(rows.flatMap(r=>[r.student.usn,r.student.lrn,r.student.id]).filter((value):value is string=>!!value))].sort();
   const groups: Prisma.GroupGetPayload<{select:typeof groupSelect}>[]=[];
   const students: Prisma.StudentGetPayload<{select:typeof studentSelect}>[]=[];
   for (const batch of chunks(slugs)) groups.push(...await tx.group.findMany({where:{slug:{in:batch}},select:groupSelect}));
   for (const batch of chunks(ids)) students.push(...await tx.student.findMany({where:{OR:[{id:{in:batch}},{usn:{in:batch}},{lrn:{in:batch}}]},select:studentSelect}));
-  return {groups,students};
+  return {groups,students:[...new Map(students.map(student=>[student.id,student])).values()]};
 }
 
 export async function guardImportActor(tx: Prisma.TransactionClient, actor: AuthSession) {
@@ -54,6 +61,7 @@ export async function guardImportActor(tx: Prisma.TransactionClient, actor: Auth
 
 export async function previewStudentImport(db:PrismaClient, raw:unknown, actor:AuthSession) {
   const input = importRequestSchema.parse(raw);
+  if(input.v !== 2) throw new ImportError('Import format changed. Reload and review the file again.','IMPORT_CONTRACT_UPGRADED',410);
   const prepared = prepareImport(input);
   const state = await db.$transaction(async tx=>{
     await guardImportActor(tx,actor);
@@ -64,7 +72,7 @@ export async function previewStudentImport(db:PrismaClient, raw:unknown, actor:A
   const expiresAt=preparedAt+IMPORT_TOKEN_TTL_MS;
   const token:ImportToken={v:1,purpose:IMPORT_TOKEN_PURPOSE,actorId:actor.id,fileName:input.fileName,sourceHash:prepared.sourceHash,
     normalizedInputHash:prepared.normalizedInputHash,reviewHash:hashImportReview(prepared.rows,state.students,state.groups),preparedAt,expiresAt};
-  return {...review,v:1 as const,previewToken:review.counts.blocked===0 ? signImportToken(token) : null,preparedAt:new Date(preparedAt).toISOString(),expiresAt:new Date(expiresAt).toISOString()};
+  return {...review,v:2 as const,previewToken:review.counts.blocked===0 ? signImportToken(token) : null,preparedAt:new Date(preparedAt).toISOString(),expiresAt:new Date(expiresAt).toISOString()};
 }
 
 export function verifyReviewedInput(input:ImportCommitRequest, actor:AuthSession, prepared:ReturnType<typeof prepareImport>, allowExpired=false) {
@@ -91,11 +99,16 @@ export async function applyImport(tx:Prisma.TransactionClient,review:ImportRevie
   for(const row of review.rows) {
     if(row.status==='UNCHANGED') continue;
     if(row.status!=='CREATE' && row.status!=='UPDATE') throw new ImportError('Blocked imports cannot commit.','IMPORT_BLOCKED',409);
-    const student=studentSchema.parse(row.student);
-    const data={firstName:student.firstName,lastName:student.lastName,middleName:student.middleName||null,schoolLevel:student.schoolLevel,yearLevel:student.yearLevel};
-    const groups=row.groupIds.map(id=>({id}));
-    if(row.status==='CREATE') await tx.student.create({data:{id:student.id,usn:student.id,...data,groups:{connect:groups}}});
-    else await tx.student.update({where:{id:student.id},data:{...data,groups:{set:groups}}});
+    const student=studentSchema.parse({...row.student,schoolLevel:row.student.schoolLevel||null,yearLevel:row.student.yearLevel||null});
+    if(row.status==='CREATE') {
+      const saved=await tx.student.create({data:{usn:student.usn||null,lrn:student.lrn||null,firstName:student.firstName,lastName:student.lastName,middleName:student.middleName||null,schoolLevel:student.schoolLevel??null,yearLevel:student.yearLevel??null,groups:{connect:row.groupIds.map(id=>({id}))}}});
+      row.student.id=saved.id;
+    } else {
+      const scalarFields=new Set(['usn','lrn','firstName','lastName','middleName','schoolLevel','yearLevel']);
+      const data=Object.fromEntries(row.changes.filter(change=>scalarFields.has(change.field)).map(change=>[change.field,change.after]));
+      const groupsChanged=row.changes.some(change=>change.field in IMPORT_GROUP_FIELDS);
+      await tx.student.update({where:{id:row.student.id},data:{...data,...(groupsChanged?{groups:{set:row.groupIds.map(id=>({id}))}}:{})}});
+    }
   }
 }
 
@@ -133,6 +146,7 @@ export async function commitStudentImport(db:PrismaClient, raw:unknown, actor:Au
       if(existing.requestHash!==requestHash) throw new ImportError('This import reference was already used for a different reviewed command.','IMPORT_COMMAND_REUSED',409);
       return {receipt:projectImportReceipt(existing),replayed:true};
     }
+    if(input.v !== 2) throw new ImportError('Import format changed. Reload and review the file again.','IMPORT_CONTRACT_UPGRADED',410);
     assertImportTokenFresh(token);
     await takeRosterExclusiveLock(tx);
     assertImportTokenFresh(token);
@@ -145,7 +159,7 @@ export async function commitStudentImport(db:PrismaClient, raw:unknown, actor:Au
       commandId:input.commandId,actorId:actor.id,actorNameSnapshot:fresh.name,
       fileName:input.fileName,sourceFileHash:prepared.sourceHash,normalizedInputHash:prepared.normalizedInputHash,requestHash,
       totalRows:review.counts.total,createdCount:review.counts.create,updatedCount:review.counts.update,unchangedCount:review.counts.unchanged,
-      result:receiptResult,contractVersion:1,createdAt,committedAt:new Date(),
+      result:receiptResult,contractVersion:2,createdAt,committedAt:new Date(),
     }});
     return {receipt:projectImportReceipt(saved),replayed:false};
   });

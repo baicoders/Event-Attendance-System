@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { studentSchema } from "@/globals/schemas/legacyStudentSchema";
+import { studentSchema as legacyStudentSchema } from "@/globals/schemas/legacyStudentSchema";
+import { studentSchema } from "@/globals/schemas/studentSchema";
 import { normalizeStudentImportRow } from "./classify";
 import {
   CSV_HEADERS, MAX_IMPORT_BYTES, importCountsSchema, importPreviewSchema,
@@ -7,14 +8,15 @@ import {
   type ImportReview,
 } from "./contract";
 
-const studentId = z.string().length(11).refine((value) => value === value.trim(), "Student ID must already be normalized");
+const studentId = z.string().min(1).max(128).refine((value) => value === value.trim(), "Student ID must already be normalized");
 const receiptStudentSchema = importPreviewSchema.shape.rows.element.shape.student.superRefine((student, ctx) => {
-  const validation = studentSchema.safeParse(student);
+  const modern=Boolean(student.usn||student.lrn);
+  const validation = modern ? studentSchema.safeParse({...student,schoolLevel:student.schoolLevel||null,yearLevel:student.yearLevel||null}) : legacyStudentSchema.safeParse(student);
   if (!validation.success) {
     for (const issue of validation.error.issues) ctx.addIssue({ code: "custom", path: issue.path, message: issue.message });
   }
-  const normalized = normalizeStudentImportRow(student);
-  for (const field of CSV_HEADERS) {
+  const normalized = normalizeStudentImportRow(student, false);
+  for (const field of CSV_HEADERS.filter(field=>modern||!["usn","lrn"].includes(field))) {
     if (student[field] !== normalized[field]) ctx.addIssue({ code: "custom", path: [field], message: "Receipt student projection must already be normalized" });
   }
 });
@@ -45,13 +47,16 @@ function addByteLimitIssue(value: unknown, ctx: z.RefinementCtx) {
 }
 
 export const receiptResultSchema = z.object({
-  v: z.literal(1), rows: z.array(receiptRowSchema).min(1),
+  v: z.union([z.literal(1),z.literal(2)]), rows: z.array(receiptRowSchema).min(1),
 }).strict().superRefine((result, ctx) => {
   const ids = new Set<string>();
   const physicalRows = new Set<number>();
   for (const [index, row] of result.rows.entries()) {
     if (ids.has(row.studentId)) ctx.addIssue({ code: "custom", path: ["rows", index, "studentId"], message: "Duplicate receipt student ID" });
     if (physicalRows.has(row.csvRow)) ctx.addIssue({ code: "custom", path: ["rows", index, "csvRow"], message: "Duplicate physical CSV row" });
+    if(result.v===1 && row.studentId.length!==11) ctx.addIssue({code:"custom",path:["rows",index,"studentId"],message:"Historical ID must have eleven characters"});
+    if(result.v===2 && row.status==='CREATE' && !row.student.usn && !row.student.lrn) ctx.addIssue({code:'custom',path:['rows',index],message:'New receipt requires an external identifier'});
+    if(result.v===1 && ((row.status==='CREATE'&&(row.student.usn!==undefined||row.student.lrn!==undefined)) || (row.status==='UPDATE'&&row.changes.some(change=>change.field==='usn'||change.field==='lrn')))) ctx.addIssue({code:'custom',path:['rows',index],message:'Historical receipt has unexpected v2 fields'});
     ids.add(row.studentId); physicalRows.add(row.csvRow);
     if (row.status === "CREATE" && row.student.id !== row.studentId) ctx.addIssue({ code: "custom", path: ["rows", index, "studentId"], message: "Created projection must match its receipt identity" });
   }
@@ -65,7 +70,7 @@ const receiptCountsSchema = importCountsSchema.superRefine((counts, ctx) => {
   }
 });
 export const receiptMetadataSchema = z.object({
-  v: z.literal(1), id: z.string().min(1).max(128),
+  v: z.union([z.literal(1),z.literal(2)]), id: z.string().min(1).max(128),
   commandId: z.uuid().transform((value) => value.toLowerCase()),
   actorId: z.string().min(1).max(128),
   actorNameSnapshot: z.string().min(1).refine((value) => value.trim().length > 0),
@@ -93,6 +98,7 @@ function matchingCounts(expected: ImportCounts, actual: ImportCounts): boolean {
 
 export const receiptSchema = receiptMetadataSchema.safeExtend({ result: receiptResultSchema }).superRefine((receipt, ctx) => {
   if (!matchingCounts(receipt.counts, resultCounts(receipt.result.rows))) ctx.addIssue({ code: "custom", path: ["counts"], message: "Receipt metadata counts disagree with retained row statuses" });
+  if(receipt.v!==receipt.result.v) ctx.addIssue({code:"custom",message:"Receipt versions disagree"});
   addByteLimitIssue(receipt, ctx);
 });
 export type Receipt = z.infer<typeof receiptSchema>;
@@ -102,7 +108,7 @@ export const receiptHistorySchema = z.object({ items: z.array(receiptMetadataSch
 export type ReceiptHistory = z.infer<typeof receiptHistorySchema>;
 
 const reviewSchema = importPreviewSchema.pick({ rows: true, counts: true, unknownGroups: true });
-const optionalFields = new Set<ImportField>(["middleName", "program", "department", "strand"]);
+const optionalFields = new Set<ImportField>(CSV_HEADERS.filter(field=>!["id","firstName","lastName"].includes(field)));
 const changeValue = (student: CanonicalRow, field: ImportField) => optionalFields.has(field) && student[field] === "" ? null : student[field];
 
 /** Build historical evidence from the already classified review; never classify again. */
@@ -129,7 +135,7 @@ export function buildImportReceiptResult(review: ImportReview): ReceiptResult {
     return { ...identity, status: "UPDATE", studentLabel: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "), changes };
   });
   if (!matchingCounts(validated.counts, resultCounts(rows))) throw new Error("Import review counts disagree with row statuses");
-  return receiptResultSchema.parse({ v: 1, rows });
+  return receiptResultSchema.parse({ v: 2, rows });
 }
 
 /** Validate retained JSON and metadata together before insertion or API projection. */
