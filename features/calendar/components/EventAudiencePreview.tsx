@@ -18,7 +18,7 @@ const columns: ColumnDef<AudienceRosterStudent>[] = [
   { id: "name", header: "Name", enableSorting: false,
     cell: ({ row }) => `${row.original.lastName}, ${row.original.firstName}` },
   { id: "level", header: "Level / Year", enableSorting: false,
-    cell: ({ row }) => `${row.original.schoolLevel === "SHS" ? "SHS" : "College"} / ${row.original.yearLevel.replace("YEAR_", "").replace("GRADE_", "")}` },
+    cell: ({ row }) => `${row.original.schoolLevel === "SHS" ? "SHS" : row.original.schoolLevel === "COLLEGE" ? "College" : "Not provided"} / ${(row.original.yearLevel ?? "Not provided").replace("YEAR_", "").replace("GRADE_", "")}` },
   { accessorKey: "section", header: "Section", enableSorting: false,
     cell: ({ row }) => row.original.section ?? "—" },
 ];

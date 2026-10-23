@@ -41,12 +41,14 @@ model Event {
 }
 
 model Student {
-  id          String      @id
+  id          String      @id @default(cuid())
+  usn         String?     @unique
+  lrn         String?     @unique
   lastName    String
   firstName   String
   middleName  String?
-  yearLevel   YearLevel
-  schoolLevel SchoolLevel
+  yearLevel   YearLevel?
+  schoolLevel SchoolLevel?
 
   // Relations: Students can belong to multiple groups (House, Strand, etc.)
   groups  Group[]

@@ -7,15 +7,15 @@ export type ProgressStudent = {
   firstName: string;
   middleName: string | null;
   lastName: string;
-  schoolLevel: string;
-  yearLevel: string;
+  schoolLevel: string | null;
+  yearLevel: string | null;
   groups: ProgressGroup[];
   records: { timein: Date | null; timeout: Date | null }[];
 };
 export type ProgressCounts = { eligible: number; checkedIn: number; notYet: number; rate: number | null };
 export type ProgressBucket = ProgressCounts & { bucketKey: string; label: string; groupId?: string; slug?: string };
 export type ProgressRow = {
-  studentId: string; fullName: string; schoolLevel: string; yearLevel: string; sectionLabel: string;
+  studentId: string; fullName: string; schoolLevel: string | null; yearLevel: string | null; sectionLabel: string;
   checkedIn: boolean; timein: string | null; timeout: string | null; recordNeedsReview: boolean;
 };
 export type ProgressAggregate = {
@@ -39,7 +39,7 @@ function counts(students: ProgressStudent[]): ProgressCounts {
 }
 
 function bucketOf(student: ProgressStudent, groupBy: ProgressQuery["groupBy"]): string {
-  if (groupBy === "YEAR") return `y:${student.yearLevel}`;
+  if (groupBy === "YEAR") return student.yearLevel ? `y:${student.yearLevel}` : "none";
   const groups = new Set(student.groups.filter((group) => group.category === groupBy).map((group) => group.id));
   if (groups.size === 0) return "none";
   if (groups.size > 1) return "multiple";

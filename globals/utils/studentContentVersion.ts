@@ -12,8 +12,8 @@ type StudentRef = {
   firstName: string;
   lastName: string;
   middleName: string | null;
-  schoolLevel: string;
-  yearLevel: string;
+  schoolLevel: string | null;
+  yearLevel: string | null;
   createdAt: Date;
   updatedAt: Date;
   groups: GroupRef[];

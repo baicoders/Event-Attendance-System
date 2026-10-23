@@ -2,8 +2,8 @@ export type AudienceRosterStudent = {
   id: string;
   firstName: string;
   lastName: string;
-  schoolLevel: "COLLEGE" | "SHS";
-  yearLevel: string;
+  schoolLevel: "COLLEGE" | "SHS" | null;
+  yearLevel: string | null;
   section: string | null;
 };
 

@@ -6,7 +6,7 @@ export const GROUP_DIMENSIONS = ["DEPARTMENT", "PROGRAM", "STRAND", "HOUSE", "SE
 export type GroupDimension = (typeof GROUP_DIMENSIONS)[number];
 
 type Membership = { id: string; name: string; slug: string; category: EventCategory };
-export type GroupStudent = { yearLevel: YearLevel; groups: readonly Membership[] };
+export type GroupStudent = { yearLevel: YearLevel | null; groups: readonly Membership[] };
 export type GroupBucket = { key: string; id: string | null; slug: string | null; label: string };
 export type GroupSummary = GroupBucket & {
   eligible: number;
@@ -19,6 +19,7 @@ export type GroupSummary = GroupBucket & {
 
 export function bucketForStudent(student: GroupStudent, dimension: GroupDimension): GroupBucket {
   if (dimension === "YEAR") {
+    if (!student.yearLevel) return { key: "none", id: null, slug: null, label: "No year level" };
     return { key: `y:${student.yearLevel}`, id: null, slug: null, label: student.yearLevel.replace("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) };
   }
   const matches = [...new Map(student.groups.filter((group) => group.category === dimension).map((group) => [group.id, group])).values()];

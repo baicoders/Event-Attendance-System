@@ -8,8 +8,8 @@ export type PreviewStudentInput = {
   firstName: string;
   lastName: string;
   middleName: string | null;
-  schoolLevel: string;
-  yearLevel: string;
+  schoolLevel: string | null;
+  yearLevel: string | null;
   createdAt: Date;
   updatedAt: Date;
   groups: Array<{ id: string; slug: string; name: string; category: string }>;

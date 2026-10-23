@@ -28,7 +28,7 @@ function domainReasons(student: CanonicalRow, code = "INVALID_STUDENT"): ImportR
 
 function existingRow(student: ExistingImportStudent): CanonicalRow {
   const value: CanonicalRow = { id: student.id, firstName: student.firstName, lastName: student.lastName,
-    middleName: student.middleName ?? "", schoolLevel: student.schoolLevel, yearLevel: student.yearLevel,
+    middleName: student.middleName ?? "", schoolLevel: student.schoolLevel ?? "", yearLevel: student.yearLevel ?? "",
     section: "", house: "", program: "", department: "", strand: "" };
   for (const field of groupFields) value[field] = student.groups.find((group) => group.category === IMPORT_GROUP_FIELDS[field])?.slug ?? "";
   return value;

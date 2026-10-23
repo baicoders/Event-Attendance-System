@@ -153,7 +153,7 @@ const StudentDetails = ({ event, student, record, isLoading, onRecord, operation
         <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 sm:gap-4">
           <DetailRow
             label="Type"
-            value={`${capitalizeLabel(schoolLevel)} Student`}
+            value={`${capitalizeLabel(schoolLevel ?? "")} Student`}
           />
           {isCollege && (
             <DetailRow
@@ -171,7 +171,7 @@ const StudentDetails = ({ event, student, record, isLoading, onRecord, operation
           )}
           <DetailRow
             label="Year & Section"
-            value={`${labelForGroup("YEAR", yearLevel)} - ${formatSection(section)}`}
+            value={`${labelForGroup("YEAR", yearLevel ?? "")} - ${formatSection(section)}`}
           />
           <DetailRow
             label="Department"

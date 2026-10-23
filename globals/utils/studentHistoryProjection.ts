@@ -4,7 +4,7 @@ import type { HistoryOutcomeFilter, HistoryView, StudentHistoryRow } from "../ty
 import type { EventCategory, SchoolLevel } from "@prisma/client";
 
 type StudentInput = { id: string; firstName: string; lastName: string; middleName: string | null;
-  schoolLevel: SchoolLevel; groups: ReadonlyArray<{ slug: string; name: string; category: EventCategory }> };
+  schoolLevel: SchoolLevel | null; groups: ReadonlyArray<{ slug: string; name: string; category: EventCategory }> };
 type EventInput = { id: string; title: string; category: EventCategory; start: Date; end: Date;
   allDay: boolean; includedGroups: ReadonlyArray<{ slug: string }> };
 type RecordInput = { id: string; eventId: string; timein: Date | null; timeout: Date | null; method: string };

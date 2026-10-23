@@ -30,7 +30,7 @@ export type StudentAttendanceRecord = {
   eventId: string;
   studentId: string;
   fullName: string;
-  schoolLevel: SchoolLevel;
+  schoolLevel: SchoolLevel | null;
   section: Group | null;
   timein: string | null; // Date UTC timestamp
   timeout: string | null; // Date UTC timestamp

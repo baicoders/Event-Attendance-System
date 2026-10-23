@@ -22,7 +22,7 @@ export type StudentHistoryRow = {
 };
 
 export type StudentHistoryResponse = {
-  student: { id: string; displayName: string; schoolLevel: string; groups: string[] };
+  student: { id: string; displayName: string; schoolLevel: string | null; groups: string[] };
   evaluatedAt: string;
   timeZone: "Asia/Manila";
   range: { from: string; to: string; basis: "EVENT_START_DATE" };
