@@ -76,6 +76,7 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
     if (!snapshot || !principalId) return;
     const editingPrincipal = principalId;
     setEditorError(null);
+    setCanReloadEditor(false);
     try {
       const saved = await edit.mutateAsync({ principalId: editingPrincipal, expectedVersion: snapshot.editVersion, student: { ...values, id: snapshot.id } });
       if (principalRef.current !== editingPrincipal) return;
@@ -94,6 +95,8 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
         setEditorError(error.message);
       } else if (error instanceof ApiError && error.status === 404) {
         setEditorError("This student was deleted while you were editing. Your unsaved entries remain here until you close the form.");
+      } else if (error instanceof ApiError && [400, 409, 422].includes(error.status)) {
+        setEditorError(error.message);
       } else {
         setEditorError("The save outcome is unknown. Keep these entries and reload the current record before trying again. " + (error instanceof Error ? error.message : ""));
         setCanReloadEditor(true);

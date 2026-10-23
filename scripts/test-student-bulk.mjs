@@ -339,7 +339,7 @@ try {
   });
   assert.equal(exportRes.status, 200);
   assert.equal(exportRes.cache, "private, no-store");
-  assert.equal(exportRes.body.data.schemaVersion, 1);
+  assert.equal(exportRes.body.data.schemaVersion, 2);
   assert.equal(exportRes.body.data.rows.length, 2);
   const first = exportRes.body.data.rows.find((r) => r.studentId === "00000123459");
   assert.equal(first.firstName, "=2+2");

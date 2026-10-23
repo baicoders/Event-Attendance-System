@@ -38,7 +38,7 @@ export async function POST(req: Request) {
         tx.student.findMany({
           where: { id: { in: orderedIds } },
           select: {
-            id: true,
+            id: true, usn: true, lrn: true,
             firstName: true,
             lastName: true,
             middleName: true,
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     }
 
     const rows: BulkExportRow[] = students.map((s) => ({
-      studentId: s.id,
+      studentId: s.id, usn: s.usn, lrn: s.lrn,
       lastName: s.lastName,
       firstName: s.firstName,
       middleName: s.middleName ?? "",
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       ok({
         preparedAt: preparedAt.toISOString(),
         selectionCount: orderedIds.length,
-        schemaVersion: 1 as const,
+        schemaVersion: 2 as const,
         rows,
       }),
       { status: 200, headers: { "Cache-Control": "private, no-store" } },

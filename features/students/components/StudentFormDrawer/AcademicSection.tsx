@@ -5,6 +5,7 @@ import SectionHeading from "./SectionHeading";
 import { StudentFormValues } from "@/globals/schemas/studentSchema";
 import { Option } from "@/globals/types/primitives";
 import { SchoolLevel, YearLevel } from "@prisma/client";
+import { yearAfterSchoolLevelChange } from "@/globals/utils/studentAcademic";
 import { useEffect, useRef } from "react";
 
 const SCHOOL_LEVELS = [
@@ -30,12 +31,12 @@ const AcademicSection = () => {
     control,
     watch,
     formState: { errors, isDirty },
-    setValue,
+    setValue, getValues,
   } = useFormContext<StudentFormValues>();
 
   const schoolLevel = watch("schoolLevel");
   const previousSchoolLevel = useRef(schoolLevel);
-  const yearLevelOptions = YEAR_LEVELS_BY_SCHOOL_TYPE[schoolLevel ?? "COLLEGE"];
+  const yearLevelOptions = schoolLevel ? YEAR_LEVELS_BY_SCHOOL_TYPE[schoolLevel] : [...YEAR_LEVELS_BY_SCHOOL_TYPE.COLLEGE, ...YEAR_LEVELS_BY_SCHOOL_TYPE.SHS];
 
   useEffect(() => {
     // Opening this step after a name edit must preserve the existing year.
@@ -53,9 +54,9 @@ const AcademicSection = () => {
 
     // Always reset yearLevel when level changes to prevent "Grade 11"
     // being stuck in a "College" student's state
-    const defaultYearLevel = null;
+    const defaultYearLevel = yearAfterSchoolLevelChange(getValues("yearLevel"), schoolLevel);
     setValue("yearLevel", defaultYearLevel, { shouldDirty: true });
-  }, [schoolLevel, setValue, isDirty]);
+  }, [schoolLevel, setValue, getValues, isDirty]);
   return (
     <FieldSet className="animate-in fade-in slide-in-from-right-4 duration-300">
       <SectionHeading
@@ -74,7 +75,7 @@ const AcademicSection = () => {
           error={errors.schoolLevel?.message}
         />
 
-        {schoolLevel && (
+        {(
           <FormSelect
             clearable
             name="yearLevel"

@@ -24,7 +24,7 @@ test("mutation and export bounds are enforced", () => {
   assert.equal(bulkExportSelectedSchema.safeParse({ studentIds: tooManyExport }).success, false);
 });
 
-test("IDs keep eleven-character trimmed shape without digits-only assumption", () => {
+test("IDs are trimmed opaque identities; blank selections remain invalid", () => {
   assert.equal(
     bulkPreviewSchema.safeParse({
       studentIds: [" 00000123456 "],
@@ -35,10 +35,16 @@ test("IDs keep eleven-character trimmed shape without digits-only assumption", (
   );
   assert.equal(
     bulkPreviewSchema.safeParse({
-      studentIds: ["short"],
+      studentIds: [" "],
       action: "SET_SECTION",
       targetGroupId: "g1",
     }).success,
     false,
   );
+});
+
+test('bulk selection accepts opaque generated canonical IDs without treating them as external codes',()=>{
+ const id='cmha2pc58000008l45x99blx8';
+ assert.equal(bulkPreviewSchema.safeParse({studentIds:[id],action:'SET_HOUSE',targetGroupId:'house'}).success,true);
+ assert.equal(bulkExportSelectedSchema.safeParse({studentIds:[id]}).success,true);
 });

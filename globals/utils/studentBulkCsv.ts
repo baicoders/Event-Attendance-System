@@ -27,6 +27,8 @@ export function bulkExportRowToRecord(row: BulkExportRow): Record<string, string
   const slugs = (values: string[]) => JSON.stringify([...values].sort());
   return {
     "Student ID": row.studentId,
+    "USN": row.usn ?? "",
+    "LRN": row.lrn ?? "",
     "Last name": row.lastName,
     "First name": row.firstName,
     "Middle name": row.middleName,

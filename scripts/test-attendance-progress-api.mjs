@@ -64,7 +64,7 @@ try {
   assert.equal(progress.body.data.detail.bucketTotals.eligible, 2);
   assert.equal(JSON.stringify(progress.body).includes("password"), false);
 
-  for (const query of ["groupBy=ALL", "page=0", "pageSize=20", "groupBy=YEAR&bucket=none", "bucket=g:deleted"]) {
+  for (const query of ["groupBy=ALL", "page=0", "pageSize=20", "groupBy=YEAR&bucket=multiple", "bucket=g:deleted"]) {
     assert.equal((await request(`${path}?${query}`, viewerCookie)).status, 400, query);
   }
   const stats = await request(`/api/events/${event.id}/stats`, viewerCookie);

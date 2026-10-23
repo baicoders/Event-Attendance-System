@@ -42,7 +42,7 @@ export function parseProgressQuery(params: URLSearchParams): ProgressQuery {
   if (!PROGRESS_PAGE_SIZES.includes(pageSize as ProgressQuery["pageSize"])) throw new ProgressQueryError("Unsupported page size.");
   if (q.length > 100) throw new ProgressQueryError("Search is too long.");
   const relationBucket = bucket === "all" || bucket === "none" || bucket === "multiple" || /^g:[^:]{1,128}$/.test(bucket);
-  const yearBucket = bucket === "all" || (bucket.startsWith("y:") && Object.values(YearLevel).includes(bucket.slice(2) as YearLevel));
+  const yearBucket = bucket === "all" || bucket === "none" || (bucket.startsWith("y:") && Object.values(YearLevel).includes(bucket.slice(2) as YearLevel));
   if (groupBy === "YEAR" ? !yearBucket : !relationBucket) {
     throw new ProgressQueryError("Invalid bucket for this dimension.", "INVALID_PROGRESS_BUCKET");
   }
