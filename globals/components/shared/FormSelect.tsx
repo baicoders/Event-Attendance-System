@@ -1,6 +1,6 @@
 "use client";
 
-import { useController, Control } from "react-hook-form";
+import { useController, Control, FieldValues, Path } from "react-hook-form";
 import {
   Select,
   SelectContent,
@@ -15,11 +15,14 @@ import {
   FieldLabel,
 } from "../shad-cn/field";
 import { Option } from "@/globals/types/primitives";
+import { useId } from "react";
 import { Info } from "lucide-react";
 
-interface FormSelectProps {
+interface FormSelectProps<T extends FieldValues> {
   /** Field name in the form schema. */
-  name: string;
+  name: Path<T>;
+  clearable?: boolean;
+  clearLabel?: string;
   /** Visible label. */
   label: string;
   placeholder?: string;
@@ -27,7 +30,7 @@ interface FormSelectProps {
    *  rather than hardcoding school vocabulary at the call site. */
   options: Option[];
   /** react-hook-form `control` — this component is controlled, not registered. */
-  control: Control<any>;
+  control: Control<T>;
   description?: string;
   /** Validation message. Pass `errors.field?.message`. */
   error?: string;
@@ -64,36 +67,42 @@ interface FormSelectProps {
  *
  * @see /design-system — live examples
  */
-const FormSelect = ({
+const FormSelect = <T extends FieldValues,>({
   name,
+  clearable = false,
+  clearLabel = "Not provided",
   label,
   placeholder,
   options,
   control,
   description,
   error,
-}: FormSelectProps) => {
+}: FormSelectProps<T>) => {
+  const fieldId = useId();
   const {
     field: { value, onChange, ref },
   } = useController({
     name,
     control,
-    defaultValue: "",
   });
 
   return (
     <Field className="gap-1.5">
-      <FieldLabel className="text-[10px] uppercase font-bold text-slate-400 ml-1">
+      <FieldLabel htmlFor={fieldId} className="text-[10px] uppercase font-bold text-slate-400 ml-1">
         {label}
       </FieldLabel>
-      <Select onValueChange={onChange} value={value ?? ""}>
+      <Select onValueChange={next => onChange(next === "__clear__" ? null : next)} value={typeof value === "string" ? value : ""}>
         <SelectTrigger
+          id={fieldId}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${fieldId}-error` : description ? `${fieldId}-description` : undefined}
           ref={ref}
           className="border-slate-200 rounded-xl focus:ring-slate-900"
         >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent className="rounded-xl border-slate-200">
+          {clearable && <SelectItem value="__clear__">{clearLabel}</SelectItem>}
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
@@ -103,13 +112,13 @@ const FormSelect = ({
       </Select>
 
       {description && !error && (
-        <FieldDescription className="text-[11px] ml-1 mt-1 text-slate-500">
+        <FieldDescription id={`${fieldId}-description`} className="text-[11px] ml-1 mt-1 text-slate-500">
           {description}
         </FieldDescription>
       )}
 
       {error && (
-        <FieldError className="flex items-center-safe text-[11px] font-medium text-rose-500 ml-1">
+        <FieldError id={`${fieldId}-error`} className="flex items-center-safe text-[11px] font-medium text-rose-500 ml-1">
           <Info size={12} className="mr-1 inline-block" />
           {error}
         </FieldError>

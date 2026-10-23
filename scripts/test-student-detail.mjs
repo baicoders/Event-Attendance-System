@@ -21,7 +21,8 @@ const origin = `http://127.0.0.1:${port}`;
 let server;
 let chrome;
 let db;
-const form = { id: "00000123456", firstName: "Ana", lastName: "Lee", middleName: "",
+let partialStudentId;
+const form = { id: "00000123456", usn: "00000123456", firstName: "Ana", lastName: "Lee", middleName: "",
   schoolLevel: "COLLEGE", yearLevel: "YEAR_2", section: "sec-a", house: "azul", department: "cs", program: "bsit", strand: "" };
 
 async function request(path, cookie, options = {}) {
@@ -74,6 +75,7 @@ async function browserCheck(cookie) {
     await until('document.querySelector("[role=dialog]") === null');
     const overflow = await evaluate('document.documentElement.scrollWidth > innerWidth');
     assert.equal(overflow, false, "student detail overflows 375px viewport");
+    await until('[...document.querySelectorAll("button")].some(button => button.textContent?.includes("Edit student") && !button.disabled)');
     await evaluate('[...document.querySelectorAll("button")].find(button => button.textContent?.includes("Edit student")).click()');
     await until('document.querySelector(\'[role=dialog] input[name="firstName"]\') !== null');
     await evaluate('(() => { const input = document.querySelector(\'[role=dialog] input[name="firstName"]\'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "Annette"); input.dispatchEvent(new Event("input", { bubbles: true })); })()');
@@ -81,6 +83,7 @@ async function browserCheck(cookie) {
     await until('document.body.innerText.includes("Discard student changes?")');
     await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.trim() === "Confirm").click()');
     await until('document.querySelector(\'[role=dialog] input[name="firstName"]\') === null');
+    await until('[...document.querySelectorAll("button")].some(button => button.textContent?.includes("Edit student") && !button.disabled)');
     await evaluate('[...document.querySelectorAll("button")].find(button => button.textContent?.includes("Edit student")).click()');
     await until('document.querySelector(\'[role=dialog] input[name="firstName"]\') !== null');
     await evaluate('(() => { const input = document.querySelector(\'[role=dialog] input[name="firstName"]\'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "Anita"); input.dispatchEvent(new Event("input", { bubbles: true })); })()');
@@ -91,6 +94,7 @@ async function browserCheck(cookie) {
     await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button => button.textContent?.includes("Save Changes")).click()');
     await until('document.querySelector("h1")?.textContent?.includes("Anita Lee")');
     assert.equal(await evaluate('document.querySelector(".student-qr-code svg")?.outerHTML'), qrMarkup);
+    await until('[...document.querySelectorAll("button")].some(button => button.textContent?.includes("Edit student") && !button.disabled)');
     await evaluate('[...document.querySelectorAll("button")].find(button => button.textContent?.includes("Edit student")).click()');
     await until('document.querySelector(\'[role=dialog] input[name="firstName"]\') !== null');
     await evaluate('(() => { const input = document.querySelector(\'[role=dialog] input[name="firstName"]\'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "Local"); input.dispatchEvent(new Event("input", { bubbles: true })); })()');
@@ -133,6 +137,38 @@ async function browserCheck(cookie) {
     await until('document.querySelector("h1")?.textContent?.includes("Slash Student")');
     await command("Page.navigate", { url: `${origin}/students/${encodeURIComponent("ab12%2F3456")}` });
     await until('document.querySelector("h1")?.textContent?.includes("Percent Student")');
+    await command("Page.navigate", { url: `${origin}/students/${partialStudentId}` });
+    await until('document.querySelector("h1")?.textContent?.includes("Synthetic Partial")');
+    assert.ok(await evaluate('document.body.innerText.includes("Not provided")'));
+    await evaluate('[...document.querySelectorAll("button")].find(button=>button.textContent?.includes("Edit student")).click()');
+    await until('document.querySelector(\'[role=dialog] input[name="usn"]\') !== null');
+    assert.ok(await evaluate('document.querySelector(\'[role=dialog] input[name="lrn"]\').value'));
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Academic Standing")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Group Assignments")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.includes("Save Changes")).click()');
+    await until('document.querySelector("[role=dialog]") === null');
+    const partial = await db.student.findUniqueOrThrow({where:{id:partialStudentId}});
+    assert.equal(partial.schoolLevel,null);assert.equal(partial.yearLevel,null);
+    await db.student.update({where:{id:partialStudentId},data:{schoolLevel:"COLLEGE",yearLevel:"YEAR_2",groups:{connect:[{id:"dept"},{id:"program"},{id:"house"}]}}});
+    await command("Page.reload");
+    await until('document.body.innerText.includes("College")');
+    await until('[...document.querySelectorAll("button")].some(button=>button.textContent?.includes("Edit student")&&!button.disabled)');
+    await evaluate('[...document.querySelectorAll("button")].find(button=>button.textContent?.includes("Edit student")).click()');
+    await until('document.querySelector(\'[role=dialog] input[name="usn"]\') !== null');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Academic Standing")');
+    await evaluate('document.querySelector(\'[role=dialog] [role=combobox]\').click()');
+    await until('[...document.querySelectorAll(\'[role=option]\')].some(option=>option.textContent?.includes("Senior High School"))');
+    await evaluate('[...document.querySelectorAll(\'[role=option]\')].find(option=>option.textContent?.includes("Senior High School")).click()');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.trim()==="Next").click()');
+    await until('document.querySelector("[role=dialog]")?.textContent?.includes("Group Assignments")');
+    await evaluate('[...document.querySelectorAll(\'[role=dialog] button\')].find(button=>button.textContent?.includes("Save Changes")).click()');
+    await until('document.querySelector("[role=dialog]") === null');
+    const switched=await db.student.findUniqueOrThrow({where:{id:partialStudentId},include:{groups:true}});
+    assert.equal(switched.schoolLevel,"SHS"); assert.equal(switched.yearLevel,null);
+    assert.deepEqual(switched.groups.map(group=>group.slug),["azul"]);
     console.log("Browser fixture passed: direct mobile links including encoded separator, QR/modal stability after edit, dirty editor discard, saved edit, conflict reload failure preserves input, identity/groups, roster profile link, attendance tab, and 375px layout.");
   } finally { ws.close(); }
 }
@@ -143,7 +179,7 @@ try {
   await db.user.create({ data: { id: "inactive", name: "Inactive", email: "inactive@example.test", password: "fixture-password-123", role: "ORGANIZER", status: "ACTIVE" } });
   for (const [id, name, slug, category] of [["sec", "Section A", "sec-a", "SECTION"], ["sec-b", "Section B", "sec-b", "SECTION"], ["house", "Azul", "azul", "HOUSE"], ["dept", "Computer Studies", "cs", "DEPARTMENT"], ["program", "BSIT", "bsit", "PROGRAM"]])
     await db.group.create({ data: { id, name, slug, category } });
-  await db.student.create({ data: { id: form.id, firstName: form.firstName, lastName: form.lastName, schoolLevel: form.schoolLevel, yearLevel: form.yearLevel,
+  await db.student.create({ data: { id: form.id, usn: form.usn, firstName: form.firstName, lastName: form.lastName, schoolLevel: form.schoolLevel, yearLevel: form.yearLevel,
     groups: { connect: [{ id: "sec" }, { id: "house" }, { id: "dept" }, { id: "program" }] } } });
   server = spawn("pnpm", ["start", "-p", String(port)], { env, stdio: "pipe", detached: true });
   for (let i = 0; i < 80; i++) { if (server.exitCode !== null) throw new Error(`Server exited: ${server.exitCode}`); try { await fetch(`${origin}/api/auth/session`); break; } catch { await delay(250); } }
@@ -154,6 +190,17 @@ try {
   assert.equal(login.status, 200);
   const cookie = login.headers.get("set-cookie")?.split(";")[0];
   assert.ok(cookie);
+  const create = student => request("/api/students",cookie,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(student)});
+  const name={firstName:"Synthetic",lastName:"Partial"};
+  for (const identifiers of [{usn:"00000123460"},{lrn:"000000123460"},{usn:"00000123461",lrn:"000000123461"}]) {
+    const created=await create({...name,...identifiers}); assert.equal(created.status,200);
+    const person=created.body.data; partialStudentId=person.id;
+    assert.equal(person.schoolLevel,null);assert.equal(person.yearLevel,null);assert.equal(person.groups.length,0);
+    for (const code of Object.values(identifiers)) assert.equal((await request(`/api/students?studentId=${code}`,cookie)).body.data.id,person.id);
+    assert.equal((await create({...name,...identifiers})).status,409);
+  }
+  assert.equal((await create(name)).status,400);
+  assert.equal((await create({...name,lrn:"123"})).status,400);
   const get = await request(path, cookie);
   assert.equal(get.status, 200);
   assert.equal(get.cache, "private, no-store");
@@ -192,12 +239,11 @@ try {
   assert.equal((await db.student.findUniqueOrThrow({ where: { id: form.id } })).yearLevel, "YEAR_2");
   const beforeLegacy = await request(path, cookie);
   const legacy = await request("/api/students", cookie, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, firstName: "Annie" }) });
-  assert.equal(legacy.status, 200);
-  assert.equal((await patch(beforeLegacy.body.data.editVersion, { ...form, firstName: "Stale" })).body.code, "STUDENT_EDIT_CONFLICT");
-  assert.equal((await db.student.findUniqueOrThrow({ where: { id: form.id } })).firstName, "Annie");
+  assert.equal(legacy.status, 409, "creation cannot silently overwrite an existing student");
+  assert.equal((await request(path,cookie)).body.data.editVersion,beforeLegacy.body.data.editVersion);
   await db.student.delete({ where: { id: form.id } });
   assert.equal((await patch(newVersion, form)).status, 404);
-  assert.equal(await db.student.count(), 2);
+  assert.equal(await db.student.count(), 5);
   console.log("Student detail API fixture passed: auth, ID and field validation, no-op, edit-only save, legacy-write conflict, group review, encoded ID, and deletion.");
 } finally {
   if (server?.pid) { try { process.kill(-server.pid, "SIGTERM"); } catch {} }

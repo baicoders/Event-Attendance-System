@@ -53,7 +53,7 @@ export const filterAndSortStudents = (students: Student[], query?: string): Stud
     const fullNameScore = getFuzzyScore(fullName, trimmedQuery);
     
     // Take the highest score from any field
-    const maxScore = Math.max(idScore, firstNameScore, middleNameScore, lastNameScore, fullNameScore);
+    const maxScore = Math.max(getFuzzyScore(student.usn ?? "", trimmedQuery), getFuzzyScore(student.lrn ?? "", trimmedQuery), idScore, firstNameScore, middleNameScore, lastNameScore, fullNameScore);
     
     return {
       student,

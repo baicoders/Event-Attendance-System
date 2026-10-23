@@ -22,7 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 
 const FIELDS_TO_VALIDATE: Record<Step, (keyof StudentFormValues)[]> = {
-  personal: ["id", "firstName", "lastName", "middleName"],
+  personal: ["usn", "lrn", "firstName", "lastName", "middleName"],
   academic: ["schoolLevel", "yearLevel"],
   groups: ["section", "house", "department", "program", "strand"],
 };
@@ -57,12 +57,12 @@ export default function StudentFormDrawer({
     resolver: zodResolver(studentSchema),
     mode: "onChange",
     defaultValues: {
-      id: "",
+      id: "", usn: "", lrn: "",
       firstName: "",
       lastName: "",
       middleName: "",
-      schoolLevel: undefined,
-      yearLevel: undefined,
+      schoolLevel: null,
+      yearLevel: null,
       section: "",
       house: "",
       department: "",
@@ -76,12 +76,12 @@ export default function StudentFormDrawer({
     if (!student) return;
 
     reset({
-      id: student.id,
+      id: student.id, usn: student.usn ?? "", lrn: student.lrn ?? "",
       lastName: student.lastName,
       firstName: student.firstName,
       middleName: student.middleName ?? "",
-      schoolLevel: student.schoolLevel ?? undefined,
-      yearLevel: student.yearLevel ?? undefined,
+      schoolLevel: student.schoolLevel,
+      yearLevel: student.yearLevel,
       section: student.section,
       department: student.department,
       house: student.house,

@@ -76,6 +76,7 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
     if (!snapshot || !principalId) return;
     const editingPrincipal = principalId;
     setEditorError(null);
+    setCanReloadEditor(false);
     try {
       const saved = await edit.mutateAsync({ principalId: editingPrincipal, expectedVersion: snapshot.editVersion, student: { ...values, id: snapshot.id } });
       if (principalRef.current !== editingPrincipal) return;
@@ -94,6 +95,8 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
         setEditorError(error.message);
       } else if (error instanceof ApiError && error.status === 404) {
         setEditorError("This student was deleted while you were editing. Your unsaved entries remain here until you close the form.");
+      } else if (error instanceof ApiError && [400, 409, 422].includes(error.status)) {
+        setEditorError(error.message);
       } else {
         setEditorError("The save outcome is unknown. Keep these entries and reload the current record before trying again. " + (error instanceof Error ? error.message : ""));
         setCanReloadEditor(true);
@@ -164,6 +167,8 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
               <section className="min-w-0 rounded-2xl border bg-white p-5" aria-label="Current academic information">
                 <h2 className="text-lg font-semibold">Current academic information</h2>
+                <p className="mt-3 text-sm"><strong>USN:</strong> {student.usn ?? "Not provided"}</p>
+                <p className="mt-1 text-sm"><strong>LRN:</strong> {student.lrn ?? "Not provided"}</p>
                 <p className="mt-3 text-sm"><strong>School level:</strong> {student.schoolLevel === "SHS" ? "Senior High School" : student.schoolLevel === "COLLEGE" ? "College" : "Not provided"}</p>
                 <p className="mt-1 text-sm"><strong>{student.schoolLevel === "SHS" ? "Grade" : "Year"}:</strong> {(student.yearLevel ?? "Not provided").replace("_", " ")}</p>
                 {ambiguous && <p role="alert" className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">Group assignments require review. All current memberships are shown below; profile editing is unavailable until they are resolved.</p>}

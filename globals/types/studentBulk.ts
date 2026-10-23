@@ -57,6 +57,8 @@ export type BulkRowIssue = {
 
 export type BulkExportRow = {
   studentId: string;
+  usn: string | null;
+  lrn: string | null;
   lastName: string;
   firstName: string;
   middleName: string;
@@ -73,7 +75,7 @@ export type BulkExportRow = {
 export type BulkExportResponse = {
   preparedAt: string;
   selectionCount: number;
-  schemaVersion: 1;
+  schemaVersion: 2;
   rows: BulkExportRow[];
   missingIds?: string[];
 };
@@ -81,6 +83,8 @@ export type BulkExportResponse = {
 /** Fixed CSV header order for the selected-student extract. */
 export const BULK_EXPORT_HEADERS = [
   "Student ID",
+  "USN",
+  "LRN",
   "Last name",
   "First name",
   "Middle name",

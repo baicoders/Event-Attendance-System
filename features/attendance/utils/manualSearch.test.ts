@@ -41,3 +41,10 @@ test("ties sort by names then exact ID and duplicate IDs appear once", () => {
   assert.deepEqual(searchManualRoster(roster, "Juan").map((entry) => entry.student.id), ["00000123458", "00000123459"]);
   assert.deepEqual(searchManualRoster(roster, " "), []);
 });
+
+test('manual lookup indexes USN and LRN while returning one canonical student',()=>{
+ const person={...student('csyntheticcanonical00000001','Synthetic','Student'),usn:'00000123456',lrn:'000000123456'};
+ const roster=indexManualRoster([person,student('cothercanonical00000000001','00000123456','NameMatch')]);
+ for(const code of [person.usn,person.lrn])assert.equal(searchManualRoster(roster,code)[0]?.student.id,person.id);
+ assert.equal(searchManualRoster(roster,'123456').filter(entry=>entry.student.id===person.id).length,1);
+});

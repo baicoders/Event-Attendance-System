@@ -38,3 +38,13 @@ that branch needs a subsequent compatibility check before deployment together.
 
 Verification uses synthetic fixtures and disposable test databases exclusively.
 PRs stack in the order above and must not be merged without approval.
+
+PR 1 submitted: https://github.com/baicoders/Event-Attendance-System/pull/107
+(56e5983). 167 tests plus export regression, TypeScript, changed-file ESLint and
+production build passed. Review nullable-consumer findings were fixed.
+
+PR 2 activates the partial contract only for CRUD and bulk candidates. The v1
+import/receipt validator is frozen in legacyStudentSchema until PR 3 versions it.
+POST now creates only (duplicates require explicit edit); PATCH merges omitted
+fields under the roster lock, supports explicit null clearing, and revalidates the
+complete candidate. USN/LRN conflicts include legacy internal-ID namespace matches.

@@ -39,6 +39,8 @@ export async function previewAudience(input: AudiencePreviewInput): Promise<Audi
     const searchWhere: Prisma.StudentWhereInput = input.search
       ? { AND: [where, { OR: [
           { id: { contains: input.search, mode: "insensitive" } },
+          { usn: { contains: input.search, mode: "insensitive" } },
+          { lrn: { contains: input.search, mode: "insensitive" } },
           { firstName: { contains: input.search, mode: "insensitive" } },
           { lastName: { contains: input.search, mode: "insensitive" } },
         ] }] }

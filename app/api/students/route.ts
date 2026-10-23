@@ -5,12 +5,11 @@ import { Prisma } from "@prisma/client";
 import { err, ok } from "@/globals/utils/api";
 import { assertEventVisibility, requireAuth } from "@/globals/utils/auth";
 import { buildStudentQuery } from "@/globals/utils/queryBuilder";
-import { studentSchema } from "@/globals/schemas/studentSchema";
+import { createStudentRecord } from "@/globals/utils/studentCreate";
+import { resolveStudentIdentity } from "@/globals/utils/studentIdentity";
 import { respondWithError } from "@/globals/utils/httpError";
 import { flattenStudentGroups } from "@/globals/utils/students";
 import { buildEventStudentFilter } from "@/globals/utils/buildEventStudentFilter";
-import { validateStudentGroupSlugs } from "@/globals/utils/studentGroups";
-import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,70 +19,9 @@ export async function POST(request: NextRequest) {
     // enforces active status.
     await requireAuth();
     const payload = await request.json();
-    const validatedData = studentSchema.parse(payload);
-
-    // Resolve group slugs to IDs using the same validator the bulk endpoint
-    // uses: every slug must exist AND match its column's category, so a crafted
-    // request can't (e.g.) put a HOUSE slug in the section field or reference
-    // an unknown section.
-    const resolution = await validateStudentGroupSlugs([
-      {
-        section: validatedData.section,
-        house: validatedData.house,
-        department: validatedData.department,
-        program: validatedData.program,
-        strand: validatedData.strand,
-      },
-    ]);
-
-    if (!resolution.ok) {
-      return NextResponse.json(err(resolution.error, "INVALID_GROUPS"), {
-        status: 400,
-      });
-    }
-
-    const groupConnectIds = [
-      validatedData.section,
-      validatedData.house,
-      validatedData.department,
-      validatedData.program,
-      validatedData.strand,
-    ]
-      .filter(Boolean)
-      .map((slug) => ({ id: resolution.slugToId.get(slug as string)! }));
-
-    // We use the student's ID (the 11-character string) as the unique identifier.
-    // Single-student roster write freezes eligibility (exclusive form).
-    const student = await prisma.$transaction(async (tx) => {
-      await takeRosterExclusiveLock(tx);
-      return tx.student.upsert({
-        where: { id: validatedData.id },
-        update: {
-          firstName: validatedData.firstName,
-          lastName: validatedData.lastName,
-          middleName: validatedData.middleName || null,
-          schoolLevel: validatedData.schoolLevel,
-          yearLevel: validatedData.yearLevel,
-          groups: {
-            set: groupConnectIds, // Replaces old groups with new ones
-          },
-        },
-        create: {
-          id: validatedData.id,
-          firstName: validatedData.firstName,
-          lastName: validatedData.lastName,
-          middleName: validatedData.middleName || null,
-          schoolLevel: validatedData.schoolLevel,
-          yearLevel: validatedData.yearLevel,
-          groups: {
-            connect: groupConnectIds,
-          },
-        },
-        include: {
-          groups: true,
-        },
-      });
-    });
+    // Legacy callers supplied USN as id. New records always get a generated internal ID.
+    const input = { ...payload, usn: payload.usn ?? (payload.id?.length === 11 ? payload.id : undefined) };
+    const student = await createStudentRecord(prisma, input);
 
     return NextResponse.json(ok(student), { status: 200 });
   } catch (error) {
@@ -142,13 +80,14 @@ export async function GET(request: NextRequest) {
         eventFilter = buildEventStudentFilter(event);
       }
 
-      const rawStudent = await prisma.student.findFirst({
+      const canonicalId = await resolveStudentIdentity(prisma, studentId);
+      const rawStudent = canonicalId ? await prisma.student.findFirst({
         where: {
-          id: studentId,
+          id: canonicalId,
           ...eventFilter,
         },
         include: { groups: true },
-      });
+      }) : null;
 
       if (!rawStudent) {
         return NextResponse.json(err("Student not found or ineligible"), {

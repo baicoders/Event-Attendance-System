@@ -166,7 +166,7 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
             const rowState = manualRecordState(true, eventRecords.isPending && !eventRecords.data, eventRecords.isError, rowRecord);
             const rowLabel = recordActionLabel(mode, rowState);
             return <li key={student.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0"><p className="break-words font-semibold">{displayName}</p><p className="text-sm">{student.id}</p>
+            <div className="min-w-0"><p className="break-words font-semibold">{displayName}</p><p className="text-sm">{student.id}</p><p className="text-sm">USN: {student.usn ?? "—"} · LRN: {student.lrn ?? "—"}</p>
               <p className="break-words text-xs text-slate-600">{identity(student)}</p>
               {rowRecord && <p className="mt-1 text-xs font-medium text-slate-700">{mode === "TIME_IN" && rowRecord.timein ? "Timed in " + new Date(rowRecord.timein).toLocaleTimeString() :
                 mode === "TIME_OUT" && rowRecord.timeout ? "Timed out " + new Date(rowRecord.timeout).toLocaleTimeString() :

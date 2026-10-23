@@ -3,6 +3,7 @@ import type { ProgressQuery } from "./attendanceProgressQuery";
 
 export type ProgressGroup = { id: string; name: string; slug: string; category: string };
 export type ProgressStudent = {
+  usn?: string | null; lrn?: string | null;
   id: string;
   firstName: string;
   middleName: string | null;
@@ -90,6 +91,7 @@ export function buildAttendanceProgress({ students, query, selectedGroup }: {
     const firstLast = `${student.firstName} ${student.middleName ?? ""} ${student.lastName}`.replace(/\s+/g, " ");
     const lastFirst = `${student.lastName}, ${student.firstName} ${student.middleName ?? ""}`.replace(/\s+/g, " ");
     return !search || student.id.toLocaleLowerCase().includes(search) ||
+      (student.usn ?? "").toLocaleLowerCase().includes(search) || (student.lrn ?? "").toLocaleLowerCase().includes(search) ||
       firstLast.toLocaleLowerCase().includes(search) || lastFirst.toLocaleLowerCase().includes(search);
   }).sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName) ||
     (a.middleName ?? "").localeCompare(b.middleName ?? "") || a.id.localeCompare(b.id));

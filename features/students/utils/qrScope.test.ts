@@ -32,3 +32,8 @@ test("search matches unusual IDs and names with missing middle names", () => {
   assert.deepEqual(filterQRStudents(students, "id-001", {}).map((student) => student.firstName), ["Juan"]);
   assert.deepEqual(filterQRStudents(students, "juan", {}).map((student) => student.id), ["ID-001"]);
 });
+
+test('QR roster search finds external identifiers for generated internal IDs',()=>{
+ const person={...students[0],id:'csyntheticcanonical00000001',usn:'00000123456',lrn:'000000123456'};
+ for(const code of [person.usn,person.lrn])assert.equal(filterQRStudents([person],code,{})[0]?.id,person.id);
+});

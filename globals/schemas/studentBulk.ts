@@ -10,7 +10,7 @@ export const BULK_EXPORT_JSON_LIMIT_BYTES = 1024 * 1024;
 export const BULK_ACTIONS = ["SET_SECTION", "SET_HOUSE"] as const;
 export type BulkAction = (typeof BULK_ACTIONS)[number];
 
-const trimmedId = z.string().trim().min(1, "Student ID is required").max(64);
+const trimmedId = z.string().trim().min(1, "Student ID is required").max(128).refine(value => !/[\u0000-\u001f\u007f]/.test(value), "Invalid student identity");
 
 const uniqueIds = (ids: string[], ctx: z.RefinementCtx) => {
   const seen = new Set<string>();
@@ -34,16 +34,6 @@ const studentIdArray = (min: number, max: number) =>
     .min(min, "Select at least one student")
     .max(max, `Selection is limited to ${max} students`)
     .superRefine((ids, ctx) => {
-      for (const id of ids) {
-        if (id.length !== 11) {
-          ctx.addIssue({
-            code: "custom",
-            message: "Each student ID must be 11 characters",
-            path: ["studentIds"],
-          });
-          break;
-        }
-      }
       uniqueIds(ids, ctx);
     });
 

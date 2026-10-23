@@ -23,18 +23,9 @@ const PersonalInfoSection = ({ isEdit = false }: Props) => {
       />
 
       <FieldGroup className="grid grid-cols-1 gap-y-4">
-        <FormInput
-          label="Student ID"
-          placeholder="2026XXXXXX"
-          {...register("id")}
-          error={errors.id?.message}
-          // The ID is the primary key; changing it on edit would upsert a new
-          // student instead of updating this one, so lock it when editing.
-          disabled={isEdit}
-          description={
-            isEdit ? "Student ID can't be changed after creation." : undefined
-          }
-        />
+        {isEdit && <p className="text-xs text-slate-500">Internal student identity stays unchanged.</p>}
+        <FormInput label="USN" placeholder="11-character USN" {...register("usn")} error={errors.usn?.message} description="Provide USN or LRN, or both." />
+        <FormInput label="LRN" placeholder="12-digit LRN" {...register("lrn")} error={errors.lrn?.message} />
 
         <div className="grid grid-cols-2 gap-4">
           <FormInput

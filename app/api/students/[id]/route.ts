@@ -4,13 +4,13 @@ import { err, ok } from "@/globals/utils/api";
 import { requireAuth } from "@/globals/utils/auth";
 import { flattenStudentGroups } from "@/globals/utils/students";
 import { respondWithError } from "@/globals/utils/httpError";
-import { studentSchema } from "@/globals/schemas/studentSchema";
+import { studentPatchSchema } from "@/globals/schemas/studentSchema";
 import { studentEditVersion } from "@/globals/utils/studentDetail";
 import { updateStudentDetail } from "@/globals/utils/studentEdit";
 import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 
 const privateHeaders = { "Cache-Control": "private, no-store" };
-const editFields = new Set(["id", "firstName", "lastName", "middleName", "schoolLevel", "yearLevel", "section", "house", "department", "program", "strand"]);
+const editFields = new Set(["id", "usn", "lrn", "firstName", "lastName", "middleName", "schoolLevel", "yearLevel", "section", "house", "department", "program", "strand"]);
 
 // Fetching a single student by id
 export async function GET(
@@ -59,11 +59,12 @@ export async function PATCH(
         Object.keys(input.student).some(key => !editFields.has(key))) {
       return NextResponse.json(err("Invalid edit request.", "INVALID_STUDENT_EDIT"), { status: 400, headers: privateHeaders });
     }
-    const student = studentSchema.parse(input.student);
-    if (student.id !== id) {
+    const student = studentPatchSchema.parse(input.student);
+    if (student.id !== undefined && student.id !== id) {
       return NextResponse.json(err("Student ID cannot be changed.", "STUDENT_ID_MISMATCH"), { status: 400, headers: privateHeaders });
     }
     const result = await updateStudentDetail(prisma, id, { expectedVersion: input.expectedVersion, student, principalId: principal.id });
+    if (result.kind === "identity-conflict") return NextResponse.json(err("USN or LRN already belongs to another person.", "IDENTITY_CONFLICT"), { status: 409, headers: privateHeaders });
     if (result.kind === "forbidden") return NextResponse.json(err("Account not active.", "INACTIVE_USER"), { status: 403, headers: privateHeaders });
     if (result.kind === "not-found") return NextResponse.json(err("Student not found.", "STUDENT_NOT_FOUND"), { status: 404, headers: privateHeaders });
     if (result.kind === "conflict") return NextResponse.json(err("This student changed after the editor opened. Reload the current record before saving.", "STUDENT_EDIT_CONFLICT"), { status: 409, headers: privateHeaders });

@@ -8,6 +8,7 @@ type GroupRef = {
 };
 
 type StudentRef = {
+  usn?: string | null; lrn?: string | null;
   id: string;
   firstName: string;
   lastName: string;
@@ -36,6 +37,7 @@ export function projectStudentContent(student: StudentRef) {
   return {
     v: 1 as const,
     id: student.id,
+    usn: student.usn ?? null, lrn: student.lrn ?? null,
     createdAt: student.createdAt.toISOString(),
     updatedAt: student.updatedAt.toISOString(),
     firstName: student.firstName,

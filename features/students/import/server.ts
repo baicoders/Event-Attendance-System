@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { AuthError, type AuthSession } from '@/globals/utils/auth';
-import { studentSchema } from '@/globals/schemas/studentSchema';
+import { studentSchema } from '@/globals/schemas/legacyStudentSchema';
 import { takeRosterExclusiveLock, takeImportCommandLock } from '@/globals/utils/pgLocks';
 import { parseStudentImportCsv, hasStructuralCsvErrors } from './csv';
 import { classifyStudentImport, normalizeStudentImportRow } from './classify';
@@ -20,7 +20,7 @@ import { projectImportReceipt } from './receiptProjection';
 const READ_CHUNK = 500;
 export const IMPORT_TRANSACTION_OPTIONS = { timeout:120_000, maxWait:30_000 };
 const groupSelect = {id:true,slug:true,name:true,category:true} as const;
-const studentSelect = {id:true,firstName:true,lastName:true,middleName:true,schoolLevel:true,yearLevel:true,createdAt:true,updatedAt:true,groups:{select:groupSelect}} as const;
+const studentSelect = {id:true,usn:true,lrn:true,firstName:true,lastName:true,middleName:true,schoolLevel:true,yearLevel:true,createdAt:true,updatedAt:true,groups:{select:groupSelect}} as const;
 function chunks<T>(values:T[]) { const result:T[][]=[]; for(let i=0;i<values.length;i+=READ_CHUNK) result.push(values.slice(i,i+READ_CHUNK)); return result; }
 
 export function prepareImport(input: ImportRequest) {
@@ -40,7 +40,7 @@ export async function readImportState(tx: Prisma.TransactionClient, rows: Parsed
   const groups: Prisma.GroupGetPayload<{select:typeof groupSelect}>[]=[];
   const students: Prisma.StudentGetPayload<{select:typeof studentSelect}>[]=[];
   for (const batch of chunks(slugs)) groups.push(...await tx.group.findMany({where:{slug:{in:batch}},select:groupSelect}));
-  for (const batch of chunks(ids)) students.push(...await tx.student.findMany({where:{id:{in:batch}},select:studentSelect}));
+  for (const batch of chunks(ids)) students.push(...await tx.student.findMany({where:{OR:[{id:{in:batch}},{usn:{in:batch}},{lrn:{in:batch}}]},select:studentSelect}));
   return {groups,students};
 }
 
@@ -94,7 +94,7 @@ export async function applyImport(tx:Prisma.TransactionClient,review:ImportRevie
     const student=studentSchema.parse(row.student);
     const data={firstName:student.firstName,lastName:student.lastName,middleName:student.middleName||null,schoolLevel:student.schoolLevel,yearLevel:student.yearLevel};
     const groups=row.groupIds.map(id=>({id}));
-    if(row.status==='CREATE') await tx.student.create({data:{id:student.id,...data,groups:{connect:groups}}});
+    if(row.status==='CREATE') await tx.student.create({data:{id:student.id,usn:student.id,...data,groups:{connect:groups}}});
     else await tx.student.update({where:{id:student.id},data:{...data,groups:{set:groups}}});
   }
 }

@@ -65,7 +65,7 @@ test("detail search and display retain the full middle name", () => {
 test("zero audience has no rate and invalid query values fail closed", () => {
   const result = buildAttendanceProgress({ students: [], query: parseProgressQuery(new URLSearchParams()), selectedGroup: null });
   assert.equal(result.totals.rate, null);
-  for (const query of ["groupBy=ALL", "page=0", "page=1x", "pageSize=20", "includeRows=yes", "bucket=g:", "q=" + "x".repeat(101), "groupBy=YEAR&bucket=none"]) {
+  for (const query of ["groupBy=ALL", "page=0", "page=1x", "pageSize=20", "includeRows=yes", "bucket=g:", "q=" + "x".repeat(101), "groupBy=YEAR&bucket=multiple"]) {
     assert.throws(() => parseProgressQuery(new URLSearchParams(query)));
   }
 });
@@ -79,4 +79,19 @@ test("year uses stored year level and rejects relation buckets", () => {
   });
   assert.deepEqual(result.breakdown.map((b) => b.bucketKey), ["y:GRADE_11", "y:YEAR_2"]);
   assert.deepEqual(result.detail?.rows.map((row) => row.studentId), ["02"]);
+});
+
+test('live progress searches either external identifier for generated canonical identities',()=>{
+ const person={...student('cmha2pc58000008l45x99blx8',[]),usn:'00000123456',lrn:'000000123456'};
+ for(const q of [person.usn,person.lrn,'123456']) {
+  const result=buildAttendanceProgress({students:[person],query:parseProgressQuery(new URLSearchParams({includeRows:'1',status:'ALL',q})),selectedGroup:null});
+  assert.equal(result.detail?.matchedCount,1);assert.equal(result.detail?.rows[0].studentId,person.id);
+ }
+});
+
+
+test('the missing year bucket remains selectable for partial students',()=>{
+ const person={...student('canonical',[]),yearLevel:null};
+ const result=buildAttendanceProgress({students:[person],query:parseProgressQuery(new URLSearchParams('groupBy=YEAR&includeRows=1&bucket=none&status=ALL')),selectedGroup:null});
+ assert.equal(result.detail?.matchedCount,1);
 });

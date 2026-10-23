@@ -94,3 +94,9 @@ test("leading-zero eleven-character IDs are preserved byte-for-byte", () => {
   });
   assert.equal(rows[0].id, "00000123456");
 });
+
+test('employee classification cannot be removed through student bulk section assignment',()=>{
+ const employee=baseStudent({id:'00000123459',groups:[{id:'emp',name:'Employees',slug:'employees',category:'SECTION'}]});
+ const result=buildBulkPreviewRows({orderedIds:[employee.id],studentsById:new Map([[employee.id,employee]]),target,action:'SET_SECTION'});
+ assert.equal(result.rows[0].status,'BLOCKED');
+});

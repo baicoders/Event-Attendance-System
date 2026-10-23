@@ -26,13 +26,14 @@ const GroupsSection = () => {
     <FieldSet className="animate-in fade-in slide-in-from-right-4 duration-300">
       <SectionHeading
         title="Group Assignments"
-        description="Select the student's group, section, and specific track"
+        description="Add only confirmed assignments. All fields are optional; choose Not provided to clear a value."
       />
 
       <FieldGroup className="grid grid-cols-1 gap-y-4 mt-4">
         {/* Universal Fields */}
         <div className="grid grid-cols-2 gap-4">
           <FormSelect
+            clearable
             name="section"
             label="Section"
             placeholder="Select Section"
@@ -41,6 +42,7 @@ const GroupsSection = () => {
             error={errors.section?.message}
           />
           <FormSelect
+            clearable
             name="house"
             label="House"
             placeholder="Select House"
@@ -51,9 +53,10 @@ const GroupsSection = () => {
         </div>
 
         {/* Conditional College Fields */}
-        {schoolLevel === "COLLEGE" && (
+        {(!schoolLevel || schoolLevel === "COLLEGE") && (
           <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
             <FormSelect
+              clearable
               name="department"
               label="Department"
               placeholder="Select Department"
@@ -62,6 +65,7 @@ const GroupsSection = () => {
               error={errors.department?.message}
             />
             <FormSelect
+              clearable
               name="program"
               label="Program"
               placeholder="Select Program"
@@ -73,9 +77,10 @@ const GroupsSection = () => {
         )}
 
         {/* Conditional SHS Fields */}
-        {schoolLevel === "SHS" && (
+        {(!schoolLevel || schoolLevel === "SHS") && (
           <div className="animate-in slide-in-from-top-2 duration-200">
             <FormSelect
+              clearable
               name="strand"
               label="Strand"
               placeholder="Select Strand"

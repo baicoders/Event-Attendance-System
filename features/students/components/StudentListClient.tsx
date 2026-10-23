@@ -13,7 +13,7 @@ import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
 import { StudentListCategory } from "../types";
 import { StudentQrModal } from "./StudentQRModal";
 import { StudentAttendanceHistorySheet } from "./StudentAttendanceHistorySheet";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { safeStudentReturnHref } from "@/globals/utils/studentReturn";
 
 interface StudentListClientProps {
@@ -41,6 +41,7 @@ const StudentListClient = ({
   const [qrStudent, setQrStudent] = useState<Student>();
   const [historyStudentId, setHistoryStudentId] = useState<string | null>(null);
   const searchParams = useSearchParams();
+  const router = useRouter();
   const returnTo = safeStudentReturnHref(`/students/student-list?${searchParams.toString()}`);
 
   const { mutateAsync: saveStudent } = useSaveStudent();
@@ -48,9 +49,8 @@ const StudentListClient = ({
   const confirm = useConfirm();
 
   const handleEdit = useCallback((data: Student) => {
-    setFormData(data);
-    setIsStudentFormOpen(true);
-  }, []);
+    router.push(`/students/${encodeURIComponent(data.id)}?returnTo=${encodeURIComponent(returnTo)}`);
+  }, [router, returnTo]);
 
   const handleAdd = useCallback(() => {
     setFormData(undefined);

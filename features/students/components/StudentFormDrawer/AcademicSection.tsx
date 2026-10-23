@@ -5,6 +5,7 @@ import SectionHeading from "./SectionHeading";
 import { StudentFormValues } from "@/globals/schemas/studentSchema";
 import { Option } from "@/globals/types/primitives";
 import { SchoolLevel, YearLevel } from "@prisma/client";
+import { yearAfterSchoolLevelChange } from "@/globals/utils/studentAcademic";
 import { useEffect, useRef } from "react";
 
 const SCHOOL_LEVELS = [
@@ -30,12 +31,12 @@ const AcademicSection = () => {
     control,
     watch,
     formState: { errors, isDirty },
-    resetField,
+    setValue, getValues,
   } = useFormContext<StudentFormValues>();
 
   const schoolLevel = watch("schoolLevel");
   const previousSchoolLevel = useRef(schoolLevel);
-  const yearLevelOptions = YEAR_LEVELS_BY_SCHOOL_TYPE[schoolLevel ?? "COLLEGE"];
+  const yearLevelOptions = schoolLevel ? YEAR_LEVELS_BY_SCHOOL_TYPE[schoolLevel] : [...YEAR_LEVELS_BY_SCHOOL_TYPE.COLLEGE, ...YEAR_LEVELS_BY_SCHOOL_TYPE.SHS];
 
   useEffect(() => {
     // Opening this step after a name edit must preserve the existing year.
@@ -45,18 +46,17 @@ const AcademicSection = () => {
     if (!isDirty) return;
 
     if (schoolLevel === "COLLEGE") {
-      resetField("strand", { defaultValue: "" });
+      setValue("strand", null, { shouldDirty: true });
     } else if (schoolLevel === "SHS") {
-      resetField("department", { defaultValue: "" });
-      resetField("program", { defaultValue: "" });
+      setValue("department", null, { shouldDirty: true });
+      setValue("program", null, { shouldDirty: true });
     }
 
     // Always reset yearLevel when level changes to prevent "Grade 11"
     // being stuck in a "College" student's state
-    const defaultYearLevel: YearLevel =
-      schoolLevel === "COLLEGE" ? "YEAR_1" : "GRADE_11";
-    resetField("yearLevel", { defaultValue: defaultYearLevel });
-  }, [schoolLevel, resetField, isDirty]);
+    const defaultYearLevel = yearAfterSchoolLevelChange(getValues("yearLevel"), schoolLevel);
+    setValue("yearLevel", defaultYearLevel, { shouldDirty: true });
+  }, [schoolLevel, setValue, getValues, isDirty]);
   return (
     <FieldSet className="animate-in fade-in slide-in-from-right-4 duration-300">
       <SectionHeading
@@ -66,6 +66,7 @@ const AcademicSection = () => {
 
       <FieldGroup className="grid grid-cols-1 gap-y-4">
         <FormSelect
+          clearable
           name="schoolLevel"
           label="School Level"
           placeholder="Select level"
@@ -74,8 +75,9 @@ const AcademicSection = () => {
           error={errors.schoolLevel?.message}
         />
 
-        {schoolLevel && (
+        {(
           <FormSelect
+            clearable
             name="yearLevel"
             label="Year Level"
             placeholder="Select year"

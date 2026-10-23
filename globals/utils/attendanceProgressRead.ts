@@ -54,7 +54,7 @@ export async function readAttendanceProgress(
     const students = await tx.student.findMany({
       where: buildEventStudentFilter(event),
       select: {
-        id: true, firstName: true, middleName: true, lastName: true, schoolLevel: true, yearLevel: true,
+        id: true, usn: true, lrn: true, firstName: true, middleName: true, lastName: true, schoolLevel: true, yearLevel: true,
         groups: { where: { category: { in: groupCategories } }, select: { id: true, name: true, slug: true, category: true } },
         records: { where: { eventId }, select: { timein: true, timeout: true } },
       },

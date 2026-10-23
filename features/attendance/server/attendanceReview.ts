@@ -35,7 +35,7 @@ export async function listAttendanceReview(db: PrismaClient, eventId: string, vi
     : { OR: [current, historical] };
   const nameTerms = query.search.trim().split(/\s+/).filter(Boolean);
   const where: Prisma.StudentWhereInput = { AND: [evidence, ...nameTerms.map((term): Prisma.StudentWhereInput => ({ OR: [
-    { id: { contains: term } }, { firstName: { contains: term, mode: "insensitive" } },
+    { id: { contains: term } }, { usn: { contains: term } }, { lrn: { contains: term } }, { firstName: { contains: term, mode: "insensitive" } },
     { middleName: { contains: term, mode: "insensitive" } }, { lastName: { contains: term, mode: "insensitive" } },
   ] }))] };
   const total = await tx.student.count({ where });

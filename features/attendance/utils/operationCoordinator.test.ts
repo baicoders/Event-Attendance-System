@@ -155,3 +155,13 @@ test("a sent write remains visible with its captured mode after event mode chang
   assert.equal(result?.expectedMode, "TIME_IN");
   assert.equal(coordinator.getState().recent.length, 1);
 });
+
+test('external LRN lookup records the returned canonical identity', async () => {
+  const canonical={id:'cmcanonicalstudent000000001',name:'Synthetic Student'};
+  const coordinator=createOperationCoordinator({lookup:async()=>canonical,save:async input=>{
+    assert.equal(input.studentId,canonical.id);
+    return {...saved,studentId:canonical.id};
+  }});
+  coordinator.setContext(context);
+  assert.equal((await coordinator.submit({studentId:'000000123456',method:'SCANNED'}))?.outcome,'RECORDED');
+});

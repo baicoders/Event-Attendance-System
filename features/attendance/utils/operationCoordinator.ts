@@ -113,15 +113,16 @@ export function createOperationCoordinator({ lookup, save, onChange }: Dependenc
         }
         pendingRead = null;
         if (!isCurrent()) return null;
+        base.studentId = student.id;
         publish({ ...state, phase: "SAVING" });
-        const input: SaveInput = { eventId: captured.eventId, studentId, method: request.method, expectedMode: captured.expectedMode };
+        const input: SaveInput = { eventId: captured.eventId, studentId: student.id, method: request.method, expectedMode: captured.expectedMode };
         writeSent = true;
         const response = await save(input);
         if (!sameViewerAndEvent()) return null;
         const time = validResponse(response, input);
         if (!time) return finish({ ...base, name: student.name, outcome: "RESULT_UNKNOWN",
           message: "The server response could not confirm this attempt." }, generation);
-        return finish({ ...base, name: student.name, time,
+        return finish({ ...base, studentId: student.id, name: student.name, time,
           outcome: response.changed ? "RECORDED" : "ALREADY_RECORDED",
           message: captured.expectedMode === "TIME_OUT" && !response.timein
             ? "No time-in is recorded for this student. The time-out is stored with time-in left empty."
