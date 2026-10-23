@@ -298,8 +298,7 @@ export default function AttendanceSheet({
 
       {/* ================= Footer ================= */}
       <footer className="mt-8 border-t border-gray-400 pt-2 text-[10px] text-gray-600">
-        <p>Prepared {formatReportDateTime(report.evaluatedAt)} Asia/Manila (UTC+08:00).</p>
-        <p>Made by Programmers Guild</p>
+        <p>Made by Programmers Guild • Prepared at {formatReportDateTime(report.evaluatedAt)} Asia/Manila (UTC+08:00).</p>
       </footer>
     </div>
   );
