@@ -139,6 +139,9 @@ try {
   };
   const usnOnly=await api('/api/students',{usn:'00000123458',firstName:'USN',lastName:'Only'});
   const lrnOnly=await api('/api/students',{lrn:'000000123459',firstName:'LRN',lastName:'Only'});
+  await db.group.createMany({data:[
+   ['abm','ABM'],['assh','ASSH'],['stem','STEM'],['animation','Animation'],['css','Computer System Servicing'],['he','Home Economics'],['programming','Programming'],['new-strand','New strand'],
+  ].map(([slug,name])=>({slug,name,category:'STRAND'}))});
   const {command,evaluate,until,click}=await openBrowser();
   const choose=async(expression,value)=>{await evaluate(`(()=>{const el=${expression};el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);};
   await command('Page.navigate',{url:`${base}/students`});
@@ -151,6 +154,19 @@ try {
   writeFileSync('/tmp/student-directory-actions-mobile.png',Buffer.from((await command('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
   writeFileSync('/tmp/student-directory-actions-desktop.png',Buffer.from((await command('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  await command('Page.navigate',{url:`${base}/students/select-category?category=SHS`});
+  await until(`document.querySelectorAll('a[href*="strand="]').length === 8`);
+  assert.equal(await evaluate('document.querySelector("h1").textContent'),'Senior High School');
+  assert.deepEqual(await evaluate('[...document.querySelectorAll("h2")].map(el=>el.textContent)'),['Academic track','Technical-vocational track','Other strands']);
+  assert.equal(await evaluate(`[...document.querySelectorAll('a[href*="strand="]')].every(el=>new URL(el.href).searchParams.get('category')==='SHS')`),true);
+  assert.equal(await evaluate(`new Set([...document.querySelectorAll('a[href*="strand="]')].map(el=>Math.round(el.getBoundingClientRect().height))).size`),1);
+  writeFileSync('/tmp/shs-strand-selection-desktop.png',Buffer.from((await command('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  await command('Emulation.setDeviceMetricsOverride',{width:375,height:844,deviceScaleFactor:1,mobile:true});
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth+1'),true);
+  writeFileSync('/tmp/shs-strand-selection-mobile.png',Buffer.from((await command('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate(`document.querySelector('a[href*="strand=css"]').click()`);
+  await until('location.pathname==="/students/student-list" && new URL(location.href).searchParams.get("strand")==="css"');
   await command('Page.navigate',{url:`${base}/students/qr-codes?category=ALL&source=directory`});
   const preview='[...document.querySelectorAll(".no-print .student-qr-card")].find(el=>el.textContent.includes("Synthetic Student"))';
   const printed='[...document.querySelectorAll(".student-qr-print-area .student-qr-card")].find(el=>el.textContent.includes("Synthetic Student"))';
