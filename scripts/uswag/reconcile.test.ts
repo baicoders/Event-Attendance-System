@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { normalizeName, matchParticipant, reconcile, validateLocalDatabaseUrl } from "./reconcile";
+import { normalizeName, matchParticipant, reconcile, validateDatabaseUrl, validateLocalDatabaseUrl } from "./reconcile";
 
 const student = (id: string, firstName: string, middleName: string | null, lastName: string) => ({id, firstName, middleName, lastName});
 const participant = (name: string, group = "SSC Officers", row = 1) => ({name, group, row, position: "President"});
@@ -74,4 +74,22 @@ test("CLI never falls back to DATABASE_URL and apply requires a reviewed report"
       return true;
     });
   }
+});
+
+test("remote seeding requires explicit opt-in and forbids connection overrides", () => {
+  const url = "postgresql://u:p@db.prisma.io/postgres?sslmode=require";
+  assert.throws(() => validateDatabaseUrl(url), /LOCAL/);
+  assert.deepEqual(validateDatabaseUrl(url, true), {database: "postgres", host: "db.prisma.io", port: 5432});
+  for (const suffix of ["&host=other.example", "&dbname=other", "&sslmode=disable"]) {
+    assert.throws(() => validateDatabaseUrl(url + suffix, true));
+  }
+  assert.throws(() => validateDatabaseUrl("", true));
+  assert.throws(() => validateDatabaseUrl("https://db.prisma.io/postgres", true));
+});
+
+test("remote apply still requires a reviewed report before connecting", () => {
+  assert.throws(() => execFileSync(process.execPath, ["--import", "tsx", "scripts/uswag/seed.ts", "--database-url", "postgresql://u:p@db.prisma.io/postgres?sslmode=require", "--allow-remote", "--apply"], {encoding: "utf8", stdio: "pipe"}), (error: unknown) => {
+    assert.match((error as {stderr: string}).stderr, /requires --approval-report/);
+    return true;
+  });
 });

@@ -1,4 +1,4 @@
-/** Local-only USWAG seed. No dotenv import and no environment connection fallback. */
+/** Explicit-target USWAG seed. No dotenv import and no environment connection fallback. */
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -6,21 +6,23 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
+import { getPgPoolConfig, isLocalPostgresUrl } from "../../globals/libs/dbConfig";
 import { takeRosterExclusiveLock } from "../../globals/utils/pgLocks";
-import { EXPECTED, Group, Membership, Participant, Student, reconcile, validateLocalDatabaseUrl } from "./reconcile";
+import { EXPECTED, Group, Membership, Participant, Student, reconcile, validateDatabaseUrl } from "./reconcile";
 
-const USAGE = `Usage: node --import tsx scripts/uswag/seed.ts --database-url <LOCAL-postgresql-url>
+const USAGE = `Usage: node --import tsx scripts/uswag/seed.ts --database-url <postgresql-url> [--allow-remote]
   [--workbook 'USWAG ATTENDANCE.xlsx'] [--report /tmp/private-report.json]
   [--apply --approval-report /tmp/reviewed-dry-run.json]
 Default: read-only dry-run. Review the private report before explicitly applying it.
 No students, academic memberships, or attendance records are created or modified.`;
 
-type Options = {databaseUrl: string; workbook: string; report?: string; apply: boolean; approvalReport?: string};
+type Options = {databaseUrl: string; workbook: string; report?: string; apply: boolean; allowRemote: boolean; approvalReport?: string};
 function parseArgs(argv: string[]): Options {
-  const options: Options = {databaseUrl: "", workbook: "USWAG ATTENDANCE.xlsx", apply: false};
+  const options: Options = {databaseUrl: "", workbook: "USWAG ATTENDANCE.xlsx", apply: false, allowRemote: false};
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
     if (arg === "--apply") options.apply = true;
+    else if (arg === "--allow-remote") options.allowRemote = true;
     else if (arg === "--dry-run") { /* dry-run is already the default */ }
     else if (["--database-url", "--workbook", "--report", "--approval-report"].includes(arg)) {
       const value = argv[++index];
@@ -31,7 +33,7 @@ function parseArgs(argv: string[]): Options {
       if (arg === "--approval-report") options.approvalReport = value;
     } else throw new Error(`Unknown option: ${arg}`);
   }
-  validateLocalDatabaseUrl(options.databaseUrl);
+  validateDatabaseUrl(options.databaseUrl, options.allowRemote);
   if (options.apply && argv.includes("--dry-run")) throw new Error("Choose either --apply or --dry-run.");
   if (options.apply && !options.approvalReport) throw new Error("--apply requires --approval-report from a reviewed dry-run. Review the planned assignments before writing.");
   return options;
@@ -47,7 +49,7 @@ function queryAdapter(client: Client) {
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {console.log(USAGE); return;}
   const options = parseArgs(process.argv.slice(2));
-  const expectedDatabase = validateLocalDatabaseUrl(options.databaseUrl);
+  const expectedDatabase = validateDatabaseUrl(options.databaseUrl, options.allowRemote);
   const workbookPath = resolve(options.workbook);
   const workbookHash = sha256(readFileSync(workbookPath));
   const parser = join(dirname(fileURLToPath(import.meta.url)), "read-workbook.py");
@@ -58,7 +60,7 @@ async function main() {
   const reportPath = options.report ? resolve(options.report) : join(mkdtempSync(join(tmpdir(), "uswag-reconciliation-")), "report.json");
   // Reserve a private new file before any possible writes. Never overwrite a reviewed report.
   writeFileSync(reportPath, "", {flag: "wx", mode: 0o600});
-  const client = new Client({connectionString: options.databaseUrl, connectionTimeoutMillis: 5000});
+  const client = new Client({...getPgPoolConfig(options.databaseUrl), connectionTimeoutMillis: 10000});
   let transaction = false;
   try {
     await client.connect();
@@ -68,10 +70,14 @@ async function main() {
     await client.query("SET LOCAL statement_timeout = '30s'");
     if (options.apply) await takeRosterExclusiveLock(queryAdapter(client));
     const identity = (await client.query<{database: string; serverAddress: string; serverPort: number}>(`SELECT current_database() AS database, inet_server_addr()::text AS "serverAddress", inet_server_port() AS "serverPort"`)).rows[0];
-    const peer = (client as unknown as {connection: {stream: {remoteAddress?: string; remotePort?: number}}}).connection.stream;
-    if (identity.database !== expectedDatabase.database || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer.remoteAddress ?? "") || peer.remotePort !== expectedDatabase.port) throw new Error("Connected database is not the requested local database/endpoint. Refusing to continue.");
-    // The socket peer must be the requested loopback endpoint. PostgreSQL's own
-    // inet_server_addr/port may be a container address behind that local port.
+    const peer = (client as unknown as {connection: {stream: {remoteAddress?: string; remotePort?: number; encrypted?: boolean; authorized?: boolean}}}).connection.stream;
+    const localTarget = isLocalPostgresUrl(options.databaseUrl);
+    if (identity.database !== expectedDatabase.database || peer.remotePort !== expectedDatabase.port ||
+      (localTarget ? !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer.remoteAddress ?? "") : !peer.encrypted || !peer.authorized)) {
+      throw new Error("Connected database is not the requested database/endpoint or verified TLS is unavailable. Refusing to continue.");
+    }
+    // Local peers must be loopback; remote peers use certificate/hostname verification
+    // from getPgPoolConfig. The server may itself sit behind a database proxy.
     const students = (await client.query<Student>('SELECT id, "firstName", "middleName", "lastName" FROM "Student" ORDER BY id')).rows;
     const groups = (await client.query<Group>('SELECT id, name, slug, category FROM "Group" ORDER BY id')).rows;
     const memberships = (await client.query<Membership>('SELECT m."studentId", m."groupId", m.position, g.name AS "groupName" FROM "CustomGroupMembership" m JOIN "Group" g ON g.id = m."groupId" ORDER BY m."studentId"')).rows;
