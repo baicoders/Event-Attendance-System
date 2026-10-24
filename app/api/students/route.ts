@@ -51,6 +51,7 @@ const querySchema = z.object({
   program: z.string().optional(),
   strand: z.string().optional(),
   house: z.string().optional(),
+  customGroupId: z.string().trim().min(1).optional(),
 });
 
 export async function GET(request: NextRequest) {

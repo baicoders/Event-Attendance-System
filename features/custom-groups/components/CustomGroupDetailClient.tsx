@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, QrCode } from "lucide-react";
 import { Button } from "@/globals/components/shad-cn/button";
 import PageHeader from "@/globals/components/shared/PageHeader";
 import StatusBadge from "@/globals/components/shared/StatusBadge";
@@ -31,6 +31,7 @@ export default function CustomGroupDetailClient({ groupId }: { groupId: string }
           : <>
             <PageHeader eyebrow="Custom Group" title={group.data.name} description="Membership determines eligibility for events targeting this group." actions={<>
               <StatusBadge tone="primary">{group.data.memberCount} {group.data.memberCount === 1 ? "member" : "members"}</StatusBadge>
+              <Button variant="outline" asChild><Link href={`/students/qr-codes?category=ALL&customGroupId=${encodeURIComponent(groupId)}&source=custom-group`}><QrCode aria-hidden className="size-4" />Print QR codes</Link></Button>
               {isAdmin && <Button variant="outline" onClick={() => setIsRenaming(true)}><Pencil aria-hidden className="size-4" />Rename group</Button>}
             </>} />
             {isAdmin ? <AddGroupMember groupId={groupId} /> : <p className="text-sm text-slate-500">An administrator can add or remove members and update positions.</p>}
