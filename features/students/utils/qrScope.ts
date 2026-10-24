@@ -10,6 +10,8 @@ export function getRosterContext(params: URLSearchParams) {
   const category: StudentListCategory = raw === "COLLEGE" || raw === "SHS" || raw === "HOUSE" ? raw : "ALL";
   const key = category === "COLLEGE" ? "department" : category === "SHS" ? "strand" : category === "HOUSE" ? "house" : null;
   const filters: Record<string, string> = { category };
+  const customGroupId = params.get("customGroupId")?.trim();
+  if (customGroupId) filters.customGroupId = customGroupId;
   const allowedFilters = category === "COLLEGE" ? ["department", "program", "house"] : category === "SHS" ? ["strand", "house"] : ["house"];
   if (!raw || raw === category) {
     for (const field of allowedFilters) {

@@ -1,13 +1,27 @@
-import { Group, Prisma, Student as PrismaStudent } from "@prisma/client";
-import { Student } from "@/globals/types/students";
+import { Prisma } from "@prisma/client";
+
+type StudentQueryFilters = {
+  category?: string;
+  house?: string;
+  department?: string;
+  program?: string;
+  strand?: string;
+  customGroupId?: string;
+};
 
 /**
  * Builds a Prisma 'where' object based on provided search filters.
  * Uses an 'AND' array so multiple filters (House + Strand) work together.
  */
-export function buildStudentQuery(params: any): Prisma.StudentWhereInput {
-  const { category, house, department, program, strand } = params;
+export function buildStudentQuery(params: StudentQueryFilters): Prisma.StudentWhereInput {
+  const { category, house, department, program, strand, customGroupId } = params;
   const conditions: Prisma.StudentWhereInput[] = [];
+
+  if (customGroupId) {
+    conditions.push({
+      customMemberships: { some: { groupId: customGroupId, group: { category: "CUSTOM" } } },
+    });
+  }
 
   // 1. Filter by House
   if (house) {

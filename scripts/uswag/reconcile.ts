@@ -45,12 +45,16 @@ export function matchParticipant(name: string, students: Student[]) {
   return {status: matches.length === 1 ? "matched" : matches.length ? "ambiguous" : "missing", student: matches.length === 1 ? matches[0] : undefined, candidates: matches};
 }
 export function validateLocalDatabaseUrl(value: string) {
-  if (!value || !isPostgresUrl(value) || !isLocalPostgresUrl(value)) throw new Error("--database-url must be an explicit LOCAL PostgreSQL URL; environment defaults are never used.");
+  return validateDatabaseUrl(value);
+}
+export function validateDatabaseUrl(value: string, allowRemote = false) {
+  if (!value || !isPostgresUrl(value) || (!allowRemote && !isLocalPostgresUrl(value))) throw new Error("--database-url must be an explicit LOCAL PostgreSQL URL; environment defaults are never used.");
   const parsed = new URL(value);
   // pg supports query options overriding the path/host; reject all connection overrides.
   for (const key of parsed.searchParams.keys()) {
     if (!['sslmode', 'connect_timeout', 'application_name'].includes(key)) throw new Error(`Unsupported database URL option: ${key}`);
   }
+  if (!isLocalPostgresUrl(value) && parsed.searchParams.getAll("sslmode").some(mode => !["require", "verify-ca", "verify-full"].includes(mode))) throw new Error("Remote PostgreSQL requires verified TLS.");
   const database = decodeURIComponent(parsed.pathname.slice(1));
   if (!database || database.includes("/")) throw new Error("An explicit database name is required.");
   return {database, host: parsed.hostname, port: Number(parsed.port || "5432")};

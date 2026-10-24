@@ -37,3 +37,18 @@ test('QR roster search finds external identifiers for generated internal IDs',()
  const person={...students[0],id:'csyntheticcanonical00000001',usn:'00000123456',lrn:'000000123456'};
  for(const code of [person.usn,person.lrn])assert.equal(filterQRStudents([person],code,{})[0]?.id,person.id);
 });
+
+
+test("QR links preserve an explicit custom group across roster contexts", () => {
+  assert.deepEqual(getRosterContext(new URLSearchParams("category=ALL&customGroupId=ssc-id")).filters, {category: "ALL", customGroupId: "ssc-id"});
+  assert.deepEqual(getRosterContext(new URLSearchParams("category=SHS&strand=STEM&customGroupId=sslg-id")).filters, {category: "SHS", strand: "STEM", customGroupId: "sslg-id"});
+});
+
+test("every print scope stays inside the loaded group, including stale selections", () => {
+  const members = students.slice(0, 13);
+  const filtered = filterQRStudents(members, "juan", {});
+  const selected = new Set([members[0].id, students[24].id]);
+  assert.equal(studentsForPrint(members, filtered, selected, "roster").length, 13);
+  assert.deepEqual(studentsForPrint(members, filtered, selected, "selected"), [members[0]]);
+  assert.deepEqual(studentsForPrint(members, filtered, selected, "filtered"), [members[0]]);
+});

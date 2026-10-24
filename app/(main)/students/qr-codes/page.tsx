@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Printer, QrCode } from "lucide-react";
 import { useFetchStudents } from "@/globals/hooks/useStudents";
 import { page } from "@/globals/constants/designTokens";
@@ -11,6 +11,7 @@ import { StudentQRCard } from "@/features/students/components/StudentQRCard";
 import { StudentQRPrintGrid } from "@/features/students/components/StudentQRPrintGrid";
 import { StudentQrModal } from "@/features/students/components/StudentQRModal";
 import { Student } from "@/globals/types/students";
+import { useCustomGroups } from "@/features/custom-groups/hooks/useCustomGroups";
 import getDynamicFilters from "@/features/students/utils/getDynamicFilters";
 import { filterQRStudents, getRosterContext, QR_FILTER_FIELDS, QRFilterField, QRPrintScope, studentsForPrint } from "@/features/students/utils/qrScope";
 
@@ -21,8 +22,12 @@ const FIELD_LABELS: Record<QRFilterField, string> = { schoolLevel: "School level
 
 export default function StudentQRCenterPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const context = getRosterContext(searchParams);
-  const contextKey = `${context.category}:${context.item || "General"}`;
+  const customGroupId = context.filters.customGroupId || "";
+  const customGroups = useCustomGroups();
+  const customGroup = customGroups.data?.find((group) => group.id === customGroupId);
+  const contextKey = `${context.category}:${context.item || "General"}${customGroupId ? `:custom:${customGroupId}` : ""}`;
   const { data, isLoading, isError } = useFetchStudents(context.filters);
   const students = data ?? EMPTY_STUDENTS;
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
@@ -52,6 +57,25 @@ export default function StudentQRCenterPage() {
   const options = useMemo(() => getDynamicFilters(students), [students]);
   const allFilteredSelected = filtered.length > 0 && filtered.every((student) => selectedIds.has(student.id));
   const backParams = new URLSearchParams(context.filters).toString();
+  const backHref = searchParams.get("source") === "custom-group"
+    ? customGroupId ? `/custom-groups/${encodeURIComponent(customGroupId)}` : "/custom-groups"
+    : searchParams.get("source") === "directory" ? "/students" : `/students/student-list?${backParams}`;
+
+  const setCustomGroup = (groupId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (groupId) params.set("customGroupId", groupId); else params.delete("customGroupId");
+    params.delete("scope");
+    params.delete("search");
+    QR_FILTER_FIELDS.forEach((field) => params.delete(`filter_${field}`));
+    setSearch("");
+    setFilters({});
+    setSelectedIds(new Set());
+    setScope("filtered");
+    setPreviewSelectedOnly(false);
+    setPageIndex(0);
+    setModalStudent(undefined);
+    router.replace(`/students/qr-codes?${params}`, { scroll: false });
+  };
 
   const toggleSelected = (id: string) => {
     setScope("selected");
@@ -83,17 +107,24 @@ export default function StudentQRCenterPage() {
     <section className={`${page.surface} min-h-svh student-qr-center`}>
       <style>{"@media print { @page { size: A4 portrait; margin: 10mm; } }"}</style>
       <div className={`${page.containerWide} no-print space-y-5`}>
-        <Link href={searchParams.get("source") === "directory" ? "/students" : `/students/student-list?${backParams}`} className="inline-flex rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:border-indigo-300">← Back to Students</Link>
+        <Link href={backHref} className="inline-flex rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:border-indigo-300">← {searchParams.get("source") === "custom-group" ? "Back to Custom Group" : "Back to Students"}</Link>
         <header className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">{context.label}{context.item ? ` • ${context.item}` : ""}</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">{customGroup?.name || context.label}{context.item ? ` • ${context.item}` : ""}</p>
               <h1 className="mt-2 flex items-center gap-2 text-3xl font-semibold text-slate-900"><QrCode className="size-7" /> Student QR Codes</h1>
-              <p className="mt-2 text-sm text-slate-600">{students.length} students in this roster. Review cards and choose exactly what to print.</p>
+              <p className="mt-2 text-sm text-slate-600">{students.length} {customGroupId ? "members in this group roster" : "students in this roster"}. Review cards and choose exactly what to print.</p>
             </div>
             <button type="button" onClick={print} disabled={isLoading || isError || !printStudents.length} className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"><Printer className="size-4" /> Print QR Codes ({printStudents.length})</button>
           </div>
           <div className="mt-6 flex flex-wrap items-end gap-3">
+            <label className="flex min-w-48 flex-col gap-1 text-xs font-semibold text-slate-600" htmlFor="qr-custom-group">Custom group
+              <select id="qr-custom-group" value={customGroupId} onChange={(event) => setCustomGroup(event.target.value)} disabled={customGroups.isLoading || customGroups.isError} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 disabled:opacity-50">
+                <option value="">All students</option>
+                {customGroupId && !customGroup && <option value={customGroupId}>{customGroups.isLoading ? "Loading group…" : "Selected group"}</option>}
+                {customGroups.data?.map((group) => <option key={group.id} value={group.id}>{group.name} ({group.memberCount})</option>)}
+              </select>
+            </label>
             <label className="flex min-w-56 flex-1 flex-col gap-1 text-xs font-semibold text-slate-600">Search students<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPageIndex(0); }} placeholder="Name, USN, LRN, program, section..." className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
             {QR_FILTER_FIELDS.map((field) => {
               const key = field === "schoolLevel" || field === "yearLevel" ? field : Object.keys(GROUP_FIELDS).find((group) => GROUP_FIELDS[group] === field);
@@ -102,11 +133,12 @@ export default function StudentQRCenterPage() {
               return <label key={field} className="flex min-w-36 flex-col gap-1 text-xs font-semibold text-slate-600">{FIELD_LABELS[field]}<select value={filters[field] || ""} onChange={(event) => setFilter(field, event.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"><option value="">All</option>{choices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></label>;
             })}
           </div>
+          {customGroups.isError && <p role="alert" className="mt-3 text-sm text-rose-700">Couldn&apos;t load custom groups. <button type="button" onClick={() => customGroups.refetch()} className="underline">Retry</button></p>}
         </header>
 
         <div className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-[1fr_auto_auto]">
           <fieldset><legend className="mb-2 text-sm font-semibold text-slate-900">Print scope</legend><div className="flex flex-wrap gap-4 text-sm text-slate-700">
-            {([ ["selected", `Selected students (${selectedCount})`], ["filtered", `Current filtered results (${filtered.length})`], ["roster", `Entire roster (${students.length})`] ] as const).map(([value, label]) => <label key={value} className="flex items-center gap-2"><input type="radio" name="qr-scope" checked={scope === value} onChange={() => setScope(value)} />{label}</label>)}
+            {([ ["selected", `Selected students (${selectedCount})`], ["filtered", `Current filtered results (${filtered.length})`], ["roster", `${customGroupId ? "Entire group roster" : "Entire roster"} (${students.length})`] ] as const).map(([value, label]) => <label key={value} className="flex items-center gap-2"><input type="radio" name="qr-scope" checked={scope === value} onChange={() => setScope(value)} />{label}</label>)}
           </div></fieldset>
           <label className="flex flex-col gap-1 text-sm font-semibold text-slate-900">Preferred QR identifier
             <select value={identifierType} onChange={event => setIdentifierType(event.target.value as QRIdentifierType)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-normal">

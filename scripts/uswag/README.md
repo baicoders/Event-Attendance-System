@@ -6,9 +6,9 @@ students. It needs Node with the repository's installed dependencies and Python 
 no additional spreadsheet package is needed.
 
 Run the normal data-preserving Prisma migration before using the script. Never
-reset the existing database. The CLI requires an explicit local PostgreSQL URL
+reset the existing database. The CLI requires an explicit PostgreSQL URL (local by default)
 and never loads `.env` or falls back to `DATABASE_URL`/`DIRECT_URL`. It checks the
-actual database name and connected loopback endpoint before inspecting records.
+actual database name and connected endpoint before inspecting records.
 
 ```bash
 node --import tsx scripts/uswag/seed.ts \
@@ -61,3 +61,18 @@ resolution, transliteration, or manual override file.
 ```bash
 node --import tsx --test scripts/uswag/reconcile.test.ts
 ```
+
+## Explicit remote database runs
+
+For an authorized production run, add `--allow-remote` to both the dry-run and
+apply commands, with an explicit `--database-url`. Without this flag remote
+connections are rejected. Remote connections use the application's verified TLS
+configuration (including `DATABASE_SSL_CA_BASE64` when set); insecure SSL modes
+and connection overrides remain rejected. No environment URL is loaded implicitly.
+Keep credentials out of shell history and logs. Take a database backup before
+applying to production.
+
+Missing students and membership/position conflicts are reported and skipped;
+they do not prevent other safe assignments. Group name/slug conflicts and a stale
+review fingerprint abort the transaction. Import missing students separately,
+then run a fresh dry-run/apply to add their memberships without duplicates.

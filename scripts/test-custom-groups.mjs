@@ -171,6 +171,65 @@ try {
   const groupB = await api('/api/custom-groups', { method: 'POST', body: { name: 'Synthetic Team' } });
   await api(`/api/custom-groups/${groupB.id}/members`, { method: 'POST', body: { studentId: students[1].id } });
   await api(`/api/custom-groups/${groupB.id}/members`, { method: 'POST', body: { studentId: students[0].id }, status: 409 });
+
+  // QR group rosters must use custom memberships, never the academic join table.
+  await api(`/api/students?customGroupId=${groupId}`, { cookie: null, status: 401 });
+  assert.deepEqual((await api(`/api/students?category=ALL&customGroupId=${groupId}`)).map(s => s.id), [students[0].id]);
+  assert.deepEqual((await api(`/api/students?customGroupId=${groupB.id}`, { cookie: cookieFor(organizer) })).map(s => s.id), [students[1].id]);
+  for (const id of [academic.id, 'nonexistent-custom-group']) assert.deepEqual(await api(`/api/students?customGroupId=${id}`), []);
+  assert.deepEqual(await api(`/api/students?category=SHS&customGroupId=${groupId}`), []);
+  await api('/api/students?customGroupId=', { status: 400 });
+  const emptyGroup = await api('/api/custom-groups', { method: 'POST', body: { name: 'Synthetic Empty Group' } });
+  const extraMembers = await Promise.all(Array.from({ length: 51 }, (_, index) => db.student.create({ data: {
+    firstName: 'Synthetic', lastName: `Team Member ${String(index).padStart(2, '0')}`,
+    customMemberships: { create: { groupId: groupB.id } },
+  } })));
+  await command('Page.navigate', { url: `${origin}/custom-groups/${groupId}` });
+  await until('Boolean(document.querySelector(\'a[href*="/students/qr-codes"]\'))');
+  await evaluate('document.querySelector(\'a[href*="/students/qr-codes"]\').click()');
+  const printedCards = 'document.querySelectorAll(".student-qr-print-area .student-qr-card")';
+  const previewCards = 'document.querySelectorAll(".no-print .student-qr-card")';
+  await until(`document.querySelector('#qr-custom-group')?.value === ${JSON.stringify(groupId)} && ${printedCards}.length === 1`);
+  await until('Object.keys(document.querySelector("#qr-custom-group")).some(key=>key.startsWith("__reactProps"))');
+  const choose = async (selector, value) => evaluate(`(()=>{const el=${selector};Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  assert.equal(await evaluate(`${printedCards}[0].querySelector('svg title').textContent`), `USN QR: ${students[0].usn}`);
+  await choose('[...document.querySelectorAll("label")].find(label=>label.textContent.includes("Preferred QR identifier")).querySelector("select")', 'LRN');
+  await until(`${printedCards}[0]?.querySelector('svg title').textContent === ${JSON.stringify(`LRN QR: ${students[0].lrn}`)}`);
+  await evaluate('document.querySelector(".no-print .relative input[type=checkbox]").click()');
+  await until('document.querySelector("input[name=qr-scope]").checked');
+  await fill('document.querySelector(\'input[type="search"]\')', 'no student matches this');
+  await until(`${previewCards}.length === 0`);
+  await choose('document.querySelector("#qr-custom-group")', groupB.id);
+  await until(`new URL(location.href).searchParams.get('customGroupId') === ${JSON.stringify(groupB.id)} && ${printedCards}.length === 52 && ${previewCards}.length === 48`);
+  assert.equal(await evaluate('document.querySelector(\'input[type="search"]\').value'), '');
+  assert.equal(await evaluate('document.querySelectorAll("input[name=qr-scope]")[1].checked'), true);
+  assert.equal(await evaluate('document.querySelector(".no-print").textContent.includes("Selected students (0)")'), true);
+  assert.equal(await evaluate(`document.querySelector('.student-qr-print-area').textContent.includes(${JSON.stringify(students[0].lrn)})`), false);
+  assert.equal(await evaluate(`Boolean([...${printedCards}].find(card=>card.querySelector('svg title').textContent===${JSON.stringify(`LRN QR: ${students[1].lrn}`)}))`), true);
+  writeFileSync('/tmp/custom-group-qr-manager.png', Buffer.from((await command('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  const qrPdf = Buffer.from((await command('Page.printToPDF', { printBackground: true, preferCSSPageSize: true })).data, 'base64');
+  assert.equal(qrPdf.subarray(0, 4).toString(), '%PDF');
+  writeFileSync('/tmp/custom-group-qr-print.pdf', qrPdf);
+  await fill('document.querySelector(\'input[type="search"]\')', 'Beta');
+  await until(`${printedCards}.length === 1`);
+  await evaluate('document.querySelectorAll("input[name=qr-scope]")[2].click()');
+  await until(`${printedCards}.length === 52`);
+  await choose('document.querySelector("#qr-custom-group")', emptyGroup.id);
+  await until(`new URL(location.href).searchParams.get('customGroupId') === ${JSON.stringify(emptyGroup.id)} && ${printedCards}.length === 0`);
+  assert.equal(await evaluate('[...document.querySelectorAll("button")].find(button=>button.textContent.includes("Print QR Codes")).disabled'), true);
+  await choose('document.querySelector("#qr-custom-group")', '');
+  await until(`${printedCards}.length === 54 && !new URL(location.href).searchParams.has('customGroupId')`);
+  await choose('document.querySelector("#qr-custom-group")', groupId);
+  await until(`${printedCards}.length === 1`);
+  await command('Page.reload');
+  await until(`document.querySelector('#qr-custom-group')?.value === ${JSON.stringify(groupId)} && ${printedCards}.length === 1`);
+  await command('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+  writeFileSync('/tmp/custom-group-qr-mobile.png', Buffer.from((await command('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await db.student.deleteMany({ where: { id: { in: extraMembers.map(student => student.id) } } });
+  console.log('QR groups passed: scoped API/auth, detail link, switching clears selection/search, all 52 members print across preview pages, USN/LRN, empty groups, reload, mobile, and PDF.');
+
   const groupIds = [groupId, groupB.id];
   const audience = () => api('/api/events/audience-preview', { method: 'POST', body: { category: 'CUSTOM', includedGroups: groupIds, includeRoster: true } });
   assert.deepEqual((await audience()).students.map(s => s.id).sort(), students.slice(0, 2).map(s => s.id).sort());

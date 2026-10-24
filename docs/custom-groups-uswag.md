@@ -8,6 +8,8 @@ Calendar creation/editing offers **Custom Groups** and the existing Included Gro
 
 Report → Export → Printable attendance sheet provides checkbox column selection, including USN/LRN, custom group, position, status and time-in. Position is shown on the report table too. Empty positions display an em dash. The grouping selector offers no grouping, academic section, or custom group, with group headings and subtotals. Turning off Show Late counter includes late attendees in the printed Present count; attendance calculations and individual student statuses are unchanged. The footer credits Programmers Guild. The Noted by field can be edited in the print controls; click Apply before printing. Print options live in the URL; order is fixed and calculations/filtering remain unchanged.
 
+To print a custom group's student QR codes, open **Custom Groups → group → Print QR codes**, or choose **Custom group** in **Students → Manage**. The QR manager loads current members and supports the existing USN/LRN preference, card sizes, search, and selection controls. The entire group roster prints across all pages; preview pagination does not limit printing. Switching groups clears the previous search, filters, and selection. Empty groups cannot be printed. The chosen group is included in the page URL for reloading and sharing with other authenticated staff.
+
 ## Local database and migrations
 
 The existing `.env` points to a remote service. An ignored `.env.local` now overrides Next.js runtime connections to the existing local database. Prisma CLI reads `.env`, so always supply explicit local overrides:
