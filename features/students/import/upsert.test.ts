@@ -38,3 +38,9 @@ test('new LRN-only record, missing identifiers, repeated incoming LRN, and unkno
  const unknown=review([],[{...row('00000123456'),program:'unconfirmed-program'}]);
  assert.equal(unknown.rows[0].status,'BLOCKED');assert.equal(unknown.unknownGroups[0].slug,'unconfirmed-program');
 });
+
+test('scientific-notation identifiers are not treated as literal USNs', () => {
+ const result=review([],[row('2.40015E+10')]);
+ assert.equal(result.rows[0].status,'BLOCKED');
+ assert.ok(result.rows[0].reasons.some(reason=>reason.field==='usn' && /scientific/i.test(reason.message)));
+});

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { ImportReviewRow } from './contract';
-import { serializeImportIssuesCsv } from './issueReport';
+import { serializeImportIssuesCsv, serializeSourceIssuesCsv } from './issueReport';
 
 const blocked = (overrides: Partial<ImportReviewRow> = {}): ImportReviewRow => ({
   csvRow: 42,
@@ -55,4 +55,9 @@ test('empty issues export is header-only and embedded commas, quotes and newline
   const issue = blocked();
   issue.student.firstName = 'Ana, "A"\nLine';
   assert.ok(serializeImportIssuesCsv([issue]).includes('"Ana, ""A""\nLine Student"'));
+});
+test('structural source reports include all errors beyond the visible first twenty', () => {
+  const csv=serializeSourceIssuesCsv({sheetName:'Synthetic',errors:Array.from({length:25},(_,i)=>({csvRow:i+2,code:'COLUMN_COUNT',message:`Row ${i+2} has the wrong cell count.`}))});
+  assert.ok(csv.includes('26,Synthetic'));
+  assert.equal(csv.split('\r\n').filter(Boolean).length,26);
 });

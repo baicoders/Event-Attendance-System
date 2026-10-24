@@ -41,6 +41,7 @@ export function classifyStudentImport(input:{rows:ParsedImportRow[];groups:Impor
  const unknown=new Map<string,UnknownImportGroup>();
  const rows=normalized.map(({csvRow,student:incoming})=>{
   const reasons:ImportReason[]=[];
+  for(const field of ['usn','lrn'] as const)if(incoming[field]&&/^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(incoming[field]!))reasons.push({code:'INVALID_STUDENT',field,message:'Scientific-notation identifiers are unsafe. Restore the exact original identifier as text before importing.'});
   const matches=matching(incoming);
   if(incoming.enrollmentStatus&&excludedEnrollmentStatuses.has(comparableStatus(incoming.enrollmentStatus)))reasons.push({code:'EXCLUDED_ENROLLMENT_STATUS',field:'enrollmentStatus',message:'This enrollment status is excluded. Remove this row from the import; no students are changed until every blocked row is resolved.'});
   if(incoming.id&&incoming.usn!==incoming.id)reasons.push({code:'INVALID_STUDENT',field:'id',message:'Legacy id is a USN alias and must equal the USN column when both are supplied.'});

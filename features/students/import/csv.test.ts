@@ -56,7 +56,7 @@ test("canonical headers can be reordered but cells remain exactly named", () => 
   assert.deepEqual(result.errors, []);
 });
 
-test("large valid files have no row-count cap", () => {
+test("large valid files up to the supported limit retain source rows", () => {
   const source = header + "\n" + Array.from({ length: 5005 }, (_, i) => college.replace("00000000001", String(i).padStart(11, "0"))).join("\n");
   const result = parseStudentImportCsv(source);
   assert.equal(result.rows.length, 5005);

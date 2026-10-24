@@ -29,12 +29,12 @@ function correctiveAction(reason: ImportReason): string {
 }
 
 /** Exports exceptions from this review only, never previous values or other roster records. */
-export function serializeImportIssuesCsv(rows: ImportReviewRow[]): string {
+export function serializeImportIssuesCsv(rows: ImportReviewRow[], sheetName = ''): string {
   const lines = [HEADERS.map(cell).join(',')];
   for (const row of rows) {
     for (const reason of row.reasons) {
       lines.push([
-        String(row.csvRow), '',
+        String(row.csvRow), sheetName,
         [row.student.firstName, row.student.middleName, row.student.lastName].filter(Boolean).join(' '),
         row.student.usn ?? '', row.student.lrn ?? '', reason.field ?? '',
         reason.field ? row.student[reason.field] ?? '' : '', reason.message,
@@ -43,4 +43,13 @@ export function serializeImportIssuesCsv(rows: ImportReviewRow[]): string {
     }
   }
   return `${lines.join('\r\n')}\r\n`;
+}
+
+/** Malformed sources cannot reach review; retain every parser row diagnostic. */
+export function serializeSourceIssuesCsv(source: { sheetName?: string; errors: { csvRow?: number; code: string; message: string }[] }): string {
+  return [HEADERS.map(cell).join(','), ...source.errors.map(error => [
+    error.csvRow === undefined ? '' : String(error.csvRow), source.sheetName ?? '',
+    '', '', '', 'source', '', error.message,
+    'Correct the source row or canonical headers, replace the file, and review again.',
+  ].map(cell).join(','))].join('\r\n') + '\r\n';
 }

@@ -5,12 +5,24 @@ import { IMPORT_GROUP_FIELDS, type ImportReview } from './contract';
 import { ImportError } from './errors';
 
 export const DEFAULT_IMPORT_BATCH_SIZE = 250;
+export function resolveImportBatchSize(value: string | undefined): number {
+  if (value === undefined) return DEFAULT_IMPORT_BATCH_SIZE;
+  if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 1000) throw new Error('STUDENT_IMPORT_BATCH_SIZE must be a whole number between 1 and 1000.');
+  return Number(value);
+}
+export type ImportWriteProgress = { processed: number; total: number; batch: number; batches: number };
+export type ImportProgressObserver = (progress: ImportWriteProgress) => void;
 
 /** Bounded statements on the caller's locked transaction. No independent commits. */
-export async function writeImportBatches(tx: Prisma.TransactionClient, review: ImportReview, batchSize = DEFAULT_IMPORT_BATCH_SIZE) {
+export async function writeImportBatches(tx: Prisma.TransactionClient, review: ImportReview, batchSize = DEFAULT_IMPORT_BATCH_SIZE, onProgress?: ImportProgressObserver) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 1000) throw new Error('Import batch size must be between 1 and 1000.');
   if (review.rows.some(row => row.status === 'BLOCKED')) throw new ImportError('Blocked imports cannot commit.', 'IMPORT_BLOCKED', 409);
   const changed = review.rows.filter(row => row.status !== 'UNCHANGED');
+  const notify = (processed: number, batch: number) => {
+    // Disconnected observers cannot affect transaction correctness.
+    try { onProgress?.({ processed, total: review.rows.length, batch, batches: Math.ceil(changed.length / batchSize) }); } catch { /* Observation only. */ }
+  };
+  notify(review.counts.unchanged, 0);
   for (let offset = 0; offset < changed.length; offset += batchSize) {
     const batch = changed.slice(offset, offset + batchSize).map(row => ({
       row,
@@ -56,5 +68,6 @@ export async function writeImportBatches(tx: Prisma.TransactionClient, review: I
       INSERT INTO "_GroupToStudent" ("A", "B")
       SELECT v."groupId", v."studentId" FROM jsonb_to_recordset(${JSON.stringify(memberships)}::jsonb) AS v("groupId" text, "studentId" text)
     `);
+    notify(review.counts.unchanged + Math.min(offset + batchSize, changed.length), Math.floor(offset / batchSize) + 1);
   }
 }

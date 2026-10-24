@@ -34,6 +34,7 @@ export const importRequestSchema = z.object({
   fileName: z.string().min(1).max(200)
     .refine((name) => name.trim().length > 0 && !/[\\/\u0000-\u001f\u007f]/.test(name) && name.trim() !== "." && name.trim() !== "..", "Use a display basename without paths or control characters"),
   sourceHash: z.string().regex(/^[a-fA-F0-9]{64}$/, "Expected SHA-256 hex digest"),
+  sheetName: z.string().min(1).max(31).refine(value => !/[\u0000-\u001f\u007f]/.test(value), 'Invalid sheet name').optional(),
   csv: z.string().max(MAX_IMPORT_BYTES).refine((csv) => new TextEncoder().encode(csv).byteLength <= MAX_IMPORT_BYTES, "CSV exceeds the 10 MiB technical byte limit"),
 }).strict();
 export const commitRequestSchema = importRequestSchema.extend({
@@ -79,6 +80,7 @@ export type UnknownImportGroup = z.infer<typeof unknownGroupSchema>;
 export type ImportReview = { rows: ImportReviewRow[]; counts: ImportCounts; unknownGroups: UnknownImportGroup[] };
 export const importPreviewSchema = z.object({
   v: z.literal(2), rows: z.array(reviewRowSchema), counts: importCountsSchema,
+  sheetName: z.string().max(31).optional(),
   unknownGroups: z.array(unknownGroupSchema), previewToken: z.string().max(4096).nullable(),
   preparedAt: z.iso.datetime(), expiresAt: z.iso.datetime(),
 }).strict();

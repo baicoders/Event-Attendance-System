@@ -6,6 +6,14 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { createDisposableDb } from '../../../globals/libs/testDb';
 import { previewStudentImport, commitStudentImport } from './server';
+import { resolveImportBatchSize } from './writeBatches';
+
+test('batch size configuration accepts only bounded whole numbers', () => {
+  assert.equal(resolveImportBatchSize(undefined), 250);
+  assert.equal(resolveImportBatchSize('100'), 100);
+  assert.equal(resolveImportBatchSize('1000'), 1000);
+  for (const value of ['', '0', '-1', '1001', '1.5', 'NaN']) assert.throws(() => resolveImportBatchSize(value));
+});
 
 test('100 grouped students commit with bounded queries and replay without rewriting identities', async () => {
   const fixture = await createDisposableDb('test_import_batches');
@@ -25,9 +33,12 @@ test('100 grouped students commit with bounded queries and replay without rewrit
     assert.equal(preview.counts.create, 100);
     queries = 0;
     const command = { ...input, previewToken: preview.previewToken!, commandId: randomUUID() };
-    const result = await commitStudentImport(db, command, actor);
+    const progress: { processed: number; total: number; batch: number; batches: number }[] = [];
+    const result = await commitStudentImport(db, command, actor, update => { progress.push(update); });
     const commitQueries = queries;
     assert.equal(result.receipt.counts.create, 100);
+    assert.ok(progress.length >= 2);
+    assert.deepEqual(progress.at(-1), { processed: 100, total: 100, batch: 1, batches: 1 });
     const saved = await db.student.findMany({ include: { groups: true } });
     assert.equal(saved.length, 100);
     assert.ok(saved.every(student => student.groups.length === 2 && student.id !== student.usn));

@@ -7,6 +7,9 @@ import {previewStudentImport,commitStudentImport,prepareImport} from './server';
 import {signImportToken,IMPORT_TOKEN_PURPOSE} from './token';
 import {hashImportCommand} from './commandHash';
 const source=(csv:string)=>({v:2 as const,fileName:'synthetic.csv',csv,sourceHash:createHash('sha256').update(csv).digest('hex')});
+test('server rejects unsupported display file formats before preparing a new import', () => {
+ assert.throws(()=>prepareImport({...source('usn,firstName,lastName\n00000123456,Synthetic,Student'),fileName:'unsafe.exe'}),{code:'UNSUPPORTED_FILE_TYPE'});
+});
 test('reviewed partial upserts preserve groups/history, replay safely, block conflicts and roll back receipt failures',async()=>{
  const fixture=await createDisposableDb('test_partial_import');const {db,disconnect}=createTestClient(fixture.url);
  try {
@@ -40,6 +43,13 @@ test('reviewed partial upserts preserve groups/history, replay safely, block con
   const concurrentCommand={...failureInput,previewToken:failure.previewToken!,commandId:randomUUID()};
   const concurrent=await Promise.all([commitStudentImport(db,concurrentCommand,actor),commitStudentImport(db,concurrentCommand,actor)]);
   assert.equal(concurrent.filter(result=>result.replayed).length,1);assert.equal(await db.student.count({where:{lrn:'000000123459'}}),1);
+  const overlapInput=source('lrn,firstName,lastName\n000000123460,Synthetic,Overlap');
+  const overlapReview=await previewStudentImport(db,overlapInput,actor);
+  const overlap=await Promise.allSettled([randomUUID(),randomUUID()].map(commandId=>commitStudentImport(db,{...overlapInput,previewToken:overlapReview.previewToken!,commandId},actor)));
+  assert.equal(overlap.filter(result=>result.status==='fulfilled').length,1);
+  const overlapFailure=overlap.find(result=>result.status==='rejected');
+  assert.ok(overlapFailure?.status==='rejected');assert.equal(overlapFailure.reason.code,'STALE_PREVIEW');
+  assert.equal(await db.student.count({where:{lrn:'000000123460'}}),1);
  } finally {await disconnect();await fixture.cleanup();}
 });
 
@@ -64,5 +74,24 @@ test('historical v1 exact replay survives upgrade and expiry without roster work
   await db.$executeRawUnsafe('ALTER TABLE "Student" RENAME TO "Student_replay_forbidden"');
   const replay=await commitStudentImport(db,command,actor);assert.equal(replay.replayed,true);assert.equal(replay.receipt.v,1);assert.deepEqual(replay.receipt.result,result);
   await assert.rejects(previewStudentImport(db,input,actor),{code:'IMPORT_CONTRACT_UPGRADED'});
+ } finally {await disconnect();await fixture.cleanup();}
+});
+
+test('exact historical v2 receipt replay bypasses tighter new-import row limits', async () => {
+ const fixture=await createDisposableDb('test_historical_large_import');const {db,disconnect}=createTestClient(fixture.url);
+ try {
+  const actor=await db.user.create({data:{name:'Synthetic Admin',email:'historical-large@example.test',password:'fixture',role:'ADMIN',status:'ACTIVE'}});
+  const csv='usn,firstName,lastName\n'+Array.from({length:10001},(_,i)=>`${String(i).padStart(11,'0')},Synthetic,Student`).join('\n');
+  const input=source(csv);
+  assert.throws(()=>prepareImport(input),{code:'INVALID_CSV'});
+  const prepared={sourceHash:input.sourceHash,normalizedInputHash:'a'.repeat(64)};
+  const now=Date.now();const token=signImportToken({v:1,purpose:IMPORT_TOKEN_PURPOSE,actorId:actor.id,fileName:input.fileName,sourceHash:input.sourceHash,normalizedInputHash:prepared.normalizedInputHash,reviewHash:'b'.repeat(64),preparedAt:now-700000,expiresAt:now-100000});
+  const command={...input,previewToken:token,commandId:randomUUID()};
+  const result={v:2,rows:Array.from({length:10001},(_,i)=>({csvRow:i+2,studentId:`synthetic-${i}`,status:'UNCHANGED'}))};
+  await db.studentImportBatch.create({data:{commandId:command.commandId,actorId:actor.id,actorNameSnapshot:actor.name,fileName:input.fileName,sourceFileHash:input.sourceHash,normalizedInputHash:prepared.normalizedInputHash,requestHash:hashImportCommand(command,actor.id,prepared),totalRows:10001,createdCount:0,updatedCount:0,unchangedCount:10001,result,contractVersion:2,createdAt:new Date(now-1000),committedAt:new Date(now)}});
+  await db.$executeRawUnsafe('ALTER TABLE "Student" RENAME TO "Student_replay_forbidden"');
+  const replay=await commitStudentImport(db,command,actor);
+  assert.equal(replay.replayed,true);assert.equal(replay.receipt.counts.total,10001);
+  await assert.rejects(commitStudentImport(db,{...command,csv:csv+'\n'},actor),{code:'STALE_PREVIEW'});
  } finally {await disconnect();await fixture.cleanup();}
 });

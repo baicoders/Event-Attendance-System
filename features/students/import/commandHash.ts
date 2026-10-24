@@ -7,5 +7,6 @@ export function hashImportCommand(input: ImportCommitRequest, actorId: string, p
     v:input.v, actorId, commandId:input.commandId, fileName:input.fileName,
     previewToken:input.previewToken, sourceFileHash:prepared.sourceHash,
     normalizedInputHash:prepared.normalizedInputHash,
+    ...(input.sheetName ? { sheetName: input.sheetName } : {}),
   });
 }
