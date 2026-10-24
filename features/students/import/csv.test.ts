@@ -56,7 +56,7 @@ test("canonical headers can be reordered but cells remain exactly named", () => 
   assert.deepEqual(result.errors, []);
 });
 
-test("large valid files have no row-count cap", () => {
+test("large valid files up to the supported limit retain source rows", () => {
   const source = header + "\n" + Array.from({ length: 5005 }, (_, i) => college.replace("00000000001", String(i).padStart(11, "0"))).join("\n");
   const result = parseStudentImportCsv(source);
   assert.equal(result.rows.length, 5005);
@@ -68,4 +68,28 @@ test("duplicate diagnostics stay bounded for a large repeated-ID source", () => 
   assert.equal(result.rows.length, 5005);
   assert.equal(result.errors.length, 5005);
   assert.ok(result.errors.every((error) => error.message.length < 200));
+});
+
+test("optional enrollment status is retained only when the source supplies it", () => {
+  const supplied = parseStudentImportCsv("usn,firstName,lastName,enrollmentStatus\n00000000001,Jane,Doe,Withdrawn");
+  assert.deepEqual(supplied.errors, []);
+  assert.equal((supplied.rows[0].student as unknown as Record<string, unknown>).enrollmentStatus, "Withdrawn");
+  const absent = parseStudentImportCsv("usn,firstName,lastName\n00000000001,Jane,Doe");
+  assert.equal(Object.hasOwn(absent.rows[0].student, "enrollmentStatus"), false);
+  const legacy = parseStudentImportCsv(`${header}\n${college}`, true);
+  assert.deepEqual(legacy.errors, []);
+  assert.deepEqual(Object.keys(legacy.rows[0].student), header.split(","));
+});
+test('CSV rejects more than 10000 students before retaining an unbounded number of records', () => {
+  const parsed = parseStudentImportCsv('usn,firstName,lastName\n' + '00000123456,Synthetic,Student\n'.repeat(10001));
+  assert.equal(parsed.rows.length, 0);
+  assert.ok(parsed.errors.some(error => error.code === 'TOO_MANY_ROWS'));
+});
+
+test('CSV rejects excessive cells and oversized single-cell values', () => {
+  for (const csv of ['usn,firstName,lastName\n' + ','.repeat(10000), 'usn,firstName,lastName\n00000123456,' + 'a'.repeat(4097) + ',Student']) {
+    const parsed = parseStudentImportCsv(csv);
+    assert.equal(parsed.rows.length, 0);
+    assert.ok(parsed.errors.some(error => ['TOO_MANY_COLUMNS', 'CELL_TOO_LARGE'].includes(error.code)));
+  }
 });

@@ -77,6 +77,16 @@ const serverRss = () => {
   const visit = (pid) => { try { const status = readFileSync(`/proc/${pid}/status`, "utf8"); const own = Number(status.match(/^VmRSS:\s+(\d+)/m)?.[1] ?? 0) * 1024; const children = readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8").trim().split(/\s+/).filter(Boolean); return own + children.reduce((sum, child) => sum + visit(child), 0); } catch { return 0; } };
   return server?.pid ? visit(server.pid) : 0;
 };
+async function startTestServer() {
+  server = spawn("pnpm", [process.env.IMPORT_TEST_DEV === "1" ? "dev" : "start", "--port", String(port)], { env: { ...process.env, DATABASE_URL: disposable.url, DIRECT_URL: disposable.url, AUTH_SECRET: secret, NODE_ENV: process.env.IMPORT_TEST_DEV === "1" ? "development" : "production" }, stdio: ["ignore", "pipe", "pipe"], detached: true });
+  for (const stream of [server.stdout, server.stderr]) stream.on("data", (chunk) => { serverOutput = (serverOutput + chunk).slice(-12000); });
+  for (let i = 0; i < 160; i++) {
+    if (server.exitCode !== null) throw new Error(`Server exited ${server.exitCode}`);
+    try { if ((await fetch(`${base}/api/auth/session`)).status < 500) return; } catch {}
+    await delay(250);
+  }
+  throw new Error('Isolated Next server did not become ready.');
+}
 async function heldRoster(run) {
   const connection = await pool.connect();
   await connection.query("BEGIN");
@@ -119,11 +129,7 @@ try {
   await pool.query('CREATE TABLE "ImportTestWrites" (id text NOT NULL, operation text NOT NULL)');
   await pool.query(`CREATE FUNCTION import_test_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO "ImportTestWrites" VALUES (NEW.id, TG_OP); RETURN NEW; END; $$`);
   await pool.query('CREATE TRIGGER import_test_write AFTER INSERT OR UPDATE ON "Student" FOR EACH ROW EXECUTE FUNCTION import_test_write()');
-  server = spawn("pnpm", [process.env.IMPORT_TEST_DEV === "1" ? "dev" : "start", "--port", String(port)], { env: { ...process.env, DATABASE_URL: disposable.url, DIRECT_URL: disposable.url, AUTH_SECRET: secret, NODE_ENV: process.env.IMPORT_TEST_DEV === "1" ? "development" : "production" }, stdio: ["ignore", "pipe", "pipe"], detached: true });
-  for (const stream of [server.stdout, server.stderr]) stream.on("data", (chunk) => { serverOutput = (serverOutput + chunk).slice(-12000); });
-  let ready = false;
-  for (let i = 0; i < 160; i++) { if (server.exitCode !== null) throw new Error(`Server exited ${server.exitCode}`); try { if ((await fetch(`${base}/api/auth/session`)).status < 500) { ready = true; break; } } catch {} await delay(250); }
-  assert.ok(ready, "isolated Next server became ready");
+  await startTestServer();
   const beforeLegacyRoster = await snapshot();
   const beforeLegacyGroups = await db.group.findMany({ orderBy: { id: "asc" } });
   rejected(await api("/api/bulk-import/students", [row("00000123840")]), [401]);
@@ -197,11 +203,11 @@ try {
   assert.equal(await receiptCount(), 0, "independent Group creation and abandoned review never fabricate import receipts");
   record("explicit group creation resolves blocker with zero Student writes");
 
-  const mixed = command([row(existing.id, { section: "section-b", firstName: "Updated" }), identical, row("00000123459", { middleName: "   ", strand: "   " }), row("00ABC123456", { lastName: "Oñate, Jr.", firstName: "María" })], "mañana.csv");
+  const mixed = command([row(existing.id, { section: "section-b", firstName: "STUDENT" }), identical, row("00000123459", { middleName: "   ", strand: "   " }), row("00ABC123456", { lastName: "Oñate, Jr.", firstName: "María" })], "mañana.csv");
   const review = await preview(mixed, adminCookie);
   assert.deepEqual(review.data.counts, { total: 4, create: 2, update: 1, unchanged: 1, blocked: 0 });
   assert.equal(review.data.rows.find((r) => r.student.id === existing.id).status, "UPDATE");
-  assert.deepEqual(review.data.rows.find((r) => r.student.id === existing.id).changes.sort((a,b) => a.field.localeCompare(b.field)), [{ field: "firstName", before: "Student", after: "Updated" }, { field: "section", before: "section-a", after: "section-b" }]);
+  assert.deepEqual(review.data.rows.find((r) => r.student.id === existing.id).changes.sort((a,b) => a.field.localeCompare(b.field)), [{ field: "firstName", before: "Student", after: "STUDENT" }, { field: "section", before: "section-a", after: "section-b" }]);
   const omittedBefore = await db.student.findUnique({ where: { id: omitted.id }, include: { groups: { orderBy: { id: "asc" } } } });
   const identicalBefore = await db.student.findUnique({ where: { id: identical.id } });
   const attendanceBefore = JSON.stringify(await db.record.findMany());
@@ -232,7 +238,7 @@ try {
   assert.deepEqual(await receiptRead(`/api/students/imports/${applied.id}`, otherCookie), applied);
   const privateCommand = await api(`/api/students/imports/commands/${applied.commandId}`, undefined, otherCookie, { method: "GET" });
   rejected(privateCommand, [404]); assert.equal(privateCommand.result.code, "IMPORT_RECEIPT_NOT_FOUND");
-  for (const alteredInput of [fromCsv(mixed.csv + "\n", mixed.fileName), command([row(existing.id, { firstName: "Different reviewed name" })], mixed.fileName), mixed]) {
+  for (const alteredInput of [fromCsv(mixed.csv + "\n", mixed.fileName), command([row(existing.id, { firstName: "student" })], mixed.fileName), mixed]) {
     const changedReview = await preview(alteredInput, adminCookie);
     const collision = await commit(alteredInput, changedReview, adminCookie, applied.commandId);
     rejected(collision, [409]); assert.equal(collision.result.code, "IMPORT_COMMAND_REUSED");
@@ -288,7 +294,8 @@ try {
     await db.student.deleteMany({ where: { id: "00000123463" } });
     await db.group.upsert({ where: { id: "section-a" }, create: groupData[0], update: { name: "Section A", slug: "section-a" } });
   }
-  const changeInput = command([row(existing.id, { firstName: "Changed again" })]);
+  const currentForChange = await db.student.findUniqueOrThrow({where:{id:existing.id}});
+  const changeInput = command([row(existing.id, { firstName: currentForChange.firstName, lastName: currentForChange.lastName, yearLevel: "YEAR_2" })]);
   const changeReview = await preview(changeInput, adminCookie);
   await db.student.update({ where: { id: existing.id }, data: { lastName: "Separate edit" } });
   stale(await commit(changeInput, changeReview, adminCookie));
@@ -451,8 +458,22 @@ try {
   assert.ok(!/result\s*:/.test(projectionSource), "explicit history database select excludes result JSONB");
   record("bounded metadata-only history, exact equal-timestamp pagination and fresh ADMIN receipt permissions", { pages: Math.ceil(pagedIds.length / 20), receipts: pagedIds.length });
 
+  const streamInput = command([row('00000123890')], 'streamed.csv');
+  const streamReview = await preview(streamInput, adminCookie);
+  const streamed = await fetch(`${base}/api/students/imports/commit`, { method: 'POST', headers: { cookie: adminCookie, 'content-type': 'application/json', accept: 'application/x-ndjson' }, body: JSON.stringify(commandBody(streamInput, streamReview)) });
+  assert.match(streamed.headers.get('content-type'), /application\/x-ndjson/);
+  const frames = (await streamed.text()).trim().split('\n').map(line => JSON.parse(line));
+  const progressFrames = frames.filter(frame => frame.type === 'progress');
+  assert.ok(progressFrames.length >= 2);
+  assert.equal(progressFrames.at(-1).processed, 1);
+  const terminal = frames.at(-1); assert.equal(terminal.type, 'result');
+  const streamReceipt = receiptCommitResponseSchema.parse(terminal.envelope.data).receipt;
+  assert.equal(streamReceipt.counts.create, 1);
+  assert.equal(await db.student.count({ where: { usn: '00000123890' } }), 1);
+  record('real HTTP NDJSON progress finishes with a persisted atomic receipt');
+
   if (process.argv.includes("--large")) {
-    for (const count of [2000, 5005]) {
+    for (const count of [1000, 3000, 5000, 10000]) {
       const rows = Array.from({ length: count }, (_, index) => row(String(80000000000 + count * 10000 + index), { firstName: `Load${index}` }));
       const input = command(rows, `load-${count}.csv`);
       const memoryBefore = process.memoryUsage().rss;
@@ -532,6 +553,44 @@ try {
   if (process.argv.includes("--browser") || process.argv.includes("--browser-only") || process.argv.includes("--browser-race")) {
     const { runStudentImportBrowser } = await import("./student-import-browser.mjs");
     await runStudentImportBrowser({ base, cookie: adminCookie, toCsv, row, db });
+  }
+  if (!process.argv.includes('--browser-only') && !process.argv.includes('--browser-race')) {
+    const crashKey = BigInt('7499275100041');
+    const barrier = await pool.connect();
+    const crashRows = Array.from({ length: 501 }, (_, i) => row(String(92000000000 + i)));
+    const crashInput = command(crashRows, 'synthetic-interruption.csv');
+    const crashReview = await preview(crashInput, adminCookie);
+    const crashBody = commandBody(crashInput, crashReview);
+    await pool.query(`CREATE FUNCTION import_test_interruption() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.usn = '92000000500' THEN PERFORM pg_advisory_xact_lock(7499275100041); END IF; RETURN NEW; END; $$`);
+    await pool.query('CREATE TRIGGER import_test_interruption BEFORE INSERT ON "Student" FOR EACH ROW EXECUTE FUNCTION import_test_interruption()');
+    await barrier.query('BEGIN'); await barrier.query('SELECT pg_advisory_xact_lock($1)', [crashKey.toString()]);
+    try {
+      const interrupted = api('/api/students/imports/commit', crashBody, adminCookie).catch(() => null);
+      const backend = await waitForAdvisoryWait(crashKey);
+      assert.equal(await db.student.count({ where: { usn: { in: crashRows.map(r => r.id) } } }), 0, 'tentative first two batches remain invisible');
+      const stopped = new Promise(resolve => server.once('close', resolve));
+      process.kill(-server.pid, 'SIGKILL'); await stopped;
+      await barrier.query('COMMIT');
+      await interrupted;
+      let disconnected = false;
+      for (let attempt=0; attempt<200; attempt++) {
+        const active = await pool.query('SELECT 1 FROM pg_stat_activity WHERE pid=$1', [backend]);
+        if (!active.rowCount) { disconnected=true; break; }
+        await delay(25);
+      }
+      assert.ok(disconnected, 'interrupted database backend closed');
+      assert.equal(await db.student.count({ where: { usn: { in: crashRows.map(r => r.id) } } }), 0);
+      await startTestServer();
+      rejected(await api(`/api/students/imports/commands/${crashBody.commandId}`, undefined, adminCookie, { method: 'GET' }), [404]);
+      const recovered = accepted(await api('/api/students/imports/commit', crashBody, adminCookie));
+      assert.equal(recovered.counts.create, 501);
+      const replay = await api('/api/students/imports/commit', crashBody, adminCookie); accepted(replay); assert.equal(replay.result.data.replayed, true);
+      assert.equal(await db.student.count({ where: { usn: { in: crashRows.map(r => r.id) } } }), 501);
+      record('actual server SIGKILL after two tentative batches rolls back, restarts, checks missing receipt and retries the exact command once');
+    } finally {
+      await barrier.query('ROLLBACK'); barrier.release();
+      await pool.query('DROP TRIGGER import_test_interruption ON "Student"');
+    }
   }
   record("reviewed import fixture passed", { checks: evidence.length });
 } catch (error) {

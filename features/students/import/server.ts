@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { AuthError, type AuthSession } from '@/globals/utils/auth';
-import { studentSchema } from '@/globals/schemas/studentSchema';
+import { writeImportBatches, resolveImportBatchSize, type ImportProgressObserver } from './writeBatches';
 import { takeRosterExclusiveLock, takeImportCommandLock } from '@/globals/utils/pgLocks';
 import { parseStudentImportCsv, hasStructuralCsvErrors } from './csv';
 import { classifyStudentImport, normalizeStudentImportRow } from './classify';
@@ -31,12 +31,13 @@ function normalizeLegacyRow(row: ParsedImportRow['student']) {
 }
 
 export function prepareImport(input: ImportRequest) {
+  if (!/\.(csv|xlsx)$/i.test(input.fileName)) throw new ImportError('Choose a CSV or XLSX student import file.','UNSUPPORTED_FILE_TYPE');
   const sourceHash = createHash('sha256').update(input.csv,'utf8').digest('hex');
   if (sourceHash !== input.sourceHash.toLowerCase()) throw new ImportError('CSV source hash does not match this file. Replace the file.', 'SOURCE_HASH_MISMATCH');
   const parsed = parseStudentImportCsv(input.csv, input.v === 1);
   if (hasStructuralCsvErrors(parsed)) throw new ImportError(parsed.errors.filter(e=>e.code!=='DUPLICATE_ID').slice(0,20).map(e=>e.message).join(' '), 'INVALID_CSV');
   const rows = parsed.rows.map(r=>({csvRow:r.csvRow,student:input.v === 1 ? normalizeLegacyRow(r.student) : normalizeStudentImportRow(r.student)}));
-  return {rows,sourceHash,normalizedInputHash:importHash({v:input.v,rows})};
+  return {rows,sourceHash,normalizedInputHash:importHash({v:input.v,rows,...(input.sheetName?{sheetName:input.sheetName}:{})})};
 }
 
 /** Bounded set reads through this transaction's reader, never global Prisma. */
@@ -72,7 +73,7 @@ export async function previewStudentImport(db:PrismaClient, raw:unknown, actor:A
   const expiresAt=preparedAt+IMPORT_TOKEN_TTL_MS;
   const token:ImportToken={v:1,purpose:IMPORT_TOKEN_PURPOSE,actorId:actor.id,fileName:input.fileName,sourceHash:prepared.sourceHash,
     normalizedInputHash:prepared.normalizedInputHash,reviewHash:hashImportReview(prepared.rows,state.students,state.groups),preparedAt,expiresAt};
-  return {...review,v:2 as const,previewToken:review.counts.blocked===0 ? signImportToken(token) : null,preparedAt:new Date(preparedAt).toISOString(),expiresAt:new Date(expiresAt).toISOString()};
+  return {...review,v:2 as const,...(input.sheetName?{sheetName:input.sheetName}:{}),previewToken:review.counts.blocked===0 ? signImportToken(token) : null,preparedAt:new Date(preparedAt).toISOString(),expiresAt:new Date(expiresAt).toISOString()};
 }
 
 export function verifyReviewedInput(input:ImportCommitRequest, actor:AuthSession, prepared:ReturnType<typeof prepareImport>, allowExpired=false) {
@@ -95,21 +96,8 @@ export async function revalidateImport(tx:Prisma.TransactionClient, prepared:Ret
   return review;
 }
 
-export async function applyImport(tx:Prisma.TransactionClient,review:ImportReview) {
-  for(const row of review.rows) {
-    if(row.status==='UNCHANGED') continue;
-    if(row.status!=='CREATE' && row.status!=='UPDATE') throw new ImportError('Blocked imports cannot commit.','IMPORT_BLOCKED',409);
-    const student=studentSchema.parse({...row.student,schoolLevel:row.student.schoolLevel||null,yearLevel:row.student.yearLevel||null});
-    if(row.status==='CREATE') {
-      const saved=await tx.student.create({data:{usn:student.usn||null,lrn:student.lrn||null,firstName:student.firstName,lastName:student.lastName,middleName:student.middleName||null,schoolLevel:student.schoolLevel??null,yearLevel:student.yearLevel??null,groups:{connect:row.groupIds.map(id=>({id}))}}});
-      row.student.id=saved.id;
-    } else {
-      const scalarFields=new Set(['usn','lrn','firstName','lastName','middleName','schoolLevel','yearLevel']);
-      const data=Object.fromEntries(row.changes.filter(change=>scalarFields.has(change.field)).map(change=>[change.field,change.after]));
-      const groupsChanged=row.changes.some(change=>change.field in IMPORT_GROUP_FIELDS);
-      await tx.student.update({where:{id:row.student.id},data:{...data,...(groupsChanged?{groups:{set:row.groupIds.map(id=>({id}))}}:{})}});
-    }
-  }
+export async function applyImport(tx:Prisma.TransactionClient,review:ImportReview,onProgress?:ImportProgressObserver) {
+  await writeImportBatches(tx,review,resolveImportBatchSize(process.env.STUDENT_IMPORT_BATCH_SIZE),onProgress);
 }
 
 /** Distinguish a callback that could never reach COMMIT from lost commit acknowledgement. */
@@ -130,13 +118,16 @@ export async function runImportTransaction<T>(db:PrismaClient, work:(tx:Prisma.T
   }
 }
 
-export async function commitStudentImport(db:PrismaClient, raw:unknown, actor:AuthSession) {
+export async function commitStudentImport(db:PrismaClient, raw:unknown, actor:AuthSession,onProgress?:ImportProgressObserver) {
   const input=commitRequestSchema.parse(raw);
-  const prepared=prepareImport(input);
   // Verify purpose, signature, actor and source even on replay. Expiry only
   // prevents first execution; an immutable exact receipt remains resolvable.
-  const token=verifyReviewedInput(input,actor,prepared,true);
-  const requestHash=hashImportCommand(input,actor.id,prepared);
+  // Authenticate the signed exact source before applying today's parser policy:
+  // older committed commands may legitimately exceed today's row/cell limits.
+  const token=verifyImportToken(input.previewToken,actor.id,true);
+  const sourceHash=createHash('sha256').update(input.csv,'utf8').digest('hex');
+  if(sourceHash!==input.sourceHash.toLowerCase() || sourceHash!==token.sourceHash || input.fileName!==token.fileName) throw new ImportError('The source differs from the reviewed file. Review again.','STALE_PREVIEW',409);
+  const requestHash=hashImportCommand(input,actor.id,{sourceHash,normalizedInputHash:token.normalizedInputHash});
   const createdAt=new Date();
   const result=await runImportTransaction(db,async tx=>{
     const fresh=await guardImportActor(tx,actor);
@@ -147,11 +138,13 @@ export async function commitStudentImport(db:PrismaClient, raw:unknown, actor:Au
       return {receipt:projectImportReceipt(existing),replayed:true};
     }
     if(input.v !== 2) throw new ImportError('Import format changed. Reload and review the file again.','IMPORT_CONTRACT_UPGRADED',410);
+    const prepared=prepareImport(input);
+    verifyReviewedInput(input,actor,prepared,true);
     assertImportTokenFresh(token);
     await takeRosterExclusiveLock(tx);
     assertImportTokenFresh(token);
     const review=await revalidateImport(tx,prepared,token);
-    await applyImport(tx,review);
+    await applyImport(tx,review,onProgress);
     // Construction, insert and validation of the persisted response are inside
     // this transaction: any failure rolls back every tentative Student write.
     const receiptResult=buildImportReceiptResult(review);

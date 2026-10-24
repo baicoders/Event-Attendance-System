@@ -34,8 +34,9 @@
     "benchmark:import": "tsx scripts/benchmark/http-import-benchmark.ts",
     "benchmark:operator": "node --import tsx scripts/benchmark/operator-mode.ts",
     "postinstall": "prisma generate",
-    "test:student-import": "node --import tsx --test features/students/import/csv.test.ts features/students/import/classify.test.ts features/students/import/upsert.test.ts features/students/import/contract.test.ts features/students/import/receiptContract.test.ts features/students/import/commandHash.test.ts globals/utils/pgLocks.test.ts && node --conditions=react-server --import tsx --test features/students/import/token.test.ts features/students/import/upsert.server.test.ts && node --import tsx scripts/test-student-import.mjs",
-    "test:student-import-durability": "node --import tsx scripts/test-student-import-durability.mjs"
+    "test:student-import": "node --import tsx --test features/students/import/csv.test.ts features/students/import/classify.test.ts features/students/import/upsert.test.ts features/students/import/contract.test.ts features/students/import/receiptContract.test.ts features/students/import/commandHash.test.ts features/students/import/issueReport.test.ts features/students/import/progressContract.test.ts features/students/import/parseSource.test.ts features/students/import/xlsx.test.ts globals/utils/pgLocks.test.ts && node --conditions=react-server --import tsx --test features/students/import/token.test.ts features/students/import/upsert.server.test.ts features/students/import/batching.server.test.ts && node --import tsx scripts/test-student-import.mjs",
+    "test:student-import-durability": "node --import tsx scripts/test-student-import-durability.mjs",
+    "benchmark:import-scale": "node --conditions=react-server --import tsx scripts/benchmark/student-import-scale.ts"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",
@@ -62,6 +63,8 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
     "lodash": "^4.17.21",
     "lucide-react": "^0.542.0",
     "next": "15.5.20",

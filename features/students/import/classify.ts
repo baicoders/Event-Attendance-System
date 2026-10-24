@@ -6,6 +6,7 @@ const groupFields=Object.keys(IMPORT_GROUP_FIELDS) as ImportGroupField[];
 export function normalizeStudentImportRow(row:CanonicalRow, legacyAlias=true):CanonicalRow {
  const normalized={...row};
  for(const field of CSV_HEADERS) normalized[field]=(row[field]??'').trim();
+ if(row.enrollmentStatus!==undefined)normalized.enrollmentStatus=row.enrollmentStatus.trim();
  normalized.usn=normalized.usn || (legacyAlias?normalized.id:"");
  for(const field of groupFields)normalized[field]=normalized[field].toLowerCase();
  return normalized;
@@ -19,6 +20,11 @@ function domainReasons(student:CanonicalRow):ImportReason[] {
  const validation=studentSchema.safeParse({...student,schoolLevel:student.schoolLevel||null,yearLevel:student.yearLevel||null});
  return validation.success?[]:validation.error.issues.map(issue=>({code:'INVALID_STUDENT',field:issue.path[0] as ImportField,message:issue.message}));
 }
+// NFC keeps canonically equivalent spelling equal without fuzzy matching,
+// removing accents, rearranging names, or changing compatibility characters.
+const comparableName=(value:string)=>value.normalize('NFC').trim().replace(/\s+/gu,' ').toLowerCase();
+const excludedEnrollmentStatuses=new Set(['withdrawn','not enrolled','transferred out','retained transfer out']);
+const comparableStatus=(value:string)=>value.normalize('NFKC').trim().toLowerCase().replace(/[\s/_\p{Dash_Punctuation}]+/gu,' ');
 export function classifyStudentImport(input:{rows:ParsedImportRow[];groups:ImportGroup[];students:ExistingImportStudent[]}):ImportReview {
  const groups=new Map(input.groups.map(group=>[group.slug,group]));
  const byCode=new Map<string,Map<string,ExistingImportStudent>>();
@@ -35,7 +41,9 @@ export function classifyStudentImport(input:{rows:ParsedImportRow[];groups:Impor
  const unknown=new Map<string,UnknownImportGroup>();
  const rows=normalized.map(({csvRow,student:incoming})=>{
   const reasons:ImportReason[]=[];
+  for(const field of ['usn','lrn'] as const)if(incoming[field]&&/^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(incoming[field]!))reasons.push({code:'INVALID_STUDENT',field,message:'Scientific-notation identifiers are unsafe. Restore the exact original identifier as text before importing.'});
   const matches=matching(incoming);
+  if(incoming.enrollmentStatus&&excludedEnrollmentStatuses.has(comparableStatus(incoming.enrollmentStatus)))reasons.push({code:'EXCLUDED_ENROLLMENT_STATUS',field:'enrollmentStatus',message:'This enrollment status is excluded. Remove this row from the import; no students are changed until every blocked row is resolved.'});
   if(incoming.id&&incoming.usn!==incoming.id)reasons.push({code:'INVALID_STUDENT',field:'id',message:'Legacy id is a USN alias and must equal the USN column when both are supplied.'});
   if(matches.length>1)reasons.push({code:'IDENTITY_CONFLICT',message:'USN and LRN resolve to different students. Resolve the identities before import.'});
   if([incoming.usn,incoming.lrn].some(code=>code&&(codeCounts.get(code)??0)>1)||matches.some(s=>(targetCounts.get(s.id)??0)>1))reasons.push({code:'DUPLICATE_ID',message:'An identifier or canonical student occurs more than once in this CSV.'});
@@ -43,6 +51,7 @@ export function classifyStudentImport(input:{rows:ParsedImportRow[];groups:Impor
   const previous=before?existingImportRow(before):undefined;
   const student={...incoming,id:before?.id??''};
   if(previous) {
+   for(const field of ['firstName','lastName','middleName'] as const)if(incoming[field]&&previous[field]&&comparableName(incoming[field])!==comparableName(previous[field]))reasons.push({code:'IDENTITY_CONFLICT',field,message:'This identifier belongs to a student with a different name. Review and correct the identity manually before importing.'});
    for(const field of CSV_HEADERS)if(!['id','firstName','lastName'].includes(field)&&!student[field])student[field]=previous[field]??"";
    for(const field of ['usn','lrn'] as const)if(incoming[field]&&previous[field]&&incoming[field]!==previous[field])reasons.push({code:'IDENTITY_CONFLICT',field,message:`Existing ${field.toUpperCase()} differs. Review the student manually before replacing identifiers.`});
    for(const membership of before!.groups) {
