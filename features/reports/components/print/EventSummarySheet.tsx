@@ -2,7 +2,7 @@ import Image from "next/image";
 
 import type { EventReport } from "@/globals/types/reports";
 import { formatAttendanceRate } from "@/globals/utils/attendance";
-import { formatReportDateTime, formatReportEventDate } from "@/globals/utils/reportTime";
+import { formatReportDateTime, formatReportEventSchedule } from "@/globals/utils/reportTime";
 import type { GroupDimension } from "@/globals/utils/reportGroups";
 
 const cell = "border border-gray-400 px-2 py-1 text-left align-top break-words";
@@ -23,7 +23,7 @@ export default function EventSummarySheet({ report, groupBy }: { report: EventRe
       </header>
       <section className="print-break-inside-avoid mb-4 text-sm">
         <h2 className="text-lg font-bold">{event.title}</h2>
-        <p>{formatReportEventDate(event.start, event.allDay)} to {formatReportEventDate(event.end, event.allDay)}{event.allDay ? " · All day" : ` ${report.timeZone}`}</p>
+        <p>{formatReportEventSchedule(event.start, event.end, event.allDay)}{event.allDay ? "" : " · Philippine time (UTC+08:00)"}</p>
         <p>Status: {event.status} · Audience: {event.category} {event.location ? `· ${event.location}` : ""}</p>
         <p>Prepared at {formatReportDateTime(report.evaluatedAt)} {report.timeZone} (UTC+08:00)</p>
         {event.status !== "APPROVED" ? <p className="mt-2 font-bold">PROVISIONAL — EVENT NOT APPROVED</p> : null}
