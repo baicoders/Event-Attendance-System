@@ -1,23 +1,28 @@
 import { z } from "zod";
 
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+export const MAX_IMPORT_ROWS = 10_000;
+export const MAX_IMPORT_CELL_CHARS = 4096;
 export const LARGE_IMPORT_ROWS = 2000;
 export const CSV_HEADERS = [
   "id", "usn", "lrn", "lastName", "firstName", "middleName", "schoolLevel", "yearLevel",
   "section", "house", "program", "department", "strand",
 ] as const;
+// Metadata is optional and never added to historical rows when absent. Keep the
+// canonical field order stable: exact v1/v2 command hashes are durable receipts.
+export const IMPORT_INPUT_HEADERS = [...CSV_HEADERS, "enrollmentStatus"] as const;
 
 export const IMPORT_GROUP_FIELDS = {
   section: "SECTION", house: "HOUSE", program: "PROGRAM",
   department: "DEPARTMENT", strand: "STRAND",
 } as const;
 export type ImportGroupField = keyof typeof IMPORT_GROUP_FIELDS;
-export type ImportField = (typeof CSV_HEADERS)[number];
+export type ImportField = (typeof IMPORT_INPUT_HEADERS)[number];
 
 const canonicalRowSchema = z.object({
   id: z.string(), usn: z.string().optional(), lrn: z.string().optional(), lastName: z.string(), firstName: z.string(), middleName: z.string(),
   schoolLevel: z.string(), yearLevel: z.string(), section: z.string(), house: z.string(),
-  program: z.string(), department: z.string(), strand: z.string(),
+  program: z.string(), department: z.string(), strand: z.string(), enrollmentStatus: z.string().optional(),
 }).strict();
 export type CanonicalRow = z.infer<typeof canonicalRowSchema>;
 export type ParsedImportRow = { csvRow: number; student: CanonicalRow };
@@ -53,7 +58,7 @@ export const importCountsSchema = z.object({
 }).strict();
 export type ImportCounts = z.infer<typeof importCountsSchema>;
 const reasonSchema = z.object({
-  code: z.string(), field: z.enum(CSV_HEADERS).optional(), message: z.string(),
+  code: z.string(), field: z.enum(IMPORT_INPUT_HEADERS).optional(), message: z.string(),
 }).strict();
 export type ImportReason = z.infer<typeof reasonSchema>;
 const changeSchema = z.object({

@@ -24,14 +24,44 @@ test("classification creates College and SHS rows and skips identical existing s
 });
 
 test("updates expose exact scalar and relationship diffs in canonical field order", () => {
-  const result = classifyStudentImport({ rows: [row({ firstName: "Janet", middleName: "Lee", yearLevel: "YEAR_2", section: "bsit-2a" })], groups, students: [existing()] });
+  const result = classifyStudentImport({ rows: [row({ firstName: "JANE", middleName: "Lee", yearLevel: "YEAR_2", section: "bsit-2a" })], groups, students: [existing()] });
   assert.equal(result.rows[0].status, "UPDATE");
   assert.deepEqual(result.rows[0].changes, [
-    { field: "firstName", before: "Jane", after: "Janet" },
+    { field: "firstName", before: "Jane", after: "JANE" },
     { field: "middleName", before: null, after: "Lee" },
     { field: "yearLevel", before: "YEAR_1", after: "YEAR_2" },
     { field: "section", before: "bsit-1a", after: "bsit-2a" },
   ]);
+});
+
+test("matching identifiers with conflicting existing names require manual review", () => {
+  for (const changed of [{ firstName: "Different" }, { lastName: "Person" }, { middleName: "Other" }]) {
+    const review = classifyStudentImport({ rows: [row(changed)], groups, students: [existing({ middleName: "Lee" })] }).rows[0];
+    assert.equal(review.status, "BLOCKED");
+    assert.ok(review.reasons.some(reason => reason.code === "IDENTITY_CONFLICT" && reason.field === Object.keys(changed)[0] && /manual/i.test(reason.message)));
+  }
+});
+
+test("equivalent Unicode, case and spacing in names do not create identity conflicts", () => {
+  const review = classifyStudentImport({ rows: [row({ firstName: " MARÍA   JOSE ", lastName: "DOE", middleName: "" })], groups, students: [existing({ firstName: "Mari\u0301a\u00a0Jose", middleName: "Lee" })] }).rows[0];
+  assert.equal(review.status, "UPDATE");
+  assert.deepEqual(review.reasons, []);
+  assert.equal(review.student.middleName, "Lee");
+});
+
+test("recognized excluded enrollment statuses block rows before any import", () => {
+  for (const enrollmentStatus of ["Withdrawn", " NOT ENROLLED ", "Transferred Out", "Retained/Transfer-Out", "retained / transfer out", "transferred_out"]) {
+    const review = classifyStudentImport({ rows: [row({ enrollmentStatus })], groups, students: [] }).rows[0];
+    assert.equal(review.status, "BLOCKED", enrollmentStatus);
+    assert.ok(review.reasons.some(reason => reason.code === "EXCLUDED_ENROLLMENT_STATUS" && reason.field === "enrollmentStatus"));
+  }
+});
+
+test("absent, blank or nonexcluded enrollment statuses do not exclude students", () => {
+  for (const enrollmentStatus of [undefined, "", "Enrolled"]) {
+    const review = classifyStudentImport({ rows: [row(enrollmentStatus === undefined ? {} : { enrollmentStatus })], groups, students: [] }).rows[0];
+    assert.equal(review.status, "CREATE");
+  }
 });
 
 test("normalization trims identity and names, lowers slugs, and keeps enums strict", () => {

@@ -1,4 +1,4 @@
-import { CSV_HEADERS, MAX_IMPORT_BYTES, type CanonicalRow, type ImportCsvError, type ParsedStudentImport } from "./contract";
+import { CSV_HEADERS, IMPORT_INPUT_HEADERS, MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, MAX_IMPORT_CELL_CHARS, type CanonicalRow, type ImportCsvError, type ParsedStudentImport } from "./contract";
 
 /** Duplicate identity is a row blocker; every other parser error invalidates the source. */
 export function hasStructuralCsvErrors(result: ParsedStudentImport | ImportCsvError[]): boolean {
@@ -25,6 +25,7 @@ export function parseStudentImportCsv(csv: string, legacy = false): ParsedStuden
     cells = []; cell = ""; mode = "plain"; recordHasContent = false;
   };
   for (let i = 0; i < source.length; i++) {
+    if (cell.length > MAX_IMPORT_CELL_CHARS) return fail('CELL_TOO_LARGE', `A cell exceeds ${MAX_IMPORT_CELL_CHARS} characters.`, rowStart);
     const char = source[i];
     if (mode === "quoted") {
       if (char === '"') {
@@ -38,8 +39,10 @@ export function parseStudentImportCsv(csv: string, legacy = false): ParsedStuden
     }
     if (char === ",") {
       cells.push(cell); cell = ""; mode = "plain"; recordHasContent = true;
+      if (cells.length >= IMPORT_INPUT_HEADERS.length) return fail('TOO_MANY_COLUMNS', 'Too many spreadsheet columns.', rowStart);
     } else if (char === "\r" || char === "\n") {
       finishRecord();
+      if (records.length > MAX_IMPORT_ROWS + 1) return fail('TOO_MANY_ROWS', `Import at most ${MAX_IMPORT_ROWS.toLocaleString()} students per file.`, rowStart);
       if (char === "\r" && source[i + 1] === "\n") i++;
       line++; rowStart = line;
     } else if (char === '"' && cell.length === 0 && mode === "plain") {
@@ -52,14 +55,16 @@ export function parseStudentImportCsv(csv: string, legacy = false): ParsedStuden
     }
   }
   if (mode === "quoted") return fail("MALFORMED_CSV", "Unclosed quoted CSV cell.", rowStart);
+  if (cell.length > MAX_IMPORT_CELL_CHARS) return fail('CELL_TOO_LARGE', `A cell exceeds ${MAX_IMPORT_CELL_CHARS} characters.`, rowStart);
   finishRecord();
+  if (records.length > MAX_IMPORT_ROWS + 1) return fail('TOO_MANY_ROWS', `Import at most ${MAX_IMPORT_ROWS.toLocaleString()} students per file.`, rowStart);
   if (records.length === 0) return fail("EMPTY_CSV", "Choose a CSV with a header and at least one student row.");
   const header = records[0];
   const seen = new Set<string>();
   for (const name of header.cells) {
     if (seen.has(name)) errors.push({ csvRow: header.csvRow, code: "DUPLICATE_HEADER", message: `Duplicate header: ${name}.` });
     seen.add(name);
-    if (!(CSV_HEADERS as readonly string[]).includes(name)) errors.push({ csvRow: header.csvRow, code: "UNEXPECTED_HEADER", message: `Unexpected header: ${name}.` });
+    if (!((legacy ? CSV_HEADERS : IMPORT_INPUT_HEADERS) as readonly string[]).includes(name)) errors.push({ csvRow: header.csvRow, code: "UNEXPECTED_HEADER", message: `Unexpected header: ${name}.` });
   }
   const requiredHeaders = legacy ? CSV_HEADERS.filter(name=>name!=="usn"&&name!=="lrn") : ["firstName","lastName"];
   for (const name of requiredHeaders) {
