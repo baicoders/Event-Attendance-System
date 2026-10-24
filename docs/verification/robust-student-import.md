@@ -190,3 +190,8 @@ COMMIT acknowledgment, so displayed duration is approximate.
 10. Repeat at 10k while observing memory, connections and actual deployment timeout/
     proxy behavior. Schedule outside scanning. Validate backups and restore into
     another isolated database before institutional rollout. Leave PR unmerged.
+
+## Review PR
+
+[PR #116](https://github.com/baicoders/Event-Attendance-System/pull/116) targets main,
+which the user selected as the review base. It remains unmerged.
