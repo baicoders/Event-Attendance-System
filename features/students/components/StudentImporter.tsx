@@ -9,16 +9,17 @@ import { queryKeys } from "@/globals/utils/queryKeys";
 import type { GroupCategory } from "@/globals/schemas/groupSchema";
 import GroupFormSheet from "@/features/settings/components/GroupFormSheet";
 import { MAX_IMPORT_BYTES, importPreviewSchema, importRequestSchema, type ImportPreview, type ImportCounts } from "../import/contract";
-import { parseStudentImportCsv, hasStructuralCsvErrors } from "../import/csv";
+import { processImportFile } from "../import/readSource";
+import { readImportProgressStream, parsePendingImportReference, pendingImportStorageKey, serializePendingImportReference, type ImportProgress } from "../import/progressContract";
 import ImportSourceStep, { type ImportSource } from "./ImportSourceStep";
 import ImportReviewStep from "./ImportReviewStep";
 import ImportResult, { type ConfirmedImportResult } from "./ImportResult";
 import { receiptCommitResponseSchema, receiptSchema, type Receipt } from "../import/receiptContract";
 
 const utf8Bytes = (value: string) => new TextEncoder().encode(value).byteLength;
-const payloadFor = (source: ImportSource) => ({ v: 2 as const, fileName: source.fileName, sourceHash: source.sourceHash, csv: source.csv });
+const payloadFor = (source: ImportSource) => ({ v: 2 as const, fileName: source.fileName, sourceHash: source.sourceHash, csv: source.csv, ...(source.sheetName ? { sheetName: source.sheetName } : {}) });
 
-type FrozenImportCommand = { commandId: string; body: string; sourceHash: string; fileName: string; counts: ImportCounts };
+type FrozenImportCommand = { commandId: string; body: string | null; sourceHash: string; fileName: string; counts: ImportCounts };
 
 type Rejection = { success: false; message: string; code: string; outcome: "REJECTED" };
 function isRejection(value: unknown): value is Rejection {
@@ -47,6 +48,18 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
   const [command, setCommand] = useState<FrozenImportCommand | null>(null);
   const [groupDefaults, setGroupDefaults] = useState<{ slug: string; category: GroupCategory; generation: number; source: ImportSource } | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const [recoveryUnavailable, setRecoveryUnavailable] = useState(false);
+  const recoveryKey = pendingImportStorageKey(actor.id, actor.credentialVersion ?? 0);
+
+  useEffect(() => {
+    try {
+      const restored = parsePendingImportReference(sessionStorage.getItem(recoveryKey), actor.id, actor.credentialVersion ?? 0);
+      if (restored) { setCommand({ ...restored, body: null }); setOutcome("unknown"); }
+      else sessionStorage.removeItem(recoveryKey);
+    } catch { setRecoveryUnavailable(true); }
+  }, [recoveryKey, actor.id, actor.credentialVersion]);
+  const clearPending = () => { try { sessionStorage.removeItem(recoveryKey); } catch { /* Storage can be disabled. */ } };
 
   useEffect(() => {
     mounted.current = true;
@@ -61,7 +74,8 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
   const reset = () => {
     generation.current += 1;
     activeSource.current = null;
-    setSource(null); setPreview(null); setError(""); setResult(null); setCommand(null); setOutcome("source"); setReading(false); setBusy(false); setLargeAcknowledged(false); setGroupDefaults(null);
+    clearPending();
+    setSource(null); setPreview(null); setError(""); setResult(null); setCommand(null); setOutcome("source"); setReading(false); setBusy(false); setLargeAcknowledged(false); setGroupDefaults(null); setProgress(null);
   };
   const resetAfterOutcome = async () => {
     if (outcome === "unknown") {
@@ -78,15 +92,7 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
     const version = generation.current;
     setReading(true);
     try {
-      if (file.size > MAX_IMPORT_BYTES) throw new Error("This file exceeds the 10 MiB technical file limit. Split the source file before continuing.");
-      if (!file.name.toLowerCase().endsWith(".csv")) throw new Error("Choose a CSV file using the canonical student-import format.");
-      const bytes = await file.arrayBuffer();
-      // Preserve a UTF-8 BOM in the exact source text/hash; the parser handles it.
-      const csv = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(csv));
-      const sourceHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
-      const parsed = parseStudentImportCsv(csv);
-      const next: ImportSource = { fileName: file.name, size: file.size, csv, sourceHash, rowCount: parsed.rows.length, errors: parsed.errors, structurallyValid: !hasStructuralCsvErrors(parsed.errors) };
+      const next = await processImportFile(file);
       const requestValidation = importRequestSchema.safeParse(payloadFor(next));
       if (!requestValidation.success) {
         next.structurallyValid = false;
@@ -137,6 +143,7 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
     (["total", "create", "update", "unchanged", "blocked"] as const).every(key => receipt.counts[key] === frozen.counts[key]);
 
   const acceptReceipt = (receipt: Receipt, replayed: boolean, checked: boolean) => {
+    clearPending(); setProgress(null);
     setResult({ receipt, replayed, checked }); setOutcome("success"); setPreview(null); setCommand(null); setError("");
     if (confirmedReceipts.current.has(receipt.id)) return;
     confirmedReceipts.current.add(receipt.id);
@@ -150,9 +157,13 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
   };
 
   const sendFrozenCommand = async (frozen: FrozenImportCommand, version: number, retry: boolean) => {
+    if (!frozen.body) return;
+    setProgress(null);
     try {
-      const response = await fetch("/api/students/imports/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: frozen.body, cache: "no-store" });
-      const envelope: unknown = await response.json();
+      const response = await fetch("/api/students/imports/commit", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" }, body: frozen.body, cache: "no-store" });
+      const envelope: unknown = response.headers.get("content-type")?.includes("application/x-ndjson") && response.body
+        ? await readImportProgressStream(response.body, frozen.counts.total, event => { if (current(version)) setProgress(event); })
+        : await response.json();
       if (!current(version)) return;
       if (isRejection(envelope)) {
         refreshRejectedSession(envelope.code);
@@ -160,6 +171,7 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
           setError(`Retry rejected: ${envelope.message} The earlier request's outcome is still unconfirmed. Check result before starting a different import.`);
           setOutcome("unknown");
         } else {
+          clearPending(); setProgress(null);
           setError(`${envelope.message} No changes were applied by this request.`);
           setPreview(null); setCommand(null); setOutcome("source");
         }
@@ -195,6 +207,8 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
       try { commandId = crypto.randomUUID(); } catch { setError("Unable to allocate an import reference. No import was sent."); return; }
       const frozen: FrozenImportCommand = { commandId, body: JSON.stringify({ ...reviewed, commandId }), fileName: source.fileName, sourceHash: source.sourceHash, counts: { ...counts } };
       setCommand(frozen); setError("");
+      try { sessionStorage.setItem(recoveryKey, serializePendingImportReference(frozen, actor.id, actor.credentialVersion ?? 0)); }
+      catch { setRecoveryUnavailable(true); }
       await sendFrozenCommand(frozen, version, false);
     } finally {
       committing.current = false;
@@ -203,7 +217,7 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
   };
 
   const retrySameCommand = async () => {
-    if (!command || committing.current) return;
+    if (!command?.body || committing.current) return;
     const version = generation.current;
     committing.current = true; setBusy(true); setError("");
     try {
@@ -219,13 +233,13 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
   const checkResult = async () => {
     if (!command || committing.current) return;
     const version = generation.current;
-    committing.current = true; setBusy(true); setError("");
+    committing.current = true; setBusy(true); setError(""); setProgress(null);
     try {
       const response = await fetch(`/api/students/imports/commands/${encodeURIComponent(command.commandId)}`, { cache: "no-store" });
       const envelope: unknown = await response.json();
       if (!current(version)) return;
       if (response.status === 404 && envelope && typeof envelope === "object" && "code" in envelope && envelope.code === "IMPORT_RECEIPT_NOT_FOUND") {
-        setError("No receipt is available yet. The original request may still be in flight; a missing receipt is not proof of rollback. Check again or explicitly retry the same reviewed import.");
+        setError(`No receipt is available yet. The original request may still be in flight; a missing receipt is not proof of rollback. ${command.body ? "Check again or explicitly retry the same reviewed import." : "Check again or review import history and the current roster before preparing a fresh review."}`);
         return;
       }
       if (isRejection(envelope)) {
@@ -247,8 +261,9 @@ function AuthorizedImporter({ actor, onImportSuccess }: { actor: AuthUser; onImp
 
   return <Card className="min-w-0"><CardHeader><CardTitle>Student masterlist import</CardTitle><CardDescription>Review USN/LRN matches and exact changes before applying. Blank optional cells preserve existing information.</CardDescription></CardHeader><CardContent className="space-y-5">
     {error && <p role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">{error}</p>}
-    {busy && <p role="status">{committing.current ? (outcome === "unknown" ? "Resolving this import. Leave this tab open…" : "Confirming import. Leave this tab open…") : "Preparing authoritative review…"}</p>}
-    {outcome !== "source" && source ? <ImportResult result={outcome === "success" ? result : null} fileName={source.fileName} commandId={command?.commandId ?? null} busy={busy} onCheck={() => void checkResult()} onRetry={() => void retrySameCommand()} onAnother={() => void resetAfterOutcome()} /> : preview ? <ImportReviewStep preview={preview} busy={busy} expired={now >= Date.parse(preview.expiresAt)} onReview={() => void review()} onConfirm={() => void commit()} onReplace={reset} onCreateGroup={defaults => { if (source) setGroupDefaults({ ...defaults, generation: generation.current, source }); }} /> : <ImportSourceStep source={source} busy={busy || reading} reading={reading} largeAcknowledged={largeAcknowledged} onAcknowledge={() => setLargeAcknowledged(true)} onFile={file => void readFile(file)} onReset={reset} onReview={() => void review()} />}
+    {recoveryUnavailable && <p className="text-sm text-amber-800">This browser could not retain the import reference for page refresh. Keep this tab open until the result is confirmed.</p>}
+    {busy && (progress ? <div role="status" className="space-y-2"><p>Importing students: {progress.processed.toLocaleString()} of {progress.total.toLocaleString()} rows processed • batch {progress.batch} of {progress.batches}</p><progress className="w-full" value={progress.processed} max={progress.total} aria-label="Tentative import processing" /><p className="text-sm text-muted-foreground">{progress.processed === progress.total ? "Awaiting database commit. " : "Processing inside one transaction. "}These changes are provisional until a committed receipt is confirmed.</p></div> : <p role="status">{committing.current ? (outcome === "unknown" ? "Resolving this import. Leave this tab open…" : "Confirming import. Leave this tab open…") : "Preparing authoritative review…"}</p>)}
+    {outcome !== "source" ? <ImportResult result={outcome === "success" ? result : null} fileName={source?.fileName ?? command?.fileName ?? "Student import"} commandId={command?.commandId ?? null} retryAvailable={Boolean(command?.body)} busy={busy} onCheck={() => void checkResult()} onRetry={() => void retrySameCommand()} onAnother={() => void resetAfterOutcome()} /> : preview ? <ImportReviewStep preview={preview} busy={busy} expired={now >= Date.parse(preview.expiresAt)} onReview={() => void review()} onConfirm={() => void commit()} onReplace={reset} onCreateGroup={defaults => { if (source) setGroupDefaults({ ...defaults, generation: generation.current, source }); }} /> : <ImportSourceStep source={source} busy={busy || reading} reading={reading} largeAcknowledged={largeAcknowledged} onAcknowledge={() => setLargeAcknowledged(true)} onFile={file => void readFile(file)} onReset={reset} onReview={() => void review()} />}
     {groupDefaults && <GroupFormSheet isOpen createDefaults={groupDefaults} onClose={() => setGroupDefaults(opened => opened === groupDefaults ? null : opened)} onCreated={() => {
       // Group creation is durable even after Cancel, but its late completion
       // must never revive the review of a replaced file or close a newer form.

@@ -3,9 +3,10 @@
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import ExcelJS from "exceljs";
 
 const browserScript = String.raw`
-import json, re, sys, time
+import base64, csv, json, re, sys, time
 from playwright.sync_api import sync_playwright, expect
 
 config = json.loads(sys.stdin.readline())
@@ -68,17 +69,32 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Reset", exact=True).click()
     previews_before_oversize = len(preview_requests)
     page.get_by_label("Choose CSV file").set_input_files({"name": "oversized.csv", "mimeType": "text/csv", "buffer": b"x" * (10 * 1024 * 1024 + 1)})
-    expect(page.get_by_role("alert").filter(has_text="exceeds the 10 MiB technical file limit")).to_be_visible()
+    expect(page.get_by_role("alert").filter(has_text=re.compile("exceeds the 10 MiB.*limit"))).to_be_visible()
     assert len(preview_requests) == previews_before_oversize, "oversized source never dispatches server review"
+    page.evaluate("window.__parseTicks = 0; window.__parseTimer = setInterval(() => window.__parseTicks++, 5)")
     upload(page, "large-advisory.csv", config["large"])
+    assert page.evaluate("clearInterval(window.__parseTimer); window.__parseTicks") > 0, "main thread remains available during large-file worker parsing"
     expect(page.get_by_role("button", name="Review import", exact=True)).to_be_disabled()
-    expect(page.get_by_text("Large import — 2,000 rows", exact=True)).to_be_visible()
+    expect(page.get_by_text("Large import — 5,000 rows", exact=True)).to_be_visible()
     page.get_by_role("button", name="Continue anyway", exact=True).click()
     review(page)
+    large_rows = page.get_by_label("Import review rows")
+    expect(large_rows.locator("tbody tr")).to_have_count(25)
+    expect(large_rows.get_by_text("Page 1 of 200", exact=True)).to_be_visible()
+    large_rows.get_by_label("Search import rows").fill("91000004999")
+    expect(large_rows.locator("tbody tr")).to_have_count(1)
+    expect(large_rows).to_contain_text("91000004999")
+    large_rows.get_by_label("Search import rows").fill("")
+    expect(large_rows.locator("tbody tr")).to_have_count(25)
     page.set_viewport_size({"width": 375, "height": 812})
     mobile_width(page)
     page.screenshot(path="/tmp/student-import-mobile-large-review.png", full_page=True)
-    page.get_by_role("button", name="Replace file", exact=True).click()
+    confirm(page)
+    expect(page.get_by_role("progressbar", name="Tentative import processing", exact=True)).to_be_visible(timeout=60000)
+    expect(page.get_by_role("heading", name="Import complete", exact=True)).to_be_visible(timeout=120000)
+    expect(page.get_by_label("Import complete", exact=True)).to_contain_text("5,000")
+    page.screenshot(path="/tmp/student-import-mobile-large-complete.png", full_page=True)
+    page.get_by_role("button", name="Import another file", exact=True).click()
     page.set_viewport_size({"width": 1440, "height": 1000})
     # A Group creation is durable independent work. Its late completion must
     # never revive the CSV review that opened the sheet after source replacement.
@@ -121,6 +137,9 @@ with sync_playwright() as p:
     upload(page, "broken.csv", "id,lastName\n123,Test\n")
     expect(page.get_by_role("button", name="Review import", exact=True)).to_be_disabled()
     expect(page.get_by_label("Import source").get_by_role("alert")).to_be_visible()
+    with page.expect_download() as source_issues:
+        page.get_by_role("button", name="Download source issues (CSV)", exact=True).click()
+    assert "Missing required header" in open(source_issues.value.path(), encoding="utf-8-sig").read()
     page.get_by_role("button", name="Replace file", exact=True).click()
     upload(page, "invalid-year.csv", config["invalidYear"])
     review(page)
@@ -128,12 +147,23 @@ with sync_playwright() as p:
     expect(page.get_by_label("Import review rows")).to_contain_text("yearLevel")
     expect(page.get_by_label("Import review rows").locator("input")).to_have_count(1)
     expect(page.get_by_label("Import review rows").get_by_label("Search import rows")).to_be_visible()
+    with page.expect_download() as download_info:
+        page.get_by_role("button", name="Download issue report (CSV)", exact=True).click()
+    issue_download = download_info.value
+    assert issue_download.suggested_filename == "student-import-issues.csv"
+    with open(issue_download.path(), encoding="utf-8-sig", newline="") as issue_file:
+        issue_rows = list(csv.DictReader(issue_file))
+    assert len(issue_rows) >= 1
+    assert issue_rows[0]["Source row"] == "2"
+    assert issue_rows[0]["USN"] == "00000123812"
+    assert any(issue["Field"] == "yearLevel" and issue["Actual value"] == "GRADE_11" and issue["Corrective action"] for issue in issue_rows)
+    expect(page.get_by_text("The entire file is blocked", exact=False)).to_be_visible()
     page.get_by_role("button", name="Replace file", exact=True).click()
     upload(page, "mixed-browser.csv", config["mixed"])
     expect(page.get_by_text("broken.csv", exact=True)).to_have_count(0)
     review(page)
     page.get_by_role("button", name="Updates", exact=True).click()
-    expect(page.get_by_label("Import review rows")).to_contain_text("firstName")
+    expect(page.get_by_label("Import review rows")).to_contain_text("middleName")
     expect(page.get_by_label("Import review rows")).to_contain_text("Browser Updated")
     page.get_by_role("button", name="Creates", exact=True).click()
     page.get_by_label("Search import rows").fill("00000123800")
@@ -160,8 +190,8 @@ with sync_playwright() as p:
     expect(page.get_by_role("link", name="View students", exact=True)).to_be_visible()
     mobile_width(page)
     page.screenshot(path="/tmp/student-import-mobile-success.png", full_page=True)
-    assert len(commit_requests) == 1, "one confirmed command was dispatched"
-    first_command = json.loads(commit_requests[0])
+    assert len(commit_requests) == 2, "the large import and the mixed import each dispatched one confirmed command"
+    first_command = json.loads(commit_requests[-1])
     assert re.fullmatch(r"[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}", first_command["commandId"]), "confirmed import has a client UUID"
     receipt_href = page.get_by_role("link", name="View receipt", exact=True).get_attribute("href")
     receipt_page = context.new_page()
@@ -172,7 +202,7 @@ with sync_playwright() as p:
     receipt_rows = receipt_page.get_by_label("Receipt rows", exact=True)
     receipt_rows.get_by_role("button", name="Updated", exact=True).click()
     expect(receipt_rows).to_contain_text("Browser Updated")
-    expect(receipt_rows).to_contain_text("firstName")
+    expect(receipt_rows).to_contain_text("middleName")
     receipt_rows.get_by_role("button", name="Created", exact=True).click()
     receipt_page.get_by_label("Search receipt rows").fill("00000123800")
     expect(receipt_rows).to_contain_text("00000123800")
@@ -218,10 +248,20 @@ with sync_playwright() as p:
     mobile_width(page)
     page.screenshot(path="/tmp/student-import-mobile-unknown.png", full_page=True)
     lost_wire = commit_requests[-1]
+    saved_reference = page.evaluate("Object.entries(sessionStorage).filter(([key]) => key.startsWith('student-import-pending:')).map(([,value]) => JSON.parse(value))")
+    assert len(saved_reference) == 1
+    assert saved_reference[0]["commandId"] == json.loads(lost_wire)["commandId"]
+    assert not any(key in saved_reference[0] for key in ["csv", "body", "previewToken"]), "refresh recovery never persists roster source or review token"
+    page.reload(wait_until="domcontentloaded")
+    expect(page.get_by_role("heading", name="Outcome unknown", exact=True)).to_be_visible()
+    expect(page.get_by_text(re.compile("reference was recovered", re.I))).to_be_visible()
+    expect(page.get_by_role("button", name="Retry same reviewed import", exact=True)).to_be_disabled()
+    assert len(commit_requests) == before_loss + 1, "refresh does not resend a mutation"
     checkpoint("CHECK_START")
     page.get_by_role("button", name="Check result", exact=True).click()
     expect(page.get_by_role("heading", name="Import confirmed", exact=True)).to_be_visible()
     assert len(commit_requests) == before_loss + 1, "checking result sends no second command"
+    assert page.evaluate("Object.keys(sessionStorage).filter(key => key.startsWith('student-import-pending:')).length") == 0, "confirmed receipt clears pending refresh reference"
     checkpoint("CHECK_END")
     page.unroute("**/api/students/imports/commit", lose_response)
     page.get_by_role("button", name="Import another file", exact=True).click()
@@ -286,6 +326,7 @@ with sync_playwright() as p:
     first_page_links = history.locator("li a").evaluate_all("links => links.map(link => link.getAttribute('href'))")
     history.get_by_role("button", name="Older imports", exact=True).click()
     expect(history.get_by_text("Page 2", exact=True)).to_be_visible()
+    expect(history.locator("li a").first).not_to_have_attribute("href", first_page_links[0])
     second_page_links = history.locator("li a").evaluate_all("links => links.map(link => link.getAttribute('href'))")
     assert not set(first_page_links).intersection(second_page_links)
     mobile_width(page)
@@ -420,6 +461,13 @@ with sync_playwright() as p:
     expect(page.get_by_text("mixed-browser.csv", exact=True)).to_have_count(0)
     context.add_cookies([{"name": name, "value": value, "url": base, "httpOnly": True, "sameSite": "Lax"}])
     page.goto(base + "/students/import", wait_until="domcontentloaded")
+    # The late-check reference belongs to this administrator and survives page
+    # navigation, while it stayed hidden throughout the other actor's session.
+    expect(page.get_by_role("heading", name="Outcome unknown", exact=True)).to_be_visible()
+    expect(page.get_by_role("button", name="Retry same reviewed import", exact=True)).to_be_disabled()
+    page.get_by_role("button", name="Check result", exact=True).click()
+    expect(page.get_by_role("heading", name="Import confirmed", exact=True)).to_be_visible()
+    page.get_by_role("button", name="Import another file", exact=True).click()
     expect(page.get_by_label("Choose CSV file")).to_be_enabled()
     upload(page, "minimal-lrn.csv", "lrn,firstName,lastName\n000000129995,Synthetic,PartialBrowser")
     review(page)
@@ -435,17 +483,35 @@ with sync_playwright() as p:
     confirm(page)
     expect(page.get_by_role("heading", name="Import complete", exact=True)).to_be_visible(timeout=60000)
     assert page.request.get(base + "/api/students?studentId=00000123995").json()["data"]["id"] == person["id"]
+    page.get_by_role("button", name="Import another file", exact=True).click()
+    page.get_by_label("Choose CSV file").set_input_files({"name": "synthetic-roster.xlsx", "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "buffer": base64.b64decode(config["xlsx"])})
+    expect(page.get_by_text("synthetic-roster.xlsx", exact=True)).to_be_visible()
+    expect(page.get_by_text(re.compile("Sheet: Synthetic roster"))).to_be_visible()
+    review(page)
+    xlsx_row = page.get_by_label("Import review rows").get_by_role("row").filter(has_text="00000123996")
+    expect(xlsx_row.get_by_role("cell").first).to_have_text("3")
+    assert preview_requests[-1]["sheetName"] == "Synthetic roster"
+    confirm(page)
+    expect(page.get_by_role("heading", name="Import complete", exact=True)).to_be_visible(timeout=60000)
+    xlsx_person = page.request.get(base + "/api/students?studentId=00000123996").json()["data"]
+    assert xlsx_person["usn"] == "00000123996" and xlsx_person["firstName"] == "Synthetic" and xlsx_person["lastName"] == "Xlsx"
     context.close()
     browser.close()
-    print("Import browser checks passed: reviewed import and receipt, exact frozen UUID/check/replay after real response loss, before-received missing check and exact retry, historical detail/filter/search, bounded history pagination, Group/Settings/source/account races, keyboard and 375px width.")
+    print("Import browser checks passed: 5,000-row worker parsing and bounded review/search, issue CSV download, XLSX file selection/worker/source sheet/physical row/commit, reviewed receipt, refresh-reference-only recovery after real response loss, exact frozen replay, before-received missing check and exact retry, historical detail/filter/search, bounded history pagination, Group/Settings/source/account races, keyboard and 375px width.")
 `;
 
 export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) {
   const unchanged=await db.student.findUniqueOrThrow({where:{id:"00000123457"},include:{groups:true}});
   const unchangedRow=row(unchanged.id,{section:unchanged.groups.find(group=>group.category==="SECTION")?.slug ?? ""});
+  const current = await db.student.findUniqueOrThrow({where:{id:"00000123456"}});
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Synthetic roster");
+  worksheet.addRow(["usn", "firstName", "lastName"]);
+  worksheet.getRow(3).values = ["00000123996", "Synthetic", "Xlsx"];
+  const xlsx = Buffer.from(await workbook.xlsx.writeBuffer()).toString("base64");
   const input = {
-    base, cookie,
-    mixed: toCsv([row("00000123456", { firstName: "Browser Updated" }), unchangedRow, row("00000123800"), row("00000123801", { section: "browser-created" })]),
+    base, cookie, xlsx,
+    mixed: toCsv([row("00000123456", { firstName: current.firstName, lastName: current.lastName, middleName: "Browser Updated" }), unchangedRow, row("00000123800"), row("00000123801", { section: "browser-created" })]),
     stale: toCsv([row("00000123802")]),
     lost: toCsv([row("00000123803")]),
     lostRetry: toCsv([row("00000123806")]),
@@ -455,7 +521,7 @@ export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) 
     raceA: toCsv([row("00000123804", { section: "browser-race-created" })]),
     raceB: toCsv([row("00000123805")]),
     raceOnly: process.argv.includes("--browser-race"),
-    large: toCsv(Array.from({ length: 2000 }, (_, index) => row(String(91000000000 + index)))),
+    large: toCsv(Array.from({ length: 5000 }, (_, index) => row(String(91000000000 + index)))),
     invalidYear: toCsv([row("00000123812", { yearLevel: "GRADE_11" })]),
   };
   const child = spawn("python3", ["-c", browserScript], { stdio: ["pipe", "pipe", "pipe"] });
@@ -486,6 +552,8 @@ export async function runStudentImportBrowser({ base, cookie, toCsv, row, db }) 
   // Python tracebacks contain UI assertions only, never auth values.
   assert.equal(code, 0, errors || output || "browser process failed");
   if (!input.raceOnly) {
+    assert.equal(await db.student.count({ where: { usn: { gte: '91000000000', lte: '91000004999' } } }), 5000, 'real browser 5000-row confirmation committed all synthetic students');
+    assert.equal(await db.student.count({ where: { usn: "00000123996", firstName: "Synthetic", lastName: "Xlsx" } }), 1, "real XLSX import preserves leading-zero identifier and creates once");
     assert.equal(await db.student.count({ where: { usn: "00000123803" } }), 1, "response-loss command committed exactly one new Student");
     assert.equal(await db.student.count({ where: { usn: "00000123802" } }), 0, "simulated stale rejection never sent to mutation service");
     for (const id of ["00000123803", "00000123806", "00000123807", "00000123808"]) {
