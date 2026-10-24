@@ -1,166 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpenText, Cpu, LayoutGrid, Sparkles } from "lucide-react";
-
-import SelectionBoardFrame from "@/features/students/components/SelectionBoardFrame";
+import { ChevronRight } from "lucide-react";
 import { STRAND_TRACK_BY_SLUG } from "@/features/students/constants/categories";
-import { GroupChoice, useFetchGroupsByCategory } from "@/globals/hooks/useGroups";
+import { SHS_STRANDS } from "@/globals/constants/groups";
+import { type GroupChoice, useFetchGroupsByCategory } from "@/globals/hooks/useGroups";
 import { Skeleton } from "@/globals/components/shad-cn/skeleton";
+import { Button } from "@/globals/components/shad-cn/button";
+import { slugify } from "@/globals/utils/text";
 
-type PanelTone = "indigo" | "cyan" | "slate";
+const codesBySlug = Object.fromEntries(SHS_STRANDS.map(strand => [slugify(strand.code), strand.code]));
 
-// Static class lookups - never build these at runtime, or Tailwind ships the
-// page unstyled.
-const PANEL_CLASS: Record<PanelTone, string> = {
-  indigo:
-    "relative overflow-hidden rounded-3xl border border-indigo-100 bg-[linear-gradient(180deg,#ffffff_0%,#eef2ff_100%)] p-5 text-center shadow-[0_14px_30px_rgba(79,70,229,0.12)]",
-  cyan: "relative overflow-hidden rounded-3xl border border-cyan-100 bg-[linear-gradient(180deg,#ffffff_0%,#ecfeff_100%)] p-5 text-center shadow-[0_14px_30px_rgba(8,145,178,0.12)]",
-  slate:
-    "relative overflow-hidden rounded-3xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-5 text-center shadow-[0_14px_30px_rgba(15,23,42,0.08)]",
-};
-
-const GLOW_CLASS: Record<PanelTone, string> = {
-  indigo:
-    "pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full bg-indigo-300/20 blur-2xl",
-  cyan: "pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full bg-cyan-300/20 blur-2xl",
-  slate:
-    "pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full bg-slate-300/20 blur-2xl",
-};
-
-const CHIP_CLASS: Record<PanelTone, string> = {
-  indigo:
-    "inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700",
-  cyan: "inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700",
-  slate:
-    "inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600",
-};
-
-const LINK_CLASS: Record<PanelTone, string> = {
-  indigo:
-    "group inline-flex w-full max-w-[220px] items-center justify-center gap-2 rounded-xl border border-indigo-100 bg-white px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.16em] text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 hover:shadow-[0_10px_20px_rgba(37,99,235,0.16)]",
-  cyan: "group inline-flex w-full max-w-[220px] items-center justify-center gap-2 rounded-xl border border-cyan-100 bg-white px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.16em] text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 hover:shadow-[0_10px_20px_rgba(8,145,178,0.16)]",
-  slate:
-    "group inline-flex w-full max-w-[220px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.16em] text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:shadow-[0_10px_20px_rgba(15,23,42,0.12)]",
-};
-
-const ICON_CLASS: Record<PanelTone, string> = {
-  indigo: "size-3.5 text-indigo-400 transition group-hover:text-indigo-600",
-  cyan: "size-3.5 text-cyan-400 transition group-hover:text-cyan-600",
-  slate: "size-3.5 text-slate-400 transition group-hover:text-slate-600",
-};
-
-const StrandPanel = ({
-  tone,
-  title,
-  description,
-  icon: Icon,
-  strands,
-}: {
-  tone: PanelTone;
-  title: string;
-  description: string;
-  icon: typeof BookOpenText;
-  strands: GroupChoice[];
-}) => (
-  <article className={PANEL_CLASS[tone]}>
-    <div className={GLOW_CLASS[tone]} />
-    <div className="relative mb-4 flex flex-col items-center gap-2">
-      <div className={CHIP_CLASS[tone]}>
-        <Icon className="size-3.5" />
-        {title}
+function StrandPanel({ title, description, strands }: { title: string; description: string; strands: GroupChoice[] }) {
+  return <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <div className="mb-5 flex items-start justify-between gap-4">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+        <p className="mt-1 text-sm text-slate-500">{description}</p>
       </div>
-      <p className="text-xs text-slate-500">{description}</p>
+      <span className="shrink-0 text-sm tabular-nums text-slate-500">{strands.length}</span>
     </div>
-    <div className="grid place-items-center gap-4 sm:grid-cols-2">
-      {strands.map((strand) => (
-        <Link
-          key={strand.slug}
-          href={{
-            pathname: "/students/student-list",
-            query: { category: "SHS", strand: strand.slug },
-          }}
-          className={LINK_CLASS[tone]}
+    <div className="grid gap-3 sm:grid-cols-2">
+      {strands.map(strand => {
+        const code = codesBySlug[strand.slug];
+        return <Link key={strand.slug}
+          href={{ pathname: "/students/student-list", query: { category: "SHS", strand: strand.slug } }}
+          className="group flex min-h-24 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-4 transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
-          <Sparkles className={ICON_CLASS[tone]} />
-          {strand.name}
-        </Link>
-      ))}
+          <span className="min-w-0">
+            {code && code.toLowerCase() !== strand.name.toLowerCase() && <span className="mb-1 block text-xs font-medium text-slate-500">{code}</span>}
+            <span className="block break-words text-sm font-semibold leading-5 text-slate-800 group-hover:text-indigo-700">{strand.name}</span>
+          </span>
+          <ChevronRight aria-hidden className="size-4 shrink-0 text-slate-400 group-hover:text-indigo-600" />
+        </Link>;
+      })}
     </div>
-  </article>
-);
+  </section>;
+}
 
-const ShsSelectionBoard = () => {
-  const { data: strands, isLoading, isError } =
-    useFetchGroupsByCategory("STRAND");
+export default function ShsSelectionBoard() {
+  const { data: strands = [], isLoading, isError, refetch } = useFetchGroupsByCategory("STRAND");
+  const sections = [
+    { title: "Academic track", description: "General education and university pathways.", strands: strands.filter(strand => STRAND_TRACK_BY_SLUG[strand.slug] === "ACADEMIC") },
+    { title: "Technical-vocational track", description: "Practical skills and technical specializations.", strands: strands.filter(strand => STRAND_TRACK_BY_SLUG[strand.slug] === "TECHVOC") },
+    // Newly created strands remain reachable even without a track assignment.
+    { title: "Other strands", description: "Additional strands in the student directory.", strands: strands.filter(strand => !STRAND_TRACK_BY_SLUG[strand.slug]) },
+  ].filter(section => section.strands.length > 0);
 
-  const all = strands ?? [];
-  const academics = all.filter(
-    (s) => STRAND_TRACK_BY_SLUG[s.slug] === "ACADEMIC",
-  );
-  const tvl = all.filter((s) => STRAND_TRACK_BY_SLUG[s.slug] === "TECHVOC");
-  // A strand added in Settings has no track - the Group table has no column for
-  // one - so it lands here rather than disappearing.
-  const other = all.filter((s) => !STRAND_TRACK_BY_SLUG[s.slug]);
-
-  return (
-    <div className="flex w-full flex-col gap-6 text-center">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-          SHS Selection
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
-          Which Strand?
-        </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Choose a strand to view and manage students quickly.
-        </p>
-      </header>
-
-      <SelectionBoardFrame>
-        {isLoading ? (
-          <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-2">
-            <Skeleton className="h-64 w-full rounded-3xl" />
-            <Skeleton className="h-64 w-full rounded-3xl" />
-          </div>
-        ) : (
-          <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-2">
-            <StrandPanel
-              tone="indigo"
-              title="Academics"
-              description="Core strands for general and university preparation."
-              icon={BookOpenText}
-              strands={academics}
-            />
-            <StrandPanel
-              tone="cyan"
-              title="TVL"
-              description="Skills-focused strands for applied technical paths."
-              icon={Cpu}
-              strands={tvl}
-            />
-            {other.length > 0 ? (
-              <div className="lg:col-span-2">
-                <StrandPanel
-                  tone="slate"
-                  title="Other"
-                  description="Strands added in Settings, which have no assigned track."
-                  icon={LayoutGrid}
-                  strands={other}
-                />
-              </div>
-            ) : null}
-          </div>
-        )}
-
-        {isError ? (
-          <p className="mt-4 text-sm text-rose-600">
-            Couldn&apos;t load strands. Please retry.
-          </p>
-        ) : null}
-      </SelectionBoardFrame>
-    </div>
-  );
-};
-
-export default ShsSelectionBoard;
+  return <div className="w-full space-y-6">
+    <header className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p className="text-sm font-medium text-indigo-700">Student directory</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">Senior High School</h1>
+        <p className="mt-2 text-sm text-slate-500">Select a strand to view and manage its student roster.</p>
+      </div>
+      {!isLoading && !isError && <p className="text-sm text-slate-500">{strands.length} {strands.length === 1 ? "strand" : "strands"}</p>}
+    </header>
+    {isLoading ? <div aria-label="Loading strands" role="status" className="grid gap-6 lg:grid-cols-2">
+      <Skeleton className="h-72 rounded-2xl" /><Skeleton className="h-72 rounded-2xl" />
+    </div> : isError ? <div role="alert" className="rounded-2xl border border-slate-200 bg-white p-6">
+      <p className="mb-3 text-sm text-slate-600">Couldn&apos;t load strands.</p>
+      <Button variant="outline" onClick={() => void refetch()}>Retry</Button>
+    </div> : sections.length ? <div className="grid items-start gap-6 lg:grid-cols-2">
+      {sections.map(section => <StrandPanel key={section.title} {...section} />)}
+    </div> : <p className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">No strands yet. An administrator can add them in Settings.</p>}
+  </div>;
+}

@@ -1,15 +1,17 @@
 "use client";
 
-import { memo } from "react";
+import React, { memo } from "react";
 import { Student } from "@/globals/types/students";
+import type { QRIdentifierType } from "../utils/qrIdentifier";
 import { StudentQRCard } from "./StudentQRCard";
 
 type Props = {
   students: Student[];
+  identifierType?: QRIdentifierType;
   size: "standard" | "large";
 };
 
-export const StudentQRPrintGrid = memo(function StudentQRPrintGrid({ students, size }: Props) {
+export const StudentQRPrintGrid = memo(function StudentQRPrintGrid({ students, size, identifierType }: Props) {
   const cardsPerPage = size === "standard" ? 12 : 6;
 
   return (
@@ -17,7 +19,7 @@ export const StudentQRPrintGrid = memo(function StudentQRPrintGrid({ students, s
       {Array.from({ length: Math.ceil(students.length / cardsPerPage) }, (_, index) => (
         <div className="student-qr-print-sheet" key={index}>
           {students.slice(index * cardsPerPage, (index + 1) * cardsPerPage).map((student) => (
-            <StudentQRCard key={student.id} student={student} />
+            <StudentQRCard key={student.id} student={student} identifierType={identifierType} />
           ))}
         </div>
       ))}

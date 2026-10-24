@@ -14,7 +14,8 @@ import type { StudentDetail } from "@/globals/types/students";
 import type { StudentFormValues } from "@/globals/schemas/studentSchema";
 import StudentDataIssueBadges from "./StudentDataIssueBadges";
 import StudentFormDrawer from "./StudentFormDrawer";
-import { StudentQRCard } from "./StudentQRCard";
+import { StudentQRPreview } from "./StudentQRPreview";
+import type { QRIdentifierType } from "../utils/qrIdentifier";
 import { StudentQrModal } from "./StudentQRModal";
 import { StudentAttendanceHistoryPanel } from "./StudentAttendanceHistoryPanel";
 import { useEditStudentDetail, useStudentDetail } from "../hooks/useStudentDetail";
@@ -25,6 +26,7 @@ const groupLabels: Record<string, string> = {
 };
 
 export default function StudentDetailClient({ studentId }: { studentId: string }) {
+  const [qrIdentifierType, setQRIdentifierType] = useState<QRIdentifierType>("USN");
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const principalId = user?.status === "ACTIVE" ? user.id : "";
@@ -187,7 +189,7 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
               </section>
               <section className="rounded-2xl border bg-white p-5" aria-label="Student QR">
                 <h2 className="mb-3 text-lg font-semibold">Student QR</h2>
-                <StudentQRCard student={student} showGroupDetail={!ambiguous} fillHeight={false} />
+                <StudentQRPreview student={student} showGroupDetail={!ambiguous} fillHeight={false} identifierType={qrIdentifierType} onIdentifierTypeChange={setQRIdentifierType} />
                 <button type="button" className="mt-3 text-sm text-indigo-700 underline" onClick={() => setQrOwner(principalId)}>View larger QR</button>
               </section>
             </div>
@@ -201,7 +203,7 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
             <StudentAttendanceHistoryPanel key={studentId} studentId={studentId} />
           </section>}
           <footer className="text-xs text-slate-600">Current roster record · Record created {dateFormat.format(student.createdAt)} · Last updated {dateFormat.format(student.updatedAt)} · Asia/Manila. Changing school or group assignments can change current-roster reports.</footer>
-          <StudentQrModal open={qrOpen} onOpenChange={open => setQrOwner(open ? principalId : null)} student={student} showGroupDetail={!ambiguous} />
+          <StudentQrModal open={qrOpen} onOpenChange={open => setQrOwner(open ? principalId : null)} student={student} showGroupDetail={!ambiguous} identifierType={qrIdentifierType} onIdentifierTypeChange={setQRIdentifierType} />
           <StudentFormDrawer key={`${studentId}-${principalId}-${editorKey}`} student={snapshot} isOpen={!!snapshot}
             onViewQR={() => setQrOwner(principalId)} onClose={() => setEditing(null)} onSubmit={save}
             saveError={editorError} onReloadCurrent={canReloadEditor ? () => void reloadEditor() : undefined} />

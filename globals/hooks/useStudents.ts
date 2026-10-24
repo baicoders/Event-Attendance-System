@@ -58,7 +58,7 @@ export const useStudent = (studentId?: string) => {
     queryFn: async () => {
       if (!studentId) return;
 
-      const student = await fetchApi<StudentDTO>(`/api/students/${studentId}`);
+      const student = await fetchApi<StudentDTO>(`/api/students/${encodeURIComponent(studentId)}`);
       return transformStudent(student);
     },
   });
@@ -82,9 +82,8 @@ export const useStudentFromEvent = ({
     queryFn: async () => {
       if (!eventId || !studentId) return null;
 
-      const student = await fetchApi<StudentDTO>(
-        `/api/students?eventId=${eventId}&studentId=${studentId}`,
-      );
+      const params = new URLSearchParams({ eventId, studentId });
+      const student = await fetchApi<StudentDTO>(`/api/students?${params}`);
       return transformStudent(student);
     },
   });

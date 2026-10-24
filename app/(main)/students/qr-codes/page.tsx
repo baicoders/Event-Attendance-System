@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Printer, QrCode } from "lucide-react";
 import { useFetchStudents } from "@/globals/hooks/useStudents";
 import { page } from "@/globals/constants/designTokens";
+import type { QRIdentifierType } from "@/features/students/utils/qrIdentifier";
 import { StudentQRCard } from "@/features/students/components/StudentQRCard";
 import { StudentQRPrintGrid } from "@/features/students/components/StudentQRPrintGrid";
 import { StudentQrModal } from "@/features/students/components/StudentQRModal";
@@ -28,6 +29,7 @@ export default function StudentQRCenterPage() {
   const [filters, setFilters] = useState<Partial<Record<QRFilterField, string>>>(() => Object.fromEntries(QR_FILTER_FIELDS.map((field) => [field, searchParams.get(`filter_${field}`) || ""])));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [scope, setScope] = useState<QRPrintScope>(searchParams.get("scope") === "selected" ? "selected" : "filtered");
+  const [identifierType, setIdentifierType] = useState<QRIdentifierType>("USN");
   const [size, setSize] = useState<"standard" | "large">("standard");
   const [pageIndex, setPageIndex] = useState(0);
   const [previewSelectedOnly, setPreviewSelectedOnly] = useState(false);
@@ -92,7 +94,7 @@ export default function StudentQRCenterPage() {
             <button type="button" onClick={print} disabled={isLoading || isError || !printStudents.length} className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"><Printer className="size-4" /> Print QR Codes ({printStudents.length})</button>
           </div>
           <div className="mt-6 flex flex-wrap items-end gap-3">
-            <label className="flex min-w-56 flex-1 flex-col gap-1 text-xs font-semibold text-slate-600">Search students<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPageIndex(0); }} placeholder="Name, ID, program, section..." className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
+            <label className="flex min-w-56 flex-1 flex-col gap-1 text-xs font-semibold text-slate-600">Search students<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPageIndex(0); }} placeholder="Name, USN, LRN, program, section..." className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" /></label>
             {QR_FILTER_FIELDS.map((field) => {
               const key = field === "schoolLevel" || field === "yearLevel" ? field : Object.keys(GROUP_FIELDS).find((group) => GROUP_FIELDS[group] === field);
               const choices = options[key || ""] || [];
@@ -102,20 +104,26 @@ export default function StudentQRCenterPage() {
           </div>
         </header>
 
-        <div className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-[1fr_auto]">
+        <div className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-[1fr_auto_auto]">
           <fieldset><legend className="mb-2 text-sm font-semibold text-slate-900">Print scope</legend><div className="flex flex-wrap gap-4 text-sm text-slate-700">
             {([ ["selected", `Selected students (${selectedCount})`], ["filtered", `Current filtered results (${filtered.length})`], ["roster", `Entire roster (${students.length})`] ] as const).map(([value, label]) => <label key={value} className="flex items-center gap-2"><input type="radio" name="qr-scope" checked={scope === value} onChange={() => setScope(value)} />{label}</label>)}
           </div></fieldset>
+          <label className="flex flex-col gap-1 text-sm font-semibold text-slate-900">Preferred QR identifier
+            <select value={identifierType} onChange={event => setIdentifierType(event.target.value as QRIdentifierType)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-normal">
+              <option value="USN">USN</option><option value="LRN">LRN</option>
+            </select>
+            <span className="max-w-64 text-xs font-normal text-slate-500">Uses the other identifier when unavailable. Each card shows the identifier encoded.</span>
+          </label>
           <fieldset><legend className="mb-2 text-sm font-semibold text-slate-900">Card size</legend><div className="flex gap-4 text-sm text-slate-700"><label className="flex items-center gap-2"><input type="radio" name="qr-size" checked={size === "standard"} onChange={() => setSize("standard")} />Standard · 12/page</label><label className="flex items-center gap-2"><input type="radio" name="qr-size" checked={size === "large"} onChange={() => setSize("large")} />Large · 6/page</label></div></fieldset>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700"><label className="flex items-center gap-2"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} disabled={!filtered.length} /> Select all filtered students ({filtered.length})</label><label className="flex items-center gap-2"><input type="checkbox" checked={previewSelectedOnly} onChange={(event) => { setPreviewSelectedOnly(event.target.checked); setPageIndex(0); }} /> Show selected only ({selectedCount})</label><span>{selectedCount} selected across all preview pages</span></div>
-        {isLoading ? <p className="rounded-xl bg-white p-8">Loading students…</p> : isError ? <p className="rounded-xl bg-white p-8 text-rose-700">Couldn&apos;t load students. Please retry.</p> : !previewResults.length ? <p className="rounded-xl bg-white p-8">{previewSelectedOnly ? "No students selected." : "No students match the current search and filters."}</p> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{previewStudents.map((student) => <div key={student.id} className="relative rounded-xl bg-white p-3 shadow-sm"><label className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={selectedIds.has(student.id)} onChange={() => toggleSelected(student.id)} /> Select</label><button type="button" onClick={() => setModalStudent(student)} className="block w-full text-left" aria-label={`View QR for ${student.id}`}><StudentQRCard student={student} /></button></div>)}</div>}
+        {isLoading ? <p className="rounded-xl bg-white p-8">Loading students…</p> : isError ? <p className="rounded-xl bg-white p-8 text-rose-700">Couldn&apos;t load students. Please retry.</p> : !previewResults.length ? <p className="rounded-xl bg-white p-8">{previewSelectedOnly ? "No students selected." : "No students match the current search and filters."}</p> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{previewStudents.map((student) => <div key={student.id} className="relative rounded-xl bg-white p-3 shadow-sm"><label className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={selectedIds.has(student.id)} onChange={() => toggleSelected(student.id)} /> Select</label><button type="button" onClick={() => setModalStudent(student)} className="block w-full text-left" aria-label={`View QR for ${student.id}`}><StudentQRCard student={student} identifierType={identifierType} /></button></div>)}</div>}
         {pageCount > 1 && <div className="flex items-center justify-center gap-4 pb-6 text-sm"><button type="button" disabled={pageIndex === 0} onClick={() => setPageIndex(pageIndex - 1)} className="rounded-full border bg-white px-4 py-2 disabled:opacity-40">Previous</button><span>Page {pageIndex + 1} of {pageCount}</span><button type="button" disabled={pageIndex >= pageCount - 1} onClick={() => setPageIndex(pageIndex + 1)} className="rounded-full border bg-white px-4 py-2 disabled:opacity-40">Next</button></div>}
       </div>
 
-      <StudentQRPrintGrid students={printStudents} size={size} />
-      <StudentQrModal open={!!modalStudent} onOpenChange={(open) => { if (!open) setModalStudent(undefined); }} student={modalStudent} />
+      <StudentQRPrintGrid students={printStudents} size={size} identifierType={identifierType} />
+      <StudentQrModal open={!!modalStudent} onOpenChange={(open) => { if (!open) setModalStudent(undefined); }} student={modalStudent} identifierType={identifierType} onIdentifierTypeChange={setIdentifierType} />
     </section>
   );
 }

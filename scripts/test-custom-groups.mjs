@@ -191,6 +191,10 @@ try {
 
   await command('Page.navigate', { url: `${origin}/reports/events/${event.id}/print?grouped=0&columns=name,identifier,group,position,status,timein` });
   await until('document.querySelector(".print-table th") && [...document.querySelectorAll(".print-table th")].some(el=>el.textContent==="Position")');
+  const schedule=await evaluate('document.querySelector("dl").innerText');
+  assert.match(schedule,/Philippine time \(UTC\+08:00\)/);
+  assert.match(schedule,/\d{1,2}:\d{2} [AP]M/);
+  assert.equal(/\d{4}-\d{2}-\d{2}/.test(schedule),false);
   const toggleIdentifier = '[...document.querySelectorAll("label")].find(l=>l.textContent.trim()==="USN/LRN").querySelector("input")';
   await until(`Boolean(${toggleIdentifier})`);
   // Print markup is server-rendered; wait for hydration before dispatching a

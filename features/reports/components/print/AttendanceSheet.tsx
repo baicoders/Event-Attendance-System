@@ -6,7 +6,7 @@ import {
   ATTENDANCE_OUTCOME_LABEL,
   formatAttendanceRate,
 } from "@/globals/utils/attendance";
-import { formatReportClock, formatReportDateTime, formatReportEventDate } from "@/globals/utils/reportTime";
+import { formatReportClock, formatReportDateTime, formatReportEventSchedule } from "@/globals/utils/reportTime";
 import { capitalizeLabel } from "@/globals/utils/text";
 import { PRINT_COLUMNS, type PrintColumnKey } from "@/features/reports/utils/printColumns";
 
@@ -160,13 +160,12 @@ export default function AttendanceSheet({
       <section className="print-break-inside-avoid mb-4 text-sm">
         <h2 className="mb-2 text-lg font-bold">{event.title}</h2>
         <dl className="grid grid-cols-2 gap-x-8 gap-y-1">
-          <div className="flex gap-2">
-            <dt className="font-semibold">Date &amp; time:</dt>
-            <dd>{formatReportEventDate(event.start, event.allDay)}{event.allDay ? " · All day" : " Asia/Manila"}</dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="font-semibold">Ends:</dt>
-            <dd>{formatReportEventDate(event.end, event.allDay)}{event.allDay ? " · All day" : " Asia/Manila"}</dd>
+          <div className="col-span-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <dt className="shrink-0 font-semibold">Date &amp; time:</dt>
+            <dd className="min-w-0 flex-1">
+              <span>{formatReportEventSchedule(event.start, event.end, event.allDay)}</span>
+              {!event.allDay && <span className="mt-0.5 block text-xs text-gray-600">Philippine time (UTC+08:00)</span>}
+            </dd>
           </div>
           {event.location ? (
             <div className="flex gap-2">

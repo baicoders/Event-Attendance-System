@@ -95,3 +95,11 @@ test("hiding the Late counter folds late attendees into Present while preserving
   assert.match(hidden, /<strong>Eligible:<\/strong> 3/);
   assert.match(hidden, /66\.7%/);
 });
+
+test("printed event metadata uses a readable schedule and a single timezone note", () => {
+  const html = renderToStaticMarkup(createElement(AttendanceSheet, { report, options: { includeAbsentees: true, groupBy: "NONE", columns: ["name"] } }));
+  const metadata = html.match(/<dl\b[\s\S]*?<\/dl>/)?.[0] ?? "";
+  assert.ok(metadata.includes("Oct 23, 2026 · 2:00 PM – 6:00 PM"));
+  assert.equal((metadata.match(/Philippine time \(UTC\+08:00\)/g) ?? []).length, 1);
+  assert.equal(metadata.includes("2026-10-23"), false);
+});

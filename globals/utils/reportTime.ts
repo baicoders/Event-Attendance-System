@@ -20,3 +20,30 @@ export function formatReportClock(value: string | Date | null): string {
 export function formatReportEventDate(value: string | Date, allDay: boolean): string {
   return allDay ? new Date(value).toISOString().slice(0, 10) : formatReportDateTime(value);
 }
+
+const scheduleDateFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: REPORT_TIME_ZONE, year: "numeric", month: "short", day: "numeric",
+});
+const calendarDateFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC", year: "numeric", month: "short", day: "numeric",
+});
+const scheduleClockFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: REPORT_TIME_ZONE, hour: "numeric", minute: "2-digit", hour12: true,
+});
+
+/** Human-readable print schedule; machine-readable export timestamps stay unchanged. */
+export function formatReportEventSchedule(start: string | Date, end: string | Date, allDay: boolean): string {
+  const from = new Date(start), to = new Date(end);
+  const dateFormatter = allDay ? calendarDateFormatter : scheduleDateFormatter;
+  const fromDate = dateFormatter.format(from), toDate = dateFormatter.format(to);
+  if (allDay) {
+    const dates = fromDate === toDate ? fromDate : from <= to
+      ? dateFormatter.formatRange(from, to).replace(/\s+/g, " ")
+      : `${fromDate} – ${toDate}`;
+    return `${dates} · All day`;
+  }
+  const fromTime = scheduleClockFormatter.format(from), toTime = scheduleClockFormatter.format(to);
+  return fromDate === toDate
+    ? `${fromDate} · ${fromTime} – ${toTime}`
+    : `${fromDate}, ${fromTime} – ${toDate}, ${toTime}`;
+}

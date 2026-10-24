@@ -1,6 +1,7 @@
 "use client";
 
-import { StudentQRCard } from "./StudentQRCard";
+import { StudentQRPreview } from "./StudentQRPreview";
+import type { QRIdentifierType } from "../utils/qrIdentifier";
 
 import {
   Dialog,
@@ -16,6 +17,8 @@ type StudentQrModalProps = {
   onOpenChange: (open: boolean) => void;
   student: Student | undefined;
   showGroupDetail?: boolean;
+  identifierType?: QRIdentifierType;
+  onIdentifierTypeChange?: (type: QRIdentifierType) => void;
 };
 
 export function StudentQrModal({
@@ -23,6 +26,8 @@ export function StudentQrModal({
   onOpenChange,
   student,
   showGroupDetail = true,
+  identifierType,
+  onIdentifierTypeChange,
 }: StudentQrModalProps) {
   if (!student) return null;
 
@@ -36,7 +41,7 @@ export function StudentQrModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mx-auto w-full max-w-64 py-4"><StudentQRCard student={student} showGroupDetail={showGroupDetail} /></div>
+        <div className="mx-auto w-full max-w-64 py-4"><StudentQRPreview key={student.id} student={student} showGroupDetail={showGroupDetail} identifierType={identifierType} onIdentifierTypeChange={onIdentifierTypeChange} /></div>
       </DialogContent>
     </Dialog>
   );
