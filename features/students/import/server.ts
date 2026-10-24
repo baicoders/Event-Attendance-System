@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { AuthError, type AuthSession } from '@/globals/utils/auth';
-import { studentSchema } from '@/globals/schemas/studentSchema';
+import { writeImportBatches } from './writeBatches';
 import { takeRosterExclusiveLock, takeImportCommandLock } from '@/globals/utils/pgLocks';
 import { parseStudentImportCsv, hasStructuralCsvErrors } from './csv';
 import { classifyStudentImport, normalizeStudentImportRow } from './classify';
@@ -96,20 +96,7 @@ export async function revalidateImport(tx:Prisma.TransactionClient, prepared:Ret
 }
 
 export async function applyImport(tx:Prisma.TransactionClient,review:ImportReview) {
-  for(const row of review.rows) {
-    if(row.status==='UNCHANGED') continue;
-    if(row.status!=='CREATE' && row.status!=='UPDATE') throw new ImportError('Blocked imports cannot commit.','IMPORT_BLOCKED',409);
-    const student=studentSchema.parse({...row.student,schoolLevel:row.student.schoolLevel||null,yearLevel:row.student.yearLevel||null});
-    if(row.status==='CREATE') {
-      const saved=await tx.student.create({data:{usn:student.usn||null,lrn:student.lrn||null,firstName:student.firstName,lastName:student.lastName,middleName:student.middleName||null,schoolLevel:student.schoolLevel??null,yearLevel:student.yearLevel??null,groups:{connect:row.groupIds.map(id=>({id}))}}});
-      row.student.id=saved.id;
-    } else {
-      const scalarFields=new Set(['usn','lrn','firstName','lastName','middleName','schoolLevel','yearLevel']);
-      const data=Object.fromEntries(row.changes.filter(change=>scalarFields.has(change.field)).map(change=>[change.field,change.after]));
-      const groupsChanged=row.changes.some(change=>change.field in IMPORT_GROUP_FIELDS);
-      await tx.student.update({where:{id:row.student.id},data:{...data,...(groupsChanged?{groups:{set:row.groupIds.map(id=>({id}))}}:{})}});
-    }
-  }
+  await writeImportBatches(tx,review);
 }
 
 /** Distinguish a callback that could never reach COMMIT from lost commit acknowledgement. */
