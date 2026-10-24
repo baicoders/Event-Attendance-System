@@ -1,5 +1,51 @@
 # Reviewed student masterlist import
 
+## High-volume import update (October 2026)
+
+The workflow now accepts canonical UTF-8 CSV and a single populated XLSX sheet.
+Browser parsing runs in a worker; XLSX identifiers must already be text. Numeric,
+formula, date and scientific-notation identifiers are rejected rather than repaired.
+XLSX is converted to canonical CSV with original sheet/physical-row attribution;
+the server independently validates that CSV and binds sheet metadata to review.
+The server never trusts browser classifications. Headers remain case-sensitive.
+
+The new first-execution limit is **10,000 student rows**, 4,096 characters per cell,
+and the existing 10 MiB file/request limits. XLSX expansion also has bounded ZIP,
+XML element and sparse coordinate limits. Older exact committed receipt replays
+are resolved before current row/cell policy, preserving their compatibility.
+
+Matching identifiers with a different first/last name or a conflicting supplied
+middle name require manual review. Case, composed Unicode and whitespace variants
+are equivalent; names never select a matching student. Optional `enrollmentStatus`
+recognizes Withdrawn, Not Enrolled, Transferred Out and Retained/Transfer-Out.
+Excluded rows block the whole file; remove them and review again. A missing status
+does not exclude a student. Any invalid or conflicting row blocks execution, so a
+successful receipt contains zero skipped, failed and conflicted rows.
+
+Writes use bounded batches inside the existing atomic roster/receipt transaction.
+`STUDENT_IMPORT_BATCH_SIZE` optionally selects 1–1000 rows (default 250, measured
+on synthetic 1k–10k imports). Unchanged students are unwritten; omitted fields and
+academic groups are preserved; custom memberships/positions and attendance remain
+untouched. No importer schema migration or new deployment service is required.
+
+The UI receives actual provisional batch counts over NDJSON. Only a committed
+receipt proves success; disconnects leave an unknown outcome. Refresh retains an
+actor/credential-scoped command reference and summary in session storage, never
+CSV, token or submitted body. Check result can resolve it after refresh; exact
+retry requires the original in-memory command. Existing JSON API clients remain
+supported. Issue CSV downloads include all exceptions and protect formula cells.
+
+Keep deployment/proxy timeouts above the 120-second transaction plus up to 30-second
+pool wait; the commit route declares a 180-second execution allowance. Proxies that
+buffer streaming responses delay visible progress but cannot change atomicity.
+The exclusive roster lock still blocks attendance: schedule large imports outside
+active scanning. This design does not add cancellation or a background queue.
+
+Measured service phases/resources are in [scale evidence](verification/student-import-scale.md).
+Full implementation, HTTP/browser verification, limitations and manual QA are in
+[the implementation report](verification/robust-student-import.md). Historical
+sections below describing no row cap or CSV-only input are superseded above.
+
 Only usable ADMIN accounts can open `/students/import`, preview or commit. Deploy
 its UI and API together. Older direct clients receive `410 REVIEW_REQUIRED` from
 `POST /api/bulk-import/students`; that endpoint performs no roster writes.
