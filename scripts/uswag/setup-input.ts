@@ -76,7 +76,7 @@ export function loadSetupInput(directory:string,approvalsPath?:string):SetupInpu
  const assignmentCounts=object(provenance.approvedGroupAssignments);
  check(Object.keys(assignmentCounts).length===7&&Object.entries(APPROVED_COUNTS).every(([group,count])=>assignmentCounts[group]===count),"Invalid provenance group counts.");
  let workbook:{participants:Participant[]};
- try{workbook=JSON.parse(execFileSync("python3",[join(dirname(fileURLToPath(import.meta.url)),"read-workbook.py"),join(directory,SOURCE_FILES.workbook)],{encoding:"utf8",maxBuffer:8*1024*1024,stdio:["ignore","pipe","pipe"]}));}catch{fail("Workbook source validation failed.");}
+ try{workbook=JSON.parse(execFileSync("python3",[join(dirname(fileURLToPath(import.meta.url)),"read-workbook.py"),"-"],{input:buffers.workbook,encoding:"utf8",maxBuffer:8*1024*1024,stdio:["pipe","pipe","pipe"]}));}catch{fail("Workbook source validation failed.");}
  check(Array.isArray(workbook.participants)&&workbook.participants.length===95,"Workbook source counts differ.");
  const manifest=csv(buffers.manifest,["sourceRow","attendeeName","organization","position","approvalStatus","approvalBasis",...CSV_HEADERS.filter(key=>key!=="id")]);
  check(manifest.length===95,"Manifest source count differs.");

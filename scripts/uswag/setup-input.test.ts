@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import {execFileSync} from 'node:child_process';
 import { createFixture, hashFile } from "./setup-fixture.test-support";
 import { loadSetupInput } from "./setup-input";
 
@@ -13,6 +14,10 @@ function fixture(t: {after(fn:()=>void):void}) {
 function updateProvenance(f: ReturnType<typeof createFixture>,key:string,path:string) {
  const p=JSON.parse(readFileSync(f.paths.provenance,"utf8")); p[key]=hashFile(path);writeFileSync(f.paths.provenance,JSON.stringify(p));
 }
+test('workbook parser can consume the exact hashed bytes rather than rereading a mutable path',t=>{
+ const f=fixture(t);const parsed=JSON.parse(execFileSync('python3',['scripts/uswag/read-workbook.py','-'],{input:readFileSync(f.paths.workbook),encoding:'utf8',stdio:['pipe','pipe','pipe']}));
+ assert.equal(parsed.participants.length,95);assert.equal(parsed.participants[0].name,'Alias1 Synthetic');
+});
 test("validates the complete 95/94/1 source and 67 groups without treating pending decisions as approvals",t=>{
  const f=fixture(t), input=loadSetupInput(f.directory);
  assert.equal(input.rows.length,94);assert.equal(input.held.length,1);assert.equal(input.groups.filter(g=>g.category!=="CUSTOM").length,67);

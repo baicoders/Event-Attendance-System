@@ -4,6 +4,7 @@ Writes participant JSON to stdout for the seed CLI; treat that JSON as private.
 Rejects a changed/malformed workbook rather than silently skipping numbered rows.
 """
 import json
+import io
 import posixpath
 import re
 import sys
@@ -81,7 +82,8 @@ def parse_workbook(path):
 
 if __name__ == "__main__":
     try:
-        print(json.dumps(parse_workbook(sys.argv[1]), ensure_ascii=False))
+        source = io.BytesIO(sys.stdin.buffer.read()) if sys.argv[1] == "-" else sys.argv[1]
+        print(json.dumps(parse_workbook(source), ensure_ascii=False))
     except (ValueError, KeyError, IndexError, ET.ParseError, zipfile.BadZipFile, OSError) as error:
         print("Workbook validation failed: " + str(error), file=sys.stderr)
         sys.exit(1)
