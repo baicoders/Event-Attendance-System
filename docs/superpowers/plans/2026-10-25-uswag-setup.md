@@ -1,6 +1,6 @@
 # USWAG Setup Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** One reviewed, additive, transactional command for all approved USWAG prerequisites.
 
@@ -36,12 +36,12 @@ lock in one PostgreSQL transaction. Reports stay private; stdout contains counts
 `student: CanonicalRow`, `hashes`, `blockers`, `held`. Group definitions retain
 explicit reviewed approval, no inferred label aliases.
 
-- [ ] Write synthetic workbook/bundle fixture and failing tests: 95/94/1, seven
+- [x] Write synthetic workbook/bundle fixture and failing tests: 95/94/1, seven
   counts, provenance, two aliases, exact row bindings, malformed/duplicate/swapped
   USNs, 67 references, pending decisions and source-bound approval file.
-- [ ] Run tests to establish missing functionality, implement validator using
+- [x] Run tests to establish missing functionality, implement validator using
   original bundle formats and existing workbook parser, rerun until green.
-- [ ] Commit input validator and its synthetic tests.
+- [x] Commit input validator and its synthetic tests.
 
 ### Task 2: Deterministic combined planning
 
@@ -52,11 +52,11 @@ and owner records. Plan includes group/student/membership operations, blockers,
 held rows, counts and event readiness. Reuse `classifyStudentImport` while requiring
 exact USN selection and preserving additive academic joins.
 
-- [ ] Write failing tests for all-new/existing/mixed, blank fields, identifiers,
+- [x] Write failing tests for all-new/existing/mixed, blank fields, identifiers,
   conflicting academic/custom values, seven counts, unchanged timestamps and extras.
-- [ ] Implement pure planner, event candidate discovery/readiness and optional
+- [x] Implement pure planner, event candidate discovery/readiness and optional
   authorized owned DRAFT plan. No implicit event lifecycle changes.
-- [ ] Run pure suite and commit planner.
+- [x] Run pure suite and commit planner.
 
 ### Task 3: Reviewed transactional CLI
 
@@ -64,22 +64,22 @@ exact USN selection and preserving additive academic joins.
 **Interfaces:** explicit target env-name option, source directory, optional approval
 file and event JSON; read-only default, `--apply --approval-report --backup-confirmed`.
 
-- [ ] Write failing disposable PostgreSQL tests for complete combined writes,
+- [x] Write failing disposable PostgreSQL tests for complete combined writes,
   replay no-ops, stale approvals, conflicts, locks, interruption and rollback.
-- [ ] Implement validated target/peer verification, private reports, full-state
+- [x] Implement validated target/peer verification, private reports, full-state
   fingerprint, roster and table locks, additive writes and honest commit outcomes.
-- [ ] Test all-new/existing/mixed, production constraints, event eligibility and
+- [x] Test all-new/existing/mixed, production constraints, event eligibility and
   printed membership positions. Reproduce 67/50 demo vocabulary counts safely.
-- [ ] Add command, run tests and commit.
+- [x] Add command, run tests and commit.
 
 ### Task 4: Operator runbook and review
 
 **Files:** `docs/uswag-setup.md`, `scripts/uswag/README.md`, verification evidence doc.
 
-- [ ] Document one dry-run and matching apply command, private inputs, backup,
+- [x] Document one dry-run and matching apply command, private inputs, backup,
   approval file format, event inputs, blockers and recovery from unknown outcomes.
-- [ ] Run focused tests, existing import tests, typecheck, changed-file lint, build.
-- [ ] Independent whole-branch review; address material findings with regression tests.
+- [x] Run focused tests, existing import tests, typecheck, changed-file lint, build.
+- [x] Independent whole-branch review; address material findings with regression tests.
 - [ ] Commit docs/evidence and open one reviewable PR; never merge/deploy/apply real DB.
 
 ## Ledger
@@ -90,3 +90,14 @@ file and event JSON; read-only default, `--apply --approval-report --backup-conf
   merged attendance fixes; PR scope must exclude unrelated ahead-of-origin commits.
 - Complete handoff provenance hashes verified; 15 academic semantic blockers remain.
 - Initial worktree tests could not start before dependency installation (missing tsx).
+
+- Task 1 complete: input parser/fixture tests passed; source-private audit passed.
+- Task 2 complete: combined exact-USN planner and projected event audience tests passed.
+- Task 3 complete: final `pnpm test:uswag` passed 37 unit tests and 9 disposable PostgreSQL scenarios.
+- Task 4 verification complete: typecheck, changed-file lint, production build, 75 importer pure tests, 10 server tests and 19 HTTP checks passed; independent review clean. PR creation remains the final delivery step.
+- Ruling: the supplied input loader includes all seven CUSTOM definitions; the planner adds only missing defaults to avoid duplicate group operations.
+- Ruling: preserve unsupported academic join categories and block nonblank conflicts; the bulk import replacement writer is intentionally not reused.
+- Ruling: all 62 non-house historical decisions are pending, including the 15 semantic items; every pending definition blocks all writes.
+- Ruling: short maintenance table locks supplement the existing roster lock to protect absence checks from uncoordinated writers.
+- Review fixes: actual committed IDs, canonical report paths, atomic report replacement, recovery path discovery and consistent commit uncertainty codes all passed regressions.
+- Branch rebased onto remote main b520484, excluding earlier attendance work from this PR.
