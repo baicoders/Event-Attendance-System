@@ -80,7 +80,7 @@ file and event JSON; read-only default, `--apply --approval-report --backup-conf
   approval file format, event inputs, blockers and recovery from unknown outcomes.
 - [x] Run focused tests, existing import tests, typecheck, changed-file lint, build.
 - [x] Independent whole-branch review; address material findings with regression tests.
-- [ ] Commit docs/evidence and open one reviewable PR; never merge/deploy/apply real DB.
+- [x] Commit docs/evidence and open one reviewable PR; never merge/deploy/apply real DB.
 
 ## Ledger
 
@@ -94,10 +94,12 @@ file and event JSON; read-only default, `--apply --approval-report --backup-conf
 - Task 1 complete: input parser/fixture tests passed; source-private audit passed.
 - Task 2 complete: combined exact-USN planner and projected event audience tests passed.
 - Task 3 complete: final `pnpm test:uswag` passed 37 unit tests and 9 disposable PostgreSQL scenarios.
-- Task 4 verification complete: typecheck, changed-file lint, production build, 75 importer pure tests, 10 server tests and 19 HTTP checks passed; independent review clean. PR creation remains the final delivery step.
+- Task 4 verification complete: typecheck, changed-file lint, production build, 75 importer pure tests, 10 server tests and 19 HTTP checks passed; independent review clean. PR delivered: https://github.com/baicoders/Event-Attendance-System/pull/117.
 - Ruling: the supplied input loader includes all seven CUSTOM definitions; the planner adds only missing defaults to avoid duplicate group operations.
 - Ruling: preserve unsupported academic join categories and block nonblank conflicts; the bulk import replacement writer is intentionally not reused.
 - Ruling: all 62 non-house historical decisions are pending, including the 15 semantic items; every pending definition blocks all writes.
 - Ruling: short maintenance table locks supplement the existing roster lock to protect absence checks from uncoordinated writers.
 - Review fixes: actual committed IDs, canonical report paths, atomic report replacement, recovery path discovery and consistent commit uncertainty codes all passed regressions.
 - Branch rebased onto remote main b520484, excluding earlier attendance work from this PR.
+
+- Delivery complete: PR #117 targets main; branch and managed worktree are preserved for review. No merge, deployment or populated-database apply was performed.
