@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createFixture } from "./setup-fixture.test-support";
 import { execFileSync } from "node:child_process";
 import { normalizeName, matchParticipant, reconcile, validateDatabaseUrl, validateLocalDatabaseUrl } from "./reconcile";
 
@@ -53,8 +57,11 @@ test("connection URL must be explicit, PostgreSQL, local and cannot override hos
   }
   assert.equal(validateLocalDatabaseUrl("postgresql://u:p@127.0.0.1:5433/event_attendance_dev").database, "event_attendance_dev");
 });
-test("supplied workbook parser validates 95 participants and all group counts", () => {
-  const parsed = JSON.parse(execFileSync("python3", ["scripts/uswag/read-workbook.py", "USWAG ATTENDANCE.xlsx"], {encoding: "utf8"}));
+test("synthetic workbook parser validates 95 participants and all group counts", t => {
+  const directory = mkdtempSync(join(tmpdir(), "uswag-workbook-test-"));
+  t.after(() => rmSync(directory, {recursive: true, force: true}));
+  const fixture = createFixture(directory);
+  const parsed = JSON.parse(execFileSync("python3", ["scripts/uswag/read-workbook.py", fixture.paths.workbook], {encoding: "utf8"}));
   assert.equal(parsed.participants.length, 95);
   assert.deepEqual(Object.fromEntries(Object.keys(parsed.expected).map(group => [group, parsed.participants.filter((p: {group: string}) => p.group === group).length])), parsed.expected);
   assert.ok(parsed.participants.every((p: {name: string; row: number}) => p.name && p.row > 0));
