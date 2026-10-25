@@ -1,20 +1,21 @@
 import {createHash,randomUUID} from 'node:crypto';
-import {closeSync,existsSync,fsyncSync,mkdtempSync,openSync,readFileSync,writeFileSync} from 'node:fs';
+import {closeSync,existsSync,mkdtempSync,openSync,readFileSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {dirname,join,resolve} from 'node:path';
+import {basename,dirname,join,resolve} from 'node:path';
 import {Client} from 'pg';
 import {getPgPoolConfig,isLocalPostgresUrl} from '../../globals/libs/dbConfig';
 import {takeRosterExclusiveLock} from '../../globals/utils/pgLocks';
 import {validateDatabaseUrl} from './reconcile';
 import {loadSetupInput} from './setup-input';
 import {buildSetupPlan,type EventOptions,type SetupPlan,type SetupState} from './setup-plan';
+import {writePrivateReport as save} from './setup-report';
 
 export type SetupOptions={inputDir:string;databaseUrl:string;groupApprovals?:string;apply?:boolean;approvalReport?:string;backupConfirmed?:boolean;allowRemote?:boolean;report?:string;eventOptions?:EventOptions};
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export class SetupError extends Error {constructor(public code:string){super(code);}}
-function save(path:string,value:unknown){const fd=openSync(path,'w',0o600);try{writeFileSync(fd,JSON.stringify(value,null,2)+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
+export class SetupError extends Error {constructor(public code:string,public reportPath?:string){super(code);}}
 function reserveReport(path?:string){
- const output=path?resolve(path):join(mkdtempSync(join(tmpdir(),'uswag-setup-')),'report.json');
+ const requested=path?resolve(path):join(mkdtempSync(join(tmpdir(),'uswag-setup-')),'report.json');
+ const output=join(realpathSync(dirname(requested)),basename(requested));
  let parent=dirname(output);
  while(parent!==dirname(parent)){if(existsSync(join(parent,'.git')))throw new SetupError('REPORT_MUST_BE_OUTSIDE_REPOSITORY');parent=dirname(parent);}
  const fd=openSync(output,'wx',0o600);closeSync(fd);return output;
@@ -29,6 +30,7 @@ async function readState(client:Client,options:EventOptions):Promise<SetupState>
 }
 async function applyPlan(client:Client,plan:SetupPlan){
  const ids=new Map<string,string>();
+ let createdEventId:string|undefined;
  for(const group of plan.groups){
   const id=group.action==='create'?randomUUID():group.id;ids.set(group.id,id);
   if(group.action==='create')await client.query('INSERT INTO "Group" (id,name,slug,category,"updatedAt") VALUES ($1,$2,$3,$4,now())',[id,group.name,group.slug,group.category]);
@@ -52,9 +54,11 @@ async function applyPlan(client:Client,plan:SetupPlan){
  }
  if(plan.event.action==='create'){
   const e=plan.event.create!;const eventId=randomUUID();
+  createdEventId=eventId;
   await client.query('INSERT INTO "Event" (id,title,location,category,start,"end",status,"createdById","updatedAt") VALUES ($1,$2,$3,\'CUSTOM\',$4,$5,\'DRAFT\',$6,now())',[eventId,e.title,e.location,e.start,e.end,e.ownerId]);
   for(const group of plan.groups.filter(g=>g.category==='CUSTOM'))await client.query('INSERT INTO "_EventGroups" ("A","B") VALUES ($1,$2)',[eventId,ids.get(group.id)]);
  }
+ return {...plan,groups:plan.groups.map(g=>({...g,id:ids.get(g.id)!})),students:plan.students.map(s=>({...s,id:ids.get(s.id)!,student:{...s.student,id:ids.get(s.id)!}})),memberships:plan.memberships.map(m=>({...m,studentId:ids.get(m.studentId)!})),event:{...plan.event,id:createdEventId??plan.event.id}};
 }
 
 /** Explicit-target entry point. Never loads dotenv or connects to an implicit URL. */
@@ -88,7 +92,7 @@ export async function executeSetup(options:SetupOptions){
    // checks and fingerprints even from writers that bypass the advisory protocol.
    await client.query('LOCK TABLE "Group","Student","CustomGroupMembership","_GroupToStudent","Event","_EventGroups" IN SHARE ROW EXCLUSIVE MODE');
   }
-  const state=await readState(client,eventOptions);const plan=buildSetupPlan(input,state,eventOptions);
+  const state=await readState(client,eventOptions);const plan=buildSetupPlan(input,state,eventOptions);let completionPlan=plan;
   const fingerprint=hash({version:1,hashes:input.hashes,target,state,plan,eventOptions});
   report={...report,...plan,target,fingerprint,outcome:plan.blockers.length?'blocked':'planned'};save(reportPath,report);
   if(options.apply){
@@ -96,20 +100,20 @@ export async function executeSetup(options:SetupOptions){
    try{approved=JSON.parse(readFileSync(resolve(options.approvalReport!),'utf8'));}catch{throw new SetupError('INVALID_APPROVAL_REPORT');}
    if(approved.mode!=='dry-run'||approved.fingerprint!==fingerprint)throw new SetupError('STALE_REVIEW');
    if(plan.blockers.length||approved.outcome!=='planned')throw new SetupError('BLOCKED_PLAN');
-   await applyPlan(client,plan);
-   report={...report,outcome:'commit-pending'};save(reportPath,report);committing=true;
+   completionPlan=await applyPlan(client,plan);
+   report={...report,...completionPlan,outcome:'commit-pending'};save(reportPath,report);committing=true;
   }
   const completion=await client.query('COMMIT');
   if(completion.command!=='COMMIT')throw new SetupError('COMMIT_NOT_CONFIRMED');
   transaction=false;committed=!!options.apply;
-  const result={...plan,mode:options.apply?'apply':'dry-run',outcome:options.apply?'committed':plan.blockers.length?'blocked':'planned',target,fingerprint,inputHashes:input.hashes,reportPath,generatedAt:report.generatedAt};
+  const result={...completionPlan,mode:options.apply?'apply':'dry-run',outcome:options.apply?'committed':plan.blockers.length?'blocked':'planned',target,fingerprint,inputHashes:input.hashes,reportPath,generatedAt:report.generatedAt};
   save(reportPath,result);return result;
  }catch(error){
   let outcome=committed?'committed-report-failed':committing?'unknown-commit':'not-applied';
   if(transaction&&!committing){try{await client!.query('ROLLBACK');outcome='rolled-back';}catch{outcome='rollback-unconfirmed';}}
-  const code=outcome==='rollback-unconfirmed'?'APPLY_ROLLBACK_UNCONFIRMED':error instanceof SetupError?error.code:options.apply?'APPLY_ROLLED_BACK':'SETUP_FAILED';
+  const code=committed?'COMMITTED_REPORT_FAILED':committing?'COMMIT_OUTCOME_UNKNOWN':outcome==='rollback-unconfirmed'?'APPLY_ROLLBACK_UNCONFIRMED':error instanceof SetupError?error.code:options.apply?'APPLY_ROLLED_BACK':'SETUP_FAILED';
   try{save(reportPath,{...report,outcome,errorCode:code});}catch{/* A previously synced commit-pending report remains recovery evidence. */}
-  if(committing||committed)throw new SetupError(committed?'COMMITTED_REPORT_FAILED':'COMMIT_OUTCOME_UNKNOWN');
-  throw new SetupError(code);
+  if(committing||committed)throw new SetupError(committed?'COMMITTED_REPORT_FAILED':'COMMIT_OUTCOME_UNKNOWN',reportPath);
+  throw new SetupError(code,reportPath);
  }finally{await client?.end().catch(()=>undefined);}
 }

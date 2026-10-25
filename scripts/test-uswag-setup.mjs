@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {Client} from 'pg';
 import {createServer,connect} from 'node:net';
+import {spawnSync} from 'node:child_process';
 import {createDisposableDatabase} from './pg-test-db.mjs';
 import fixtureModule from './uswag/setup-fixture.test-support.ts';
 import setupModule from './uswag/setup-db.ts';
@@ -26,18 +27,32 @@ const apply=(db,review,extra={})=>executeSetup(options(db,{apply:true,approvalRe
 async function connected(db,fn){const c=new Client({connectionString:db.url});await c.connect();try{return await fn(c);}finally{await c.end();}}
 async function snapshot(db){return connected(db,async c=>(await c.query(`SELECT json_build_object('students',(SELECT json_agg(s ORDER BY id) FROM "Student" s),'groups',(SELECT json_agg(g ORDER BY id) FROM "Group" g),'memberships',(SELECT json_agg(m ORDER BY "studentId") FROM "CustomGroupMembership" m),'joins',(SELECT json_agg(j ORDER BY "A","B") FROM "_GroupToStudent" j),'records',(SELECT json_agg(r ORDER BY id) FROM "Record" r)) AS value`)).rows[0].value);}
 
-test('single command plans and atomically applies all prerequisites, then preserves IDs, positions and timestamps',async()=>{
+test('single command plans and atomically applies all prerequisites, then preserves IDs, positions and timestamps',async t=>{
  const db=await createDisposableDatabase('test_uswag_new');
  try{
+  const version=await connected(db,c=>c.query('SHOW server_version'));t.diagnostic(JSON.stringify({database:db.dbName,serverVersion:version.rows[0].server_version,endpoint:'explicit-local-loopback',migrated:true}));
   const before=await snapshot(db);const review=await executeSetup(options(db));assert.deepEqual(await snapshot(db),before);
   assert.equal(review.counts.sourceRows,95);assert.equal(review.counts.approved,94);assert.equal(review.counts.held,1);
   assert.equal(review.counts.studentsCreated,94);assert.equal(review.groups.length,74);assert.equal(statSync(review.reportPath).mode&0o777,0o600);
   const result=await apply(db,review);assert.equal(result.outcome,'committed');
   const after=await snapshot(db);assert.equal(after.students.length,94);assert.equal(after.groups.length,74);assert.equal(after.memberships.length,94);
+  assert.ok(result.students.every(s=>after.students.some(actual=>actual.id===s.id)));
+  assert.ok(result.groups.every(g=>after.groups.some(actual=>actual.id===g.id)));
+  assert.ok(result.memberships.every(m=>after.memberships.some(actual=>actual.studentId===m.studentId)));
   assert.deepEqual(result.groupCounts.map(x=>x.approved),[13,26,14,11,13,12,5]);
   const next=await executeSetup(options(db));assert.equal(next.counts.studentsUnchanged,94);assert.equal(next.counts.membershipsUnchanged,94);
   await apply(db,next);assert.deepEqual(await snapshot(db),after);
   await assert.rejects(()=>apply(db,review),/STALE_REVIEW/);assert.deepEqual(await snapshot(db),after);
+ }finally{await db.cleanup();}
+});
+test('operator CLI performs dry-run and reviewed apply through the dedicated package command',async()=>{
+ const db=await createDisposableDatabase('test_uswag_cli');try{
+  const reviewPath=join(directory,'cli-review.json'),completionPath=join(directory,'cli-completion.json');
+  const common=['uswag:setup','--input-dir',fixture.inputDir,'--group-approvals',fixture.approvalsPath,'--database-env','USWAG_SETUP_TEST_TARGET'];
+  const invoke=args=>spawnSync('pnpm',[...common,...args],{encoding:'utf8',env:{...process.env,USWAG_SETUP_TEST_TARGET:db.url}});
+  const review=invoke(['--dry-run','--report',reviewPath]);assert.equal(review.status,0,review.stderr);assert.match(review.stdout,/"studentsCreated": 94/);assert.equal((await snapshot(db)).students,null);
+  const applied=invoke(['--apply','--approval-report',reviewPath,'--backup-confirmed','--report',completionPath]);assert.equal(applied.status,0,applied.stderr);assert.match(applied.stdout,/"outcome": "committed"/);assert.equal((await snapshot(db)).students.length,94);
+  assert.doesNotMatch(applied.stdout,/Student1|26000000001/);
  }finally{await db.cleanup();}
 });
 test('pending academic approvals block every write including groups',async()=>{
@@ -80,8 +95,9 @@ test('creates an authorized draft, reuses it, checks actual eligibility and expo
  const db=await createDisposableDatabase('test_uswag_event');try{
   await connected(db,c=>c.query(`INSERT INTO "User" (id,name,email,password,role,status,"updatedAt") VALUES ('owner','Synthetic owner','synthetic@example.test','unused','ORGANIZER','ACTIVE',now())`));
   const eventOptions={create:{title:'Officer gathering',ownerId:'owner',location:'Synthetic hall',start:'2026-11-01T09:00:00+08:00',end:'2026-11-01T10:00:00+08:00'}};
-  const review=await executeSetup(options(db,{eventOptions}));assert.equal(review.event.action,'create');await apply(db,review,{eventOptions});
+  const review=await executeSetup(options(db,{eventOptions}));assert.equal(review.event.action,'create');const completion=await apply(db,review,{eventOptions});
   const events=await connected(db,c=>c.query('SELECT * FROM "Event"'));assert.equal(events.rows.length,1);assert.equal(events.rows[0].status,'DRAFT');assert.equal(events.rows[0].createdById,'owner');
+  assert.equal(completion.event.id,events.rows[0].id);
   const next=await executeSetup(options(db,{eventOptions}));assert.equal(next.event.action,'reuse');await apply(db,next,{eventOptions});assert.equal((await connected(db,c=>c.query('SELECT * FROM "Event"'))).rows.length,1);
   await connected(db,c=>c.query('UPDATE "Event" SET status=\'APPROVED\' WHERE id=$1',[events.rows[0].id]));
   const ready=await executeSetup(options(db,{eventOptions:{id:events.rows[0].id}}));assert.equal(ready.event.readiness,'ready');
@@ -114,7 +130,7 @@ test('lost COMMIT response reports unknown outcome even when the database commit
   const review=await executeSetup(options(proxied));armed=true;
   const config=options(proxied,{apply:true,approvalReport:review.reportPath,backupConfirmed:true});
   await assert.rejects(()=>executeSetup(config),/COMMIT_OUTCOME_UNKNOWN/);
-  assert.equal(JSON.parse(readFileSync(config.report,'utf8')).outcome,'unknown-commit');assert.equal((await snapshot(db)).students.length,94);
+  const recoveryReport=JSON.parse(readFileSync(config.report,'utf8'));assert.equal(recoveryReport.outcome,'unknown-commit');assert.equal(recoveryReport.errorCode,'COMMIT_OUTCOME_UNKNOWN');assert.equal((await snapshot(db)).students.length,94);
   armed=false;const recovery=await executeSetup(options(proxied));assert.equal(recovery.counts.studentsUnchanged,94);
  }finally{for(const socket of sockets)socket.destroy();if(server)await new Promise(resolve=>server.close(resolve));await db.cleanup();}
 });
