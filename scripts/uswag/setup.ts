@@ -4,7 +4,8 @@ import {z} from 'zod';
 import {executeSetup,SetupError,type SetupOptions} from './setup-db';
 import {runApprovedLocalSetup} from './setup-local';
 const USAGE=`Usage: pnpm run uswag:setup
-Runs the approved local USWAG setup using DATABASE_URL from the checkout's env files.
+Runs approved USWAG setup using shell DATABASE_URL first, otherwise .env.
+Hosted PostgreSQL uses verified TLS; .env.local cannot override the setup target.
 Use pnpm run uswag:setup --dry-run for a read-only preview.
 
 Advanced usage: pnpm uswag:setup --input-dir /private/handoff --database-env USWAG_SETUP_DATABASE_URL
@@ -46,7 +47,7 @@ async function main(){
  if(process.argv.includes('--help')){console.log(USAGE);return;}
  const args=process.argv.slice(2);
  const result=args.length===0||args.length===1&&args[0]==='--dry-run'?await runApprovedLocalSetup(args[0]==='--dry-run'):await executeSetup(parse(args));
- console.log(JSON.stringify({mode:result.mode,outcome:result.outcome,counts:result.counts,groupCounts:result.groupCounts,eventReadiness:result.event.readiness,event:result.baseline?.event,accounts:result.baseline?.users.map(({email,role,action})=>({email,role,action})),fingerprint:result.fingerprint,report:result.reportPath},null,2));
+ console.log(JSON.stringify({mode:result.mode,outcome:result.outcome,database:{host:result.target.host,port:result.target.port,name:result.target.database},counts:result.counts,groupCounts:result.groupCounts,eventReadiness:result.event.readiness,event:result.baseline?.event,accounts:result.baseline?.users.map(({email,role,action})=>({email,role,action})),fingerprint:result.fingerprint,report:result.reportPath},null,2));
  if(result.outcome==='blocked')process.exitCode=2;
 }
 main().catch(error=>{

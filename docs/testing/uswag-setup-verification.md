@@ -1,5 +1,27 @@
 # USWAG setup verification — 2026-10-25
 
+## Hosted target and environment selection follow-up
+
+The approved setup now selects a shell-provided `DATABASE_URL` first, otherwise
+`.env`. A stale `.env.local` no longer redirects setup to the development database.
+An explicit `USWAG_SETUP_ENV_FILE` can select a different file. Hosted setup uses
+the existing verified-TLS configuration; reset remains strictly local-only.
+Console output identifies the selected host/database and source before connecting,
+and completion JSON includes the actual target without credentials.
+
+Five environment regressions passed, including stale-local override, inline shell
+selection, explicit alternate file, insecure/redirected URL rejection and hosted
+reset refusal. The original loader failed the three applicable precedence tests;
+the corrected loader passed all five. The combined unit/database-configuration
+suite passed 68 tests, with typecheck, changed-file lint and production build also
+passing. Independent review passed 10 environment/reset checks with no findings.
+
+Both bare and advanced CLI apply paths passed against disposable local databases.
+An initial concurrent advanced-CLI run returned `APPLY_ROLLED_BACK`; its isolated
+rerun passed with unchanged implementation. A hosted connection probe used a
+read-only transaction and verified TLS, database identity and schema presence.
+No hosted setup or data writes were executed during this follow-up.
+
 ## Complete baseline follow-up
 
 The operator-approved local setup now also creates four active hashed-password

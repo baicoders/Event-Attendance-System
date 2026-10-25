@@ -1,6 +1,6 @@
 # USWAG setup operator runbook
 
-## Approved single-day local setup
+## Approved single-day setup
 
 For the operator-approved USWAG handoff configured on this checkout, run:
 
@@ -8,9 +8,18 @@ For the operator-approved USWAG handoff configured on this checkout, run:
 pnpm run uswag:setup
 ```
 
-It loads the checkout's environment with the same precedence as Next.js, uses
-`DATABASE_URL`, and prepares then applies the approved roster in one command.
-It also creates the complete local test baseline:
+It uses an inline/exported `DATABASE_URL` first, otherwise the checkout's `.env`,
+and prepares then applies the approved roster in one command. `.env.local` does
+not override this setup target. Local and hosted PostgreSQL targets are supported;
+hosted connections require verified TLS. Before connecting, the command prints
+the selected host/database and environment source without credentials. The final
+JSON also includes the actual database target.
+
+For the published Prisma database, update `DATABASE_URL` in `.env` and run the
+same command above. Expect `USWAG database: db.prisma.io:5432/postgres` before it
+starts. A shell-provided URL takes precedence over the file. If you explicitly
+want a different file, set `USWAG_SETUP_ENV_FILE` (for example `.env.local`).
+It also creates the complete USWAG baseline:
 
 - One `USWAG 2026` event for October 26, 2026, all day in Asia/Manila, already
   APPROVED and including all seven custom groups (94 eligible students).
@@ -218,7 +227,7 @@ active ORGANIZER/ADMIN without a required password change. The operator must hav
 authorization to create the owner's event. Creation uses the app's validation and
 creates an owned **DRAFT**, including all seven custom groups. In this advanced
 explicit-input mode, submission and admin approval use the existing app workflow;
-only the operator-approved local baseline creates and approves its fixed USWAG event.
+only the operator-approved USWAG baseline creates and approves its fixed event.
 Repeating the advanced create configuration reuses a discovered event rather than
 creating another one. Readiness checks exact eligible membership, not just counts;
 extra existing officers are preserved and block readiness, while safe approved
@@ -237,5 +246,5 @@ the current state. Review/apply that fresh report if anything remains outstandin
 Normal database session termination rolls back an open, uncommitted transaction.
 
 The tool does not deploy, alter the demo seed or merge code. The reset command
-replays existing migrations, and the approved local baseline submits/approves only
+replays existing migrations, and the approved USWAG baseline submits/approves only
 its fixed USWAG event. Run against a populated database only after authorization.
