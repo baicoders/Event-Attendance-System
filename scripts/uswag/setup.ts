@@ -43,4 +43,9 @@ async function main(){
  console.log(JSON.stringify({mode:result.mode,outcome:result.outcome,counts:result.counts,groupCounts:result.groupCounts,eventReadiness:result.event.readiness,fingerprint:result.fingerprint,report:result.reportPath},null,2));
  if(result.outcome==='blocked')process.exitCode=2;
 }
-main().catch(error=>{console.error(error instanceof SetupError?error.code:'SETUP_INPUT_OR_CONNECTION_FAILED');if(error instanceof SetupError&&error.reportPath)console.error(JSON.stringify({report:error.reportPath}));process.exitCode=1;});
+main().catch(error=>{
+ console.error(error instanceof SetupError?error.code:'SETUP_INPUT_OR_CONNECTION_FAILED');
+ if(error instanceof SetupError&&error.code==='INVALID_OPTIONS')console.error(`${USAGE}\nThe command never loads .env automatically; explicitly select and populate the target environment variable.`);
+ if(error instanceof SetupError&&error.reportPath)console.error(JSON.stringify({report:error.reportPath}));
+ process.exitCode=1;
+});

@@ -46,6 +46,13 @@ TLS, using the existing `DATABASE_SSL_CA_BASE64` configuration when needed. URL
 host/database overrides and insecure remote TLS are rejected. Use a direct database
 connection; this maintenance transaction is not designed for a transaction pooler.
 
+For local testing with the checkout's `.env.local`, explicitly load that file:
+replace `pnpm uswag:setup` in the commands below with
+`node --env-file=.env.local --import tsx scripts/uswag/setup.ts`, then select
+`--database-env DATABASE_URL`. This invokes the same setup tool and keeps its
+required explicit target selection. Running the package command without arguments
+prints usage and exits without connecting to a database.
+
 ## Resolve group approval blockers
 
 The supplied handoff has 67 required academic/house identifiers. Five permanent
