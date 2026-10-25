@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,statSync} from 'node:fs';
+import {mkdtempSync,readFileSync,statSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {Client} from 'pg';
@@ -26,6 +26,16 @@ const options=(db,extra={})=>({inputDir:fixture.inputDir,groupApprovals:fixture.
 const apply=(db,review,extra={})=>executeSetup(options(db,{apply:true,approvalReport:review.reportPath,backupConfirmed:true,...extra}));
 async function connected(db,fn){const c=new Client({connectionString:db.url});await c.connect();try{return await fn(c);}finally{await c.end();}}
 async function snapshot(db){return connected(db,async c=>(await c.query(`SELECT json_build_object('students',(SELECT json_agg(s ORDER BY id) FROM "Student" s),'groups',(SELECT json_agg(g ORDER BY id) FROM "Group" g),'memberships',(SELECT json_agg(m ORDER BY "studentId") FROM "CustomGroupMembership" m),'joins',(SELECT json_agg(j ORDER BY "A","B") FROM "_GroupToStudent" j),'records',(SELECT json_agg(r ORDER BY id) FROM "Record" r)) AS value`)).rows[0].value);}
+
+test('bare package command loads approved local setup and applies repeatably without manual flags',async()=>{
+ const db=await createDisposableDatabase('test_uswag_simple');try{
+  const config=join(directory,'simple-setup.json');writeFileSync(config,JSON.stringify({v:1,approved:true,inputDir:fixture.inputDir,groupApprovals:fixture.approvalsPath}));
+  const invoke=()=>spawnSync('pnpm',['run','uswag:setup'],{encoding:'utf8',env:{...process.env,DATABASE_URL:db.url,DIRECT_URL:db.url,USWAG_SETUP_CONFIG:config}});
+  const first=invoke();assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/"outcome": "committed"/);
+  const after=await snapshot(db);assert.equal(after.students.length,94);assert.equal(after.groups.length,74);assert.equal(after.memberships.length,94);
+  const second=invoke();assert.equal(second.status,0,second.stderr);assert.deepEqual(await snapshot(db),after);
+ }finally{await db.cleanup();}
+});
 
 test('single command plans and atomically applies all prerequisites, then preserves IDs, positions and timestamps',async t=>{
  const db=await createDisposableDatabase('test_uswag_new');

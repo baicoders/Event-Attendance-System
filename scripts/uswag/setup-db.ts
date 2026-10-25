@@ -10,7 +10,7 @@ import {loadSetupInput} from './setup-input';
 import {buildSetupPlan,type EventOptions,type SetupPlan,type SetupState} from './setup-plan';
 import {writePrivateReport as save} from './setup-report';
 
-export type SetupOptions={inputDir:string;databaseUrl:string;groupApprovals?:string;apply?:boolean;approvalReport?:string;backupConfirmed?:boolean;allowRemote?:boolean;report?:string;eventOptions?:EventOptions};
+export type SetupOptions={inputDir:string;databaseUrl:string;groupApprovals?:string;apply?:boolean;approvalReport?:string;backupConfirmed?:boolean;approvedEventSetup?:boolean;allowRemote?:boolean;report?:string;eventOptions?:EventOptions};
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export class SetupError extends Error {constructor(public code:string,public reportPath?:string){super(code);}}
 function reserveReport(path?:string){
@@ -65,12 +65,12 @@ async function applyPlan(client:Client,plan:SetupPlan){
 export async function executeSetup(options:SetupOptions){
  let expected:ReturnType<typeof validateDatabaseUrl>;
  try{expected=validateDatabaseUrl(options.databaseUrl,options.allowRemote);}catch{throw new SetupError('INVALID_EXPLICIT_DATABASE_TARGET');}
- if(options.apply&&(!options.approvalReport||!options.backupConfirmed))throw new SetupError('APPLY_REQUIRES_REVIEW_AND_BACKUP_CONFIRMATION');
+ if(options.apply&&(!options.approvalReport||!options.backupConfirmed&&!options.approvedEventSetup))throw new SetupError('APPLY_REQUIRES_REVIEW_AND_BACKUP_CONFIRMATION');
  const input=loadSetupInput(options.inputDir,options.groupApprovals);
  const eventOptions=options.eventOptions??{};
  const reportPath=reserveReport(options.report);
  let client:Client|undefined;let transaction=false;let committing=false;let committed=false;
- let report:Record<string,unknown>={mode:options.apply?'apply':'dry-run',outcome:'not-started',generatedAt:new Date().toISOString(),inputHashes:input.hashes,reportPath};
+ let report:Record<string,unknown>={mode:options.apply?'apply':'dry-run',outcome:'not-started',generatedAt:new Date().toISOString(),inputHashes:input.hashes,reportPath,executionPolicy:options.approvedEventSetup?'operator-approved-single-day-event':'reviewed-apply'};
  save(reportPath,report);
  try{
   client=new Client({...getPgPoolConfig(options.databaseUrl),connectionTimeoutMillis:10000});
@@ -106,7 +106,7 @@ export async function executeSetup(options:SetupOptions){
   const completion=await client.query('COMMIT');
   if(completion.command!=='COMMIT')throw new SetupError('COMMIT_NOT_CONFIRMED');
   transaction=false;committed=!!options.apply;
-  const result={...completionPlan,mode:options.apply?'apply':'dry-run',outcome:options.apply?'committed':plan.blockers.length?'blocked':'planned',target,fingerprint,inputHashes:input.hashes,reportPath,generatedAt:report.generatedAt};
+  const result={...completionPlan,mode:options.apply?'apply':'dry-run',outcome:options.apply?'committed':plan.blockers.length?'blocked':'planned',target,fingerprint,inputHashes:input.hashes,reportPath,generatedAt:report.generatedAt,executionPolicy:report.executionPolicy};
   save(reportPath,result);return result;
  }catch(error){
   let outcome=committed?'committed-report-failed':committing?'unknown-commit':'not-applied';

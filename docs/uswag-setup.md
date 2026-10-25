@@ -1,5 +1,24 @@
 # USWAG setup operator runbook
 
+## Approved single-day local setup
+
+For the operator-approved USWAG handoff configured on this checkout, run:
+
+```bash
+pnpm run uswag:setup
+```
+
+It loads the checkout's environment with the same precedence as Next.js, uses
+`DATABASE_URL`, and prepares then applies the approved roster in one command.
+Private source paths and the operator's approval are stored in the ignored
+`.env.uswag-setup.json`; group decisions remain source-hash-bound in private files.
+There is no manual review-report or backup-acknowledgement step in this approved
+single-day mode. Source verification, exact USNs, conflict blockers, transactional
+writes, private reports and repeatable no-ops still apply. No automatic backup is
+claimed. `pnpm run uswag:setup --dry-run` remains available for a preview.
+
+The explicit-input workflow below remains available for other targets and handoffs.
+
 `pnpm uswag:setup` is the single dedicated setup command. It verifies the private
 workbook, identity manifest, provenance and group definitions; plans academic
 groups and permanent houses; upserts the 94 approved students; creates/reuses seven
@@ -38,7 +57,7 @@ roster writes while it validates and commits. `--backup-confirmed` acknowledges
 that the operator completed this requirement; it does not create or verify a backup.
 
 Set `USWAG_SETUP_DATABASE_URL` in the operator's private shell environment to the
-explicit intended database URL. The CLI never loads `.env` and never implicitly
+explicit intended database URL. Advanced explicit-input mode never loads `.env` and never implicitly
 uses `DATABASE_URL` or `DIRECT_URL`. Prefer `--database-env` to placing credentials
 in command arguments/history. Local loopback targets are the default. Authorized
 remote runs additionally require `--allow-remote` on both commands and verified
