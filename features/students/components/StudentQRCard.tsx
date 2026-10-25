@@ -6,14 +6,15 @@ import { Student } from "@/globals/types/students";
 import { resolveQRIdentifier, type QRIdentifierType } from "../utils/qrIdentifier";
 import { formatSection } from "@/globals/utils/formatting";
 
-export const StudentQRCard = memo(function StudentQRCard({ student, showGroupDetail = true, fillHeight = true, identifierType = "USN" }: { student: Student; showGroupDetail?: boolean; fillHeight?: boolean; identifierType?: QRIdentifierType }) {
+export const StudentQRCard = memo(function StudentQRCard({ student, showGroupDetail = true, fillHeight = true, identifierType = "USN", customGroupName }: { student: Student; showGroupDetail?: boolean; fillHeight?: boolean; identifierType?: QRIdentifierType; customGroupName?: string }) {
   const identifier = resolveQRIdentifier(student, identifierType);
   const name = [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ");
   const group = student.program || student.strand || student.department || student.house;
   const detail = showGroupDetail ? [group?.toUpperCase(), student.section && formatSection(student.section)].filter(Boolean).join(" • ") : "";
 
   return (
-    <article className={`student-qr-card flex flex-col items-center justify-center rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-950 ${fillHeight ? "h-full" : ""}`}>
+    <article className={`student-qr-card ${customGroupName ? "student-qr-card-with-group" : ""} flex flex-col items-center justify-center rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-950 ${fillHeight ? "h-full" : ""}`}>
+      {customGroupName && <h2 className="student-qr-group-name mb-2 w-full break-words text-xs font-bold uppercase leading-tight">{customGroupName}</h2>}
       <div className="student-qr-code bg-white p-2">
         <QRCode value={identifier.value} title={`${identifier.type} QR: ${identifier.value}`} size={160} bgColor="#FFFFFF" fgColor="#000000" className="h-auto w-full" />
       </div>

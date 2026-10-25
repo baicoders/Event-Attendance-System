@@ -201,6 +201,8 @@ try {
   await until(`${previewCards}.length === 0`);
   await choose('document.querySelector("#qr-custom-group")', groupB.id);
   await until(`new URL(location.href).searchParams.get('customGroupId') === ${JSON.stringify(groupB.id)} && ${printedCards}.length === 52 && ${previewCards}.length === 48`);
+  await until(`[...${printedCards}].every(card=>card.querySelector('.student-qr-group-name')?.textContent===${JSON.stringify(groupB.name)})`);
+  assert.equal(await evaluate(`[...${previewCards}].every(card=>card.querySelector('.student-qr-group-name')?.textContent===${JSON.stringify(groupB.name)})`), true);
   assert.equal(await evaluate('document.querySelector(\'input[type="search"]\').value'), '');
   assert.equal(await evaluate('document.querySelectorAll("input[name=qr-scope]")[1].checked'), true);
   assert.equal(await evaluate('document.querySelector(".no-print").textContent.includes("Selected students (0)")'), true);
@@ -210,6 +212,29 @@ try {
   const qrPdf = Buffer.from((await command('Page.printToPDF', { printBackground: true, preferCSSPageSize: true })).data, 'base64');
   assert.equal(qrPdf.subarray(0, 4).toString(), '%PDF');
   writeFileSync('/tmp/custom-group-qr-print.pdf', qrPdf);
+  for (const [size, perPage] of [['standard', 12], ['large', 6]]) {
+    await evaluate(`document.querySelectorAll('input[name="qr-size"]')[${size === 'large' ? 1 : 0}].click()`);
+    await until(`document.querySelector('.student-qr-print-area').classList.contains('student-qr-print-${size}')`);
+    await command('Emulation.setEmulatedMedia', { media: 'print' });
+    const layout = await evaluate(`(() => {
+      const cards = [...${printedCards}];
+      cards[0].querySelector('.student-qr-group-name').textContent = 'W'.repeat(80);
+      const dimensions = cards.map(card => {
+        const box = card.getBoundingClientRect();
+        const children = [...card.children].map(child => child.getBoundingClientRect());
+        const svg = card.querySelector('svg').getBoundingClientRect();
+        return { width: box.width, height: box.height,
+          fits: children.every(child => child.top >= box.top && child.bottom <= box.bottom + 1 && child.left >= box.left && child.right <= box.right + 1),
+          square: Math.abs(svg.width - svg.height) < 1 };
+      });
+      return { dimensions, sheetCounts: [...document.querySelectorAll('.student-qr-print-sheet')].map(sheet => sheet.children.length) };
+    })()`);
+    assert.ok(layout.dimensions.every(card => card.fits && card.square), `${size} group headers and square QR codes fit inside their cards: ${JSON.stringify(layout.dimensions[0])}`);
+    assert.deepEqual(layout.sheetCounts, [...Array(Math.floor(52 / perPage)).fill(perPage), ...(52 % perPage ? [52 % perPage] : [])]);
+    await evaluate(`${printedCards}[0].querySelector('.student-qr-group-name').textContent=${JSON.stringify(groupB.name)}`);
+    writeFileSync(`/tmp/custom-group-qr-${size}.pdf`, Buffer.from((await command('Page.printToPDF', { printBackground: true, preferCSSPageSize: true })).data, 'base64'));
+    await command('Emulation.setEmulatedMedia', { media: 'screen' });
+  }
   await fill('document.querySelector(\'input[type="search"]\')', 'Beta');
   await until(`${printedCards}.length === 1`);
   await evaluate('document.querySelectorAll("input[name=qr-scope]")[2].click()');
@@ -219,6 +244,7 @@ try {
   assert.equal(await evaluate('[...document.querySelectorAll("button")].find(button=>button.textContent.includes("Print QR Codes")).disabled'), true);
   await choose('document.querySelector("#qr-custom-group")', '');
   await until(`${printedCards}.length === 54 && !new URL(location.href).searchParams.has('customGroupId')`);
+  assert.equal(await evaluate('document.querySelectorAll(".student-qr-print-area .student-qr-group-name").length'), 0);
   await choose('document.querySelector("#qr-custom-group")', groupId);
   await until(`${printedCards}.length === 1`);
   await command('Page.reload');

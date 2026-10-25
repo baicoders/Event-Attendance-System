@@ -36,3 +36,18 @@ test("printed QR grids encode the same identifier preference as preview cards", 
   assert.deepEqual(paths(html), paths(renderToStaticMarkup(createElement(QRCode, { value: student.lrn! }))));
   assert.ok(html.includes(`LRN: ${student.lrn}`));
 });
+
+test("custom-group batches label every card without changing identifiers or 12/6-card pagination", () => {
+  const students = Array.from({ length: 13 }, (_, index) => ({ ...student, id: `student-${index}` }));
+  for (const [size, pages] of [["standard", 2], ["large", 3]] as const) {
+    const html = renderToStaticMarkup(createElement(StudentQRPrintGrid, { students, size, identifierType: "LRN", customGroupName: "Arts & Culture Council" }));
+    const cards = [...html.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/g)].map(match => match[1]);
+    assert.equal(cards.length, 13);
+    assert.equal((html.match(/class="student-qr-print-sheet"/g) ?? []).length, pages);
+    for (const card of cards) {
+      assert.match(card, /<h2\b[^>]*>Arts &amp; Culture Council<\/h2>/);
+      assert.ok(card.indexOf("Arts &amp; Culture Council") < card.indexOf("<svg"));
+      assert.ok(card.includes(`LRN: ${student.lrn}`));
+    }
+  }
+});

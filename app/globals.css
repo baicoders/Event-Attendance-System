@@ -437,7 +437,17 @@ body {
     page-break-inside: avoid;
   }
   .student-qr-code { width: 36mm; padding: 1.5mm !important; }
+  .student-qr-card-with-group .student-qr-code { width: 32mm; flex-shrink: 0; }
   .student-qr-print-large .student-qr-code { width: 52mm; }
+  .student-qr-group-name {
+    width: 100%;
+    margin: 0 0 1mm;
+    overflow-wrap: anywhere;
+    font-size: 8pt;
+    font-weight: 700;
+    line-height: 1.1;
+    flex-shrink: 0;
+  }
   .student-qr-code svg { display: block; width: 100%; height: auto; }
   .student-qr-card h3 { font-size: 9pt; line-height: 1.1; margin-top: 1mm; }
   .student-qr-card p { font-size: 8pt; line-height: 1.1; margin-top: 0.5mm; }
