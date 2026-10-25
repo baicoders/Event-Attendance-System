@@ -1,12 +1,17 @@
-/** One dedicated CLI; never import dotenv or the destructive demo seed. */
+/** One dedicated CLI; never import the destructive demo seed. */
 import {readFileSync} from 'node:fs';
 import {z} from 'zod';
 import {executeSetup,SetupError,type SetupOptions} from './setup-db';
-const USAGE=`Usage: pnpm uswag:setup --input-dir /private/handoff --database-env USWAG_SETUP_DATABASE_URL
+import {runApprovedLocalSetup} from './setup-local';
+const USAGE=`Usage: pnpm run uswag:setup
+Runs the approved local USWAG setup using DATABASE_URL from the checkout's env files.
+Use pnpm run uswag:setup --dry-run for a read-only preview.
+
+Advanced usage: pnpm uswag:setup --input-dir /private/handoff --database-env USWAG_SETUP_DATABASE_URL
   [--group-approvals /private/group-approvals.json] [--event-options /private/event.json]
   [--dry-run] [--report /private/new-review.json] [--allow-remote]
   [--apply --approval-report /private/reviewed.json --backup-confirmed]
-Default: read-only dry-run. One command handles academic groups, houses, students,
+Advanced explicit-input default: read-only dry-run. One command handles academic groups, houses, students,
 officer groups, memberships, positions and event readiness. Private inputs/reports
 must stay outside public commits. Events are created only as owned DRAFTs.
 Alternative explicit target: --database-url <postgresql-url> (avoid shell history).`;
@@ -39,8 +44,14 @@ function parse(argv:string[]):SetupOptions{
 }
 async function main(){
  if(process.argv.includes('--help')){console.log(USAGE);return;}
- const result=await executeSetup(parse(process.argv.slice(2)));
- console.log(JSON.stringify({mode:result.mode,outcome:result.outcome,counts:result.counts,groupCounts:result.groupCounts,eventReadiness:result.event.readiness,fingerprint:result.fingerprint,report:result.reportPath},null,2));
+ const args=process.argv.slice(2);
+ const result=args.length===0||args.length===1&&args[0]==='--dry-run'?await runApprovedLocalSetup(args[0]==='--dry-run'):await executeSetup(parse(args));
+ console.log(JSON.stringify({mode:result.mode,outcome:result.outcome,counts:result.counts,groupCounts:result.groupCounts,eventReadiness:result.event.readiness,event:result.baseline?.event,accounts:result.baseline?.users.map(({email,role,action})=>({email,role,action})),fingerprint:result.fingerprint,report:result.reportPath},null,2));
  if(result.outcome==='blocked')process.exitCode=2;
 }
-main().catch(error=>{console.error(error instanceof SetupError?error.code:'SETUP_INPUT_OR_CONNECTION_FAILED');if(error instanceof SetupError&&error.reportPath)console.error(JSON.stringify({report:error.reportPath}));process.exitCode=1;});
+main().catch(error=>{
+ console.error(error instanceof SetupError?error.code:'SETUP_INPUT_OR_CONNECTION_FAILED');
+ if(error instanceof SetupError&&error.code==='INVALID_OPTIONS')console.error(`${USAGE}\nAdvanced mode never loads .env automatically; explicitly select and populate the target environment variable.`);
+ if(error instanceof SetupError&&error.reportPath)console.error(JSON.stringify({report:error.reportPath}));
+ process.exitCode=1;
+});

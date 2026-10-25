@@ -1,5 +1,35 @@
 # USWAG setup verification — 2026-10-25
 
+## Complete baseline follow-up
+
+The operator-approved local setup now also creates four active hashed-password
+test accounts and the approved October 26, 2026 Asia/Manila all-day event. Its
+`uswag:reset` wrapper resets the validated local target and rebuilds this baseline;
+the earlier verification below documents the original roster-only implementation.
+
+Final follow-up verification passed **49 unit tests, 10 disposable roster scenarios
+and 2 complete-baseline scenarios (61 total)**. The representative complete fixture
+was `test_uswag_baseline_mvnikvok_856b4240_azmv` on local PostgreSQL 17.11. Real HTTP
+checks verified all four logins, attendance recording by three organizers, eight
+successful logins across initial setup and reset, exact seven-group eligibility,
+and the approved one-day event with correct creator/reviewer attribution.
+
+The actual Prisma migration reset completed, followed by successful reseeding of
+94 students, 74 groups, 94 memberships, four accounts and one approved event. It
+cleared test attendance while retaining all printed USN QR identifiers. A separate
+injected event-insert failure rolled back account, group and student creation.
+Normal repeat setup preserved timestamps, existing passwords, capture mode and
+attendance. Remote, maintenance and redirected reset targets were rejected in
+guard tests; migration and runtime URLs were forced to the same validated target.
+
+Typecheck, changed-file ESLint, isolated production build and independent review
+passed. The existing unrelated unused `_req` build warning remains. Material review
+findings about final-audience extras and noncanonical account emails were fixed
+and regression-tested. Prisma's AI reset guard initially stopped the destructive
+test; the operator explicitly authorized only disposable synthetic reset testing,
+and the successful run passed that consent solely through the test environment.
+The user's configured development database was neither reset nor seeded.
+
 Scope: the dedicated `pnpm uswag:setup` CLI. All database execution used synthetic
 identities in disposable migrated PostgreSQL databases. The populated application
 database was not inspected or changed. No deployment, event approval or main merge

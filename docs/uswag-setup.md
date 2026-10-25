@@ -1,5 +1,57 @@
 # USWAG setup operator runbook
 
+## Approved single-day local setup
+
+For the operator-approved USWAG handoff configured on this checkout, run:
+
+```bash
+pnpm run uswag:setup
+```
+
+It loads the checkout's environment with the same precedence as Next.js, uses
+`DATABASE_URL`, and prepares then applies the approved roster in one command.
+It also creates the complete local test baseline:
+
+- One `USWAG 2026` event for October 26, 2026, all day in Asia/Manila, already
+  APPROVED and including all seven custom groups (94 eligible students).
+- An active administrator: `admin@uswag.test`.
+- Three active organizers: `organizer1@uswag.test`, `organizer2@uswag.test`,
+  `organizer3@uswag.test`.
+- Initial password for all four new accounts: **`Uswag2026!`**. Passwords are hashed
+  in the database. Matching existing accounts keep their current passwords.
+
+Organizer 1 owns the event; the seeded admin is its recorded reviewer. It starts
+in time-in mode, has no attendance records, and leaves location blank. The stored
+end is exclusive midnight October 27, so the calendar shows October 26 only.
+Ordinary repeated setup preserves existing attendance, capture mode and passwords;
+conflicting accounts or attendance-bearing event changes are reported rather than
+silently overwritten.
+
+To discard local testing results and restore that complete baseline, run:
+
+```bash
+pnpm run uswag:reset
+```
+
+This command **erases the local test database**, replays Prisma migrations, then
+runs the same USWAG setup. It restores the four initial logins and approved event,
+94 students and memberships, and 74 groups, with attendance cleared. Private source
+files and approvals stay outside the database. Printed **USN** QR cards keep working
+because the approved USNs are unchanged; no new printing is needed after reset.
+Reset accepts only the configured local `event_attendance_dev` database or disposable
+`test_uswag_*` fixtures. It forces migration and setup to the same validated target.
+Prisma 7 does not automatically seed after raw `prisma migrate reset`, so use the
+combined `uswag:reset` command to get the ready-to-use baseline back in one step.
+
+Private source paths and the operator's approval are stored in the ignored
+`.env.uswag-setup.json`; group decisions remain source-hash-bound in private files.
+There is no manual review-report or backup-acknowledgement step in this approved
+single-day mode. Source verification, exact USNs, conflict blockers, transactional
+writes, private reports and repeatable no-ops still apply. No automatic backup is
+claimed. `pnpm run uswag:setup --dry-run` remains available for a preview.
+
+The explicit-input workflow below remains available for other targets and handoffs.
+
 `pnpm uswag:setup` is the single dedicated setup command. It verifies the private
 workbook, identity manifest, provenance and group definitions; plans academic
 groups and permanent houses; upserts the 94 approved students; creates/reuses seven
@@ -38,13 +90,20 @@ roster writes while it validates and commits. `--backup-confirmed` acknowledges
 that the operator completed this requirement; it does not create or verify a backup.
 
 Set `USWAG_SETUP_DATABASE_URL` in the operator's private shell environment to the
-explicit intended database URL. The CLI never loads `.env` and never implicitly
+explicit intended database URL. Advanced explicit-input mode never loads `.env` and never implicitly
 uses `DATABASE_URL` or `DIRECT_URL`. Prefer `--database-env` to placing credentials
 in command arguments/history. Local loopback targets are the default. Authorized
 remote runs additionally require `--allow-remote` on both commands and verified
 TLS, using the existing `DATABASE_SSL_CA_BASE64` configuration when needed. URL
 host/database overrides and insecure remote TLS are rejected. Use a direct database
 connection; this maintenance transaction is not designed for a transaction pooler.
+
+For local testing with the checkout's `.env.local`, explicitly load that file:
+replace `pnpm uswag:setup` in the commands below with
+`node --env-file=.env.local --import tsx scripts/uswag/setup.ts`, then select
+`--database-env DATABASE_URL`. This invokes the same setup tool and keeps its
+required explicit target selection. Running the package command without arguments
+prints usage and exits without connecting to a database.
 
 ## Resolve group approval blockers
 
@@ -132,7 +191,7 @@ organizations requires a separately reviewed application/schema change. Attendan
 and QR identity are never rewritten. The held attendee never receives a placeholder
 student; a future identity resolution needs a newly reviewed authoritative scope.
 
-## Optional event setup through the same command
+## Advanced explicit-input event setup
 
 Without event options, the tool discovers USWAG-title events and checks a unique
 candidate. Multiple candidates require an explicit ID. Missing scheduling/ownership
@@ -157,9 +216,10 @@ To create an event, supply explicit verified details instead:
 The dates above are illustrative, not an approved schedule. The owner must be an
 active ORGANIZER/ADMIN without a required password change. The operator must have
 authorization to create the owner's event. Creation uses the app's validation and
-creates an owned **DRAFT**, including all seven custom groups. Submission and admin
-approval use the existing app workflow; this CLI never approves or edits an existing
-event. Repeating the create configuration reuses a discovered event rather than
+creates an owned **DRAFT**, including all seven custom groups. In this advanced
+explicit-input mode, submission and admin approval use the existing app workflow;
+only the operator-approved local baseline creates and approves its fixed USWAG event.
+Repeating the advanced create configuration reuses a discovered event rather than
 creating another one. Readiness checks exact eligible membership, not just counts;
 extra existing officers are preserved and block readiness, while safe approved
 roster additions may still commit. Review event reasons even after a successful apply.
@@ -176,6 +236,6 @@ an old approval.** Restore connectivity, run a new read-only dry-run and inspect
 the current state. Review/apply that fresh report if anything remains outstanding.
 Normal database session termination rolls back an open, uncommitted transaction.
 
-The tool does not deploy, migrate schema, alter the demo seed, submit/approve
-events, or merge code. Run it against a populated database only after separate
-authorization and backup verification.
+The tool does not deploy, alter the demo seed or merge code. The reset command
+replays existing migrations, and the approved local baseline submits/approves only
+its fixed USWAG event. Run against a populated database only after authorization.

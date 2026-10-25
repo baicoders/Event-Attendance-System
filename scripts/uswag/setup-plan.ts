@@ -3,11 +3,12 @@ import { IMPORT_GROUP_FIELDS, type CanonicalRow, type ExistingImportStudent, typ
 import { EXPECTED, customGroupSlug } from './reconcile';
 import type { SetupInput } from './setup-input';
 import {eventSchema} from '../../globals/schemas';
+import {planUswagBaseline,type BaselineUser} from './setup-baseline';
 
-export type SetupEvent = {id:string;title:string;category:string;status:string;groupIds:string[];start:string;end:string;location:string|null;createdById:string|null};
+export type SetupEvent = {id:string;title:string;category:string;status:string;groupIds:string[];start:string;end:string;location:string|null;createdById:string|null;allDay?:boolean;reviewedById?:string|null;reviewedAt?:string|null;recordCount?:number};
 export type SetupOwner = {id:string;role:string;status:string;mustChangePassword:boolean;credentialVersion:number};
 export type EventOptions = {id?:string;create?:{title:string;start:string;end:string;location:string;ownerId:string}};
-export type SetupState = {groups:ImportGroup[];students:ExistingImportStudent[];memberships:Array<{studentId:string;groupId:string;position:string|null}>;events:SetupEvent[];owners:SetupOwner[]};
+export type SetupState = {groups:ImportGroup[];students:ExistingImportStudent[];memberships:Array<{studentId:string;groupId:string;position:string|null}>;events:SetupEvent[];owners:SetupOwner[];users?:BaselineUser[]};
 type GroupPlan = ImportGroup & {action:'create'|'reuse'|'blocked'};
 type StudentPlan = {sourceRow:number;id:string;student:CanonicalRow;groupSlugs:string[];action:'create'|'update'|'noop'|'blocked';reasons:string[]};
 type MembershipPlan = {sourceRow:number;studentId:string;groupSlug:string;position:string|null;action:'create'|'set-position'|'noop'|'blocked'};
@@ -16,7 +17,7 @@ const academicCategories=new Set<string>(Object.values(IMPORT_GROUP_FIELDS));
 const sameText=(a:string,b:string)=>a.normalize('NFC').trim().toLowerCase()===b.normalize('NFC').trim().toLowerCase();
 
 /** Pure preview: no Student is ever chosen by a name, LRN, or legacy primary ID. */
-export function buildSetupPlan(input:SetupInput,state:SetupState,eventOptions:EventOptions={}) {
+export function buildSetupPlan(input:SetupInput,state:SetupState,eventOptions:EventOptions={},bootstrap=false) {
  const blockers=[...input.blockers];
  const definitions=[...input.groups,...Object.keys(EXPECTED).map(name=>({name,slug:customGroupSlug(name),category:'CUSTOM',approved:true})).filter(group=>!input.groups.some(g=>g.slug===group.slug))];
  const groups:GroupPlan[]=definitions.map(def=>{
@@ -67,7 +68,7 @@ export function buildSetupPlan(input:SetupInput,state:SetupState,eventOptions:Ev
  const expectedIds=new Set(students.map(s=>s.id));
  const candidates=state.events.filter(e=>/\buswag\b/i.test(e.title)||e.title===eventOptions.create?.title);
  const selected=eventOptions.id?state.events.find(e=>e.id===eventOptions.id):candidates.length===1?candidates[0]:undefined;
- const eventReasons:string[]=[];let eventAction:'none'|'reuse'|'create'='none';let extraStudents=0;let missingStudents=0;
+ const eventReasons:string[]=[];let eventAction:'none'|'reuse'|'create'|'approve'|'blocked'='none';let extraStudents=0;let missingStudents=0;
  if(eventOptions.id&&!selected)eventReasons.push('EVENT_NOT_FOUND');
  if(!eventOptions.id&&candidates.length>1)eventReasons.push('EVENT_SELECTION_REQUIRED');
  if(selected){
@@ -92,9 +93,20 @@ export function buildSetupPlan(input:SetupInput,state:SetupState,eventOptions:Ev
   if(extraStudents||missingStudents)eventReasons.push('EVENT_ROSTER_MISMATCH');
  }
  if(blockers.length)eventReasons.push('ROSTER_SETUP_BLOCKED');
+ const baseline=bootstrap?planUswagBaseline(state.users??[],state.events,groups):undefined;
+ if(baseline){
+  blockers.push(...baseline.blockers);
+  const finalGroups=new Set(baseline.event.groupIds);
+  const eligible=new Set(projectedMemberships.filter(m=>finalGroups.has(m.groupId)).map(m=>m.studentId));
+  extraStudents=[...eligible].filter(id=>!expectedIds.has(id)).length;missingStudents=[...expectedIds].filter(id=>!eligible.has(id)).length;
+  if(extraStudents)blockers.push('BASELINE_EVENT_EXTRA_MEMBERS');
+  if(missingStudents)blockers.push('BASELINE_EVENT_MISSING_MEMBERS');
+ }
  const readiness=blockers.length||eventReasons.some(r=>['EVENT_NOT_FOUND','EVENT_SELECTION_REQUIRED','EVENT_GROUP_SCOPE_MISMATCH','EVENT_ROSTER_MISMATCH','EVENT_ALREADY_EXISTS'].includes(r))?'blocked':!selected&&!eventOptions.create?'missing-inputs':eventReasons.length?'awaiting-approval':'ready';
- return {groups,students,memberships,held:input.held,blockers,event:{action:eventAction,id:selected?.id,create:eventOptions.create,readiness,reasons:eventReasons,extraStudents,missingStudents},
-  counts:{sourceRows:input.rows.length+input.held.length,approved:input.rows.length,held:input.held.length,groupsCreated:groups.filter(g=>g.action==='create').length,groupsReused:groups.filter(g=>g.action==='reuse').length,studentsCreated:students.filter(s=>s.action==='create').length,studentsUpdated:students.filter(s=>s.action==='update').length,studentsUnchanged:students.filter(s=>s.action==='noop').length,membershipsCreated:memberships.filter(m=>m.action==='create').length,positionsUpdated:memberships.filter(m=>m.action==='set-position').length,membershipsUnchanged:memberships.filter(m=>m.action==='noop').length,blockers:blockers.length},
+ const event={action:eventAction as 'none'|'reuse'|'create'|'approve'|'blocked',id:selected?.id,create:eventOptions.create,readiness,reasons:eventReasons,extraStudents,missingStudents};
+ if(baseline){event.action=baseline.event.action;event.id=baseline.event.id;event.readiness=blockers.length?'blocked':'ready';event.reasons=blockers.length?['BASELINE_SETUP_BLOCKED']:[];}
+ return {groups,students,memberships,held:input.held,blockers,event,baseline,
+  counts:{sourceRows:input.rows.length+input.held.length,approved:input.rows.length,held:input.held.length,groupsCreated:groups.filter(g=>g.action==='create').length,groupsReused:groups.filter(g=>g.action==='reuse').length,studentsCreated:students.filter(s=>s.action==='create').length,studentsUpdated:students.filter(s=>s.action==='update').length,studentsUnchanged:students.filter(s=>s.action==='noop').length,membershipsCreated:memberships.filter(m=>m.action==='create').length,positionsUpdated:memberships.filter(m=>m.action==='set-position').length,membershipsUnchanged:memberships.filter(m=>m.action==='noop').length,accountsCreated:baseline?.users.filter(u=>u.action==='create').length??0,accountsReused:baseline?.users.filter(u=>u.action==='reuse').length??0,blockers:blockers.length},
   groupCounts:Object.keys(EXPECTED).map(group=>({group,approved:input.rows.filter(row=>row.group===group).length}))};
 }
 export type SetupPlan=ReturnType<typeof buildSetupPlan>;
