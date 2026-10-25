@@ -43,6 +43,15 @@ After a production build of the same source, repeat without rebuilding:
 E2E_SKIP_BUILD=1 pnpm test:e2e:attendance
 ```
 
+To run only the three regression cases:
+
+```sh
+E2E_CASES=03,10,15 pnpm test:e2e:attendance
+```
+
+`E2E_CASES` accepts comma-separated two-digit case IDs; omitting it runs all 20.
+Selected cases are recorded in the JSON report.
+
 This still creates fresh data and restarts the application and proxy. Rebuild
 after product changes. Runtime and migration URLs are explicitly overridden for
 the disposable database even if `.env.local` points somewhere else.
@@ -62,6 +71,11 @@ the disposable database even if `.env.local` points somewhere else.
   lost; deliberate recovery without automatic replay.
 - Admin corrections, voids/restores, immutable history, permissions, progress,
   downloaded CSV contents, and printable summaries.
+
+The scanner's decoder is served at `/qr-decoder/zxing_reader.wasm`. Next prepares
+it from the installed scanner dependency when loading its configuration, keeping
+the JavaScript and WASM versions aligned. A fresh browser can scan using only the
+local HTTPS server; no CDN cache or native `BarcodeDetector` is required.
 
 The test runner supplies a temporary CA. Chrome's certificate exception is pinned
 only to the fixture leaf public key, and Node independently verifies the proxy's

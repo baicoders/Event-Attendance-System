@@ -6,6 +6,7 @@ import asyncio
 import csv
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -15,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
-from playwright.async_api import async_playwright, expect
+from playwright.async_api import async_playwright, expect, Error as PlaywrightError
 
 # This suite checks correctness; readiness is not a five-second performance SLO.
 expect.set_options(timeout=30000)
@@ -31,6 +32,9 @@ BROWSERS = []
 DIAGNOSTICS = []
 EVIDENCE = []
 SCENARIO = "setup"
+CASE_IDS = set(os.environ["E2E_CASES"].split(",")) if os.environ.get("E2E_CASES") else set()
+if CASE_IDS - {f"{i:02}" for i in range(1, 21)}:
+    raise ValueError("E2E_CASES must contain comma-separated two-digit case IDs from 01 to 20")
 MOBILE = {"viewport": {"width": 393, "height": 851}, "is_mobile": True, "has_touch": True,
           "device_scale_factor": 1, "user_agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"}
 
@@ -147,6 +151,8 @@ async def set_timeout(page, event, enabled=True):
 
 
 async def scenario(name, function):
+    if CASE_IDS and name[:2] not in CASE_IDS:
+        return
     global SCENARIO
     SCENARIO = name
     start_contexts = len(CONTEXTS)
@@ -188,7 +194,7 @@ def save_report():
     (OUT / "report.json").write_text(json.dumps({
         "status": "infrastructure_failure" if any(item["status"] == "infrastructure_failure" for item in RESULTS) else "running" if not REPORT_COMPLETE else "failed" if any(item["status"] != "passed" for item in RESULTS) else "passed",
         "completed": REPORT_COMPLETE,
-        "environment": {"https": True, "proxy": "isolated Caddy internal CA", "browser": "Chrome, Android emulation + desktop", "rosterSize": 2000, "operators": 5, "physicalDevicesTested": False},
+        "environment": {"https": True, "proxy": "isolated Caddy internal CA", "browser": "Chrome, Android emulation + desktop", "rosterSize": 2000, "operators": 5, "physicalDevicesTested": False, "selectedCases": sorted(CASE_IDS) if CASE_IDS else "all"},
         "results": RESULTS, "diagnostics": DIAGNOSTICS,
     }, indent=2))
 
@@ -267,6 +273,9 @@ async def main():
 
         async def time_out():
             event = F["events"]["manual"]["id"]
+            if not evidence(event, F["students"][0]["id"])["records"]:
+                setup = await page_for(browser, event)
+                await manual(setup, F["students"][0])
             ctx = await context(browser, user="admin", mobile=False)
             admin = await ctx.new_page()
             await set_timeout(admin, event)
@@ -279,6 +288,13 @@ async def main():
             assert rows[F["students"][4]["id"]]["timein"] is None and rows[F["students"][4]["id"]]["timeout"]
             await page.get_by_label("Search name, USN or LRN").fill(F["students"][4]["id"])
             await expect(page.get_by_role("button", name=re.compile("Already timed out for E2E Student0005"))).to_be_disabled()
+            table = page.get_by_role("table")
+            await expect(table.get_by_text(F["students"][0]["id"], exact=True)).to_be_visible()
+            assert await table.get_by_text(F["students"][4]["id"], exact=True).count() == 0, "Time-out-only row was counted as checked in"
+            operator = await page_for(browser, event, operator=True)
+            await operator.get_by_role("button", name="Manual entry", exact=True).click()
+            await operator.get_by_label("Search name, USN or LRN").fill(F["students"][4]["id"])
+            await expect(operator.get_by_role("button", name=re.compile("Already timed out for E2E Student0005"))).to_be_disabled()
 
         videos = {}
         render = await browser.new_page(viewport={"width": 720, "height": 720})
@@ -297,6 +313,8 @@ async def main():
             student_index = {"usn": 0, "lrn": 1, "legacy": 2}.get(key)
             before = evidence(event)
             page = await page_for(camera_browser, event, operator=True, camera=True, no_internet=no_internet)
+            decoder_responses = []
+            page.on("response", lambda response: decoder_responses.append(response) if "/qr-decoder/" in response.url else None)
             DIAGNOSTICS.append({"scenario": SCENARIO, "type": "camera_capabilities", "nativeBarcodeDetector": await page.evaluate("typeof BarcodeDetector !== \"undefined\"")})
             assert await page.evaluate("!!navigator.mediaDevices?.getUserMedia"), "Camera API unavailable over fixture HTTPS"
             await page.get_by_role("button", name="Open Camera", exact=True).click()
@@ -312,6 +330,12 @@ async def main():
                 await page.get_by_role("button", name="Open Camera", exact=True).click()
                 await expect(page.get_by_text("Time-in already recorded", exact=True).first).to_be_visible(timeout=25000)
                 assert evidence(event, F["students"][student_index]["id"])["records"] == first["records"], "Repeated QR overwrote a timestamp"
+                if no_internet:
+                    assert decoder_responses, "Scanner did not load its decoder from the laptop"
+                    assert all(response.ok for response in decoder_responses)
+                    wasm = next(response for response in decoder_responses if response.url.endswith("zxing_reader.wasm"))
+                    assert "application/wasm" in wasm.headers.get("content-type", "")
+                    assert not [item for item in DIAGNOSTICS if item["scenario"] == SCENARIO and item["type"] == "external_request"], "Offline scanning attempted an external request"
 
         async def no_internet():
             ctx = await context(browser, no_internet=True, authenticated=False)
@@ -410,7 +434,12 @@ async def main():
                 response = await route.fetch()
                 body = await response.json()
                 body["data"]["isTimeout"] = False
-                await route.fulfill(response=response, json=body)
+                try:
+                    await route.fulfill(response=response, json=body)
+                except PlaywrightError as error:
+                    # A newer mode refetch can cancel this deliberately stale poll.
+                    if "Route is already handled" not in str(error):
+                        raise
             await phone.route(f"**/api/events/{event}", stale)
             await phone.get_by_role("button", name="Manual entry", exact=True).click()
             student = F["students"][8]
@@ -422,8 +451,15 @@ async def main():
             await expect(phone.get_by_label("Manual attendance", exact=True).get_by_text("mode changed", exact=True)).to_be_visible()
             assert evidence(event)["records"] == [], "Stale time-in request wrote the opposite mode"
             await phone.unroute(f"**/api/events/{event}", stale)
-            await phone.reload(wait_until="domcontentloaded", timeout=60000)
+            await phone.get_by_label("Manual attendance", exact=True).get_by_role("button", name="Acknowledge result", exact=True).click()
+            await phone.get_by_role("button", name="Return to scanner", exact=True).click()
+            await phone.get_by_role("button", name="Review mode and continue", exact=True).click()
             await expect(phone.get_by_text("TIME OUT", exact=True)).to_be_visible()
+            # Observing a different mode may itself require acknowledging the fresh mode.
+            review = phone.get_by_role("button", name="Review mode and continue", exact=True)
+            if await review.is_visible():
+                await review.click()
+            await expect(phone.get_by_role("button", name="Open Camera", exact=True)).to_be_enabled()
             await manual(phone, student, mode="out", operator=True)
             row = evidence(event)["records"][0]
             assert row["timeout"] and row["timein"] is None
@@ -446,10 +482,37 @@ async def main():
             changed = (datetime.fromisoformat(value) - timedelta(minutes=1)).isoformat(timespec="seconds")
             await sheet.get_by_label("Time in", exact=True).fill(changed)
             await sheet.get_by_role("button", name="Review and correct", exact=True).click()
+            await page.get_by_role("dialog", name="Correct attendance?", exact=True).get_by_role("button", name="Cancel", exact=True).click()
+            await expect(sheet.get_by_role("button", name="Review and correct", exact=True)).to_be_enabled()
+            assert len(evidence(event)["changes"]) == 1, "Canceling a correction changed attendance"
+            history_started = asyncio.Event()
+            release_history = asyncio.Event()
+            async def hold_history(route):
+                history_started.set()
+                await release_history.wait()
+                if not route.request.failure:
+                    try:
+                        await route.continue_()
+                    except PlaywrightError as error:
+                        # React Query cancels the invalidation read when explicitly refetching.
+                        if "Route is already handled" not in str(error):
+                            raise
+            await page.route("**/attendance-history?*", hold_history)
+            await sheet.get_by_role("button", name="Review and correct", exact=True).click()
             async with page.expect_response(lambda response: "/attendance-corrections" in response.url and response.request.method == "POST") as changed_response:
                 await page.get_by_role("dialog", name="Correct attendance?", exact=True).get_by_role("button", name="Confirm", exact=True).click()
             assert (await changed_response.value).ok
+            try:
+                await asyncio.wait_for(history_started.wait(), timeout=30)
+                # A committed save still owns the submission guard until evidence refreshes.
+                # Enabled follow-up actions must not silently discard the next click.
+                await expect(sheet.get_by_role("button", name="Void", exact=True)).to_be_disabled(timeout=5000)
+                assert len(evidence(event)["changes"]) == 2
+            finally:
+                release_history.set()
+                await page.unroute("**/attendance-history?*", hold_history)
             await expect(sheet.get_by_text("Attendance change saved.", exact=True)).to_be_visible()
+            await expect(sheet.get_by_role("button", name="Void", exact=True)).to_be_enabled()
             corrected = evidence(event)["records"][0]
             assert corrected["timein"] != original["timein"] and corrected["revision"] == original["revision"] + 1
             for action in ["Void", "Restore"]:

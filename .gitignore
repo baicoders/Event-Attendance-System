@@ -56,3 +56,6 @@ next-env.d.ts
 /.superpowers/
 __pycache__/
 /.venv-attendance/
+
+# Copied from the installed scanner dependency when Next loads its configuration.
+/public/qr-decoder/

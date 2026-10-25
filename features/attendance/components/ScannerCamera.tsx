@@ -7,7 +7,11 @@ import {
   centerText,
   IDetectedBarcode,
   Scanner as QRScanner,
+  setZXingModuleOverrides,
 } from "@yudiel/react-qr-scanner";
+
+// Configure before the scanner creates its decoder; never depend on an external CDN.
+setZXingModuleOverrides({ locateFile: (path: string) => `/qr-decoder/${path}` });
 
 type ScannerCameraProps = {
   onRead: (id: string) => void;

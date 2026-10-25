@@ -56,7 +56,7 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
   const refetchRoster = roster.refetch;
   const index = useMemo(() => indexManualRoster(roster.data ?? []), [roster.data]);
   const matches = useMemo(() => query.trim().length >= 2 ? searchManualRoster(index, query) : [], [index, query]);
-  const eventRecords = useAllRecordsFromEvent(active ? eventId : undefined, { live: active });
+  const eventRecords = useAllRecordsFromEvent(active ? eventId : undefined, { live: active, includeWithoutTimeIn: true });
   const recordsByStudent = useMemo(() => new Map((eventRecords.data ?? []).map((record) => [record.studentId, record])), [eventRecords.data]);
   const selectedId = active && displayedStudent && eventId ? displayedStudent.id : undefined;
   const recordQuery = useRecordOfStudentInEvent(eventId, selectedId, { live: active, active });

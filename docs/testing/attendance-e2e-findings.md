@@ -5,7 +5,26 @@ Caddy HTTPS, mobile Chrome emulation for attendance, and desktop administration.
 The fixture contains 2,000 synthetic students and five separate operator accounts.
 No deployed-site data or real student attendance was changed.
 
-## Confirmed findings
+## Follow-up fixes
+
+The three reported issues have been addressed:
+
+- Manual-entry status now reads all stored eligible records, including time-out-only
+  evidence, using `includeWithoutTimeIn=true`. Those records still do not count as
+  checked in. The status query has a separate cache key under the existing
+  invalidation prefix, without polling an entire absent roster.
+- The correction sheet keeps controls disabled through confirmation, save, and
+  evidence refresh, including exact-command retries. The saved message appears
+  after that refresh. A delayed-history browser regression reproduces the former
+  race deterministically, and cancellation is checked for accidental writes/locks.
+- The decoder is copied from the scanner's exact installed dependency and served
+  locally. The fresh-browser QR regression requires a successful local WASM
+  response and zero external requests while recording and repeating a real scan.
+
+All three targeted browser cases and the full 20-scenario suite passed. Follow-up
+verification is recorded below. Original evidence is retained as the baseline.
+
+## Original confirmed findings
 
 ### 1. A time-out-only student still offers “Record time out”
 
@@ -23,13 +42,14 @@ The database has the correct time-out and an empty time-in. The row-status looku
 in `ManualAttendanceSection` uses the present-only event-records query, which omits
 records without time-in. Consequently it interprets this existing record as absent.
 This is misleading UI; the server's write-once guards protect the saved timestamp.
-The regression remains failing. Product behavior was not changed.
+The original regression is retained and now checks both the normal and focused
+operator routes, as well as exclusion from the checked-in table.
 
 ### 2. Cold QR fallback decoding requires an external CDN
 
 **Regression:** `10-no-internet-camera`.
 
-Reproduce in a fresh browser without native `BarcodeDetector` support:
+Original reproduction in a fresh browser:
 
 1. Keep access to the local Caddy HTTPS application and local database.
 2. Block external internet access and open the scanner.
@@ -44,11 +64,11 @@ The same QR images decode and save successfully with that request permitted.
 Fresh login and manual attendance also work with external requests blocked.
 The blocked WASM fetch and browser error are recorded in the diagnostics.
 
-This finding applies to the fallback decoder exercised by Linux Chrome under
-Android emulation. It does **not** prove every physical Android phone fails:
-phones may provide native decoding or already have the WASM cached. A cold-device
-check on the actual school Wi-Fi remains necessary. This is separate from Caddy
-certificate trust; the automated camera runs use verified fixture HTTPS.
+The initial run used Linux Chrome under Android emulation. Follow-up source
+inspection found that installed `@yudiel/react-qr-scanner` 2.4.1 imports the
+`barcode-detector` ponyfill directly; browser-native detection alone does not
+bypass that decoder in this version. The follow-up fix serves the same matching
+WASM from the laptop, removing the runtime CDN requirement.
 
 ### 3. Immediate follow-up admin action can be silently ignored
 
@@ -76,10 +96,12 @@ This is a UI timing issue, not a lost correction or damaged record. The first
 correction remains saved. Reproduce more readily by slowing the history read in
 browser developer tools and making the next action promptly after the saved
 message. The normal correct/void/restore sequence, including before/after audit
-snapshots, passed in run 1. The failing assertion is retained without adding an
-artificial wait that would conceal the user-visible race.
+snapshots, passed in run 1. The regression now deliberately holds the history read and checks that
+follow-up controls remain disabled until evidence is ready.
 
 ## Verification record
+
+### Original baseline
 
 Tested application baseline: `1dcd909a4a3f` (product source unchanged).
 Failed regressions are deliberately retained and the command returns exit status 1.
@@ -112,6 +134,29 @@ Supporting checks already completed:
 A fresh reviewer checked the harness. Follow-up changes strengthened crash and
 cleanup reporting, CSV timestamps and printed totals, no-write details viewing,
 and before/after audit-history assertions. These changes affect tests only.
+
+### Follow-up verification
+
+| Check | Result | Local evidence |
+|---|---|---|
+| Targeted cases 03, 10, 15 | 3/3 passed | `test-results/attendance-e2e/2026-10-25T04-19-17-753Z-305243/` |
+| Complete attendance flow | 20/20 passed, exit 0 | `test-results/attendance-e2e/2026-10-25T04-31-34-216Z-328292/` |
+| External browser requests in the complete run | 0 | Complete run `report.json` diagnostics |
+| Existing attendance unit/database checks | 70 passed | Follow-up supporting logs |
+| Fixture, reporting, cleanup and decoder checks | 6 passed | Complete run + decoder asset SHA/compile check |
+| Production build, type-check, changed-file ESLint | Passed | Follow-up supporting logs |
+| Stored-record API view | Passed | `includeWithoutTimeIn` rows, absent status, and conflicting flags |
+
+The full run verifies the physical-operator workflow through simulated cameras
+and mobile browser contexts. The mode-conflict regression now recovers through
+“Acknowledge result” and “Review mode and continue,” and all actual writes are
+still checked against independent PostgreSQL evidence.
+
+An independent review found no introduced blockers. Two pre-existing correction
+edge cases were noted outside these reproduced fixes: a failed post-save history
+read can leave cached evidence with optimistic success wording, and switching
+students while an earlier save completes can reuse the sheet's local state.
+These are deferred review observations, not claims covered by this verification.
 
 ## What remains a physical-device check
 
