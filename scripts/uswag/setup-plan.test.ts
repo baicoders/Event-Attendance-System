@@ -50,3 +50,9 @@ test('draft creation reports extra members in reused groups and reuses its exact
  state.events=[{id:'draft',title:'Officer gathering',category:'CUSTOM',status:'DRAFT',groupIds:['ssc'],start:options.create.start,end:options.create.end,location:'Hall',createdById:'owner'}];
  assert.equal(buildSetupPlan(input,state,options).event.action,'reuse');
 });
+test('bootstrap checks the final seven-group audience before approving an existing partial draft',()=>{
+ const {input,state}=fixture();state.groups=[{id:'ssc',slug:'custom-ssc-officers',name:'SSC Officers',category:'CUSTOM'},{id:'sslg',slug:'custom-sslg-officers',name:'SSLG Officers',category:'CUSTOM'}];
+ state.memberships=[{studentId:'extra',groupId:'sslg',position:'Existing'}];
+ state.events=[{id:'draft',title:'USWAG 2026',category:'CUSTOM',status:'DRAFT',groupIds:['ssc'],start:'2026-10-25T16:00:00Z',end:'2026-10-26T16:00:00Z',location:null,createdById:null,recordCount:0}];
+ const p=buildSetupPlan(input,state,{},true);assert.ok(p.blockers.includes('BASELINE_EVENT_EXTRA_MEMBERS'));assert.equal(p.event.extraStudents,1);assert.equal(p.event.readiness,'blocked');
+});

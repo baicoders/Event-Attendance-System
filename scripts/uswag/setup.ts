@@ -46,7 +46,7 @@ async function main(){
  if(process.argv.includes('--help')){console.log(USAGE);return;}
  const args=process.argv.slice(2);
  const result=args.length===0||args.length===1&&args[0]==='--dry-run'?await runApprovedLocalSetup(args[0]==='--dry-run'):await executeSetup(parse(args));
- console.log(JSON.stringify({mode:result.mode,outcome:result.outcome,counts:result.counts,groupCounts:result.groupCounts,eventReadiness:result.event.readiness,fingerprint:result.fingerprint,report:result.reportPath},null,2));
+ console.log(JSON.stringify({mode:result.mode,outcome:result.outcome,counts:result.counts,groupCounts:result.groupCounts,eventReadiness:result.event.readiness,event:result.baseline?.event,accounts:result.baseline?.users.map(({email,role,action})=>({email,role,action})),fingerprint:result.fingerprint,report:result.reportPath},null,2));
  if(result.outcome==='blocked')process.exitCode=2;
 }
 main().catch(error=>{
