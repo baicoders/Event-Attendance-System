@@ -122,15 +122,15 @@ export const useUpdateAttendanceRecord = (eventId: string) => {
  */
 export const useAllRecordsFromEvent = (
   eventId?: string,
-  { live = false, includeAbsent = false, onlyNeedsReview = false }: { live?: boolean; includeAbsent?: boolean; onlyNeedsReview?: boolean } = {},
+  { live = false, includeAbsent = false, onlyNeedsReview = false, includeWithoutTimeIn = false }: { live?: boolean; includeAbsent?: boolean; onlyNeedsReview?: boolean; includeWithoutTimeIn?: boolean } = {},
 ) => {
   return useQuery({
-    queryKey: queryKeys.records.fromEvent(eventId!, includeAbsent, onlyNeedsReview),
+    queryKey: queryKeys.records.fromEvent(eventId!, includeAbsent, onlyNeedsReview, includeWithoutTimeIn),
     enabled: !!eventId,
     queryFn: async () => {
       if (!eventId) return null;
 
-      const suffix = includeAbsent ? "?includeAbsent=true" : onlyNeedsReview ? "?onlyNeedsReview=true" : "";
+      const suffix = includeAbsent ? "?includeAbsent=true" : onlyNeedsReview ? "?onlyNeedsReview=true" : includeWithoutTimeIn ? "?includeWithoutTimeIn=true" : "";
       return fetchApi<StudentAttendanceRecord[]>(
         `/api/events/${eventId}/records${suffix}`,
       );

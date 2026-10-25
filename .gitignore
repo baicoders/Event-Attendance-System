@@ -50,3 +50,12 @@ next-env.d.ts
 # Backup runner storage (catalog, spool, locks, artifacts, manifests).
 # Private per-deployment data — never committed.
 /backups/
+
+# Browser-test artifacts and local execution notes.
+/test-results/
+/.superpowers/
+__pycache__/
+/.venv-attendance/
+
+# Copied from the installed scanner dependency when Next loads its configuration.
+/public/qr-decoder/

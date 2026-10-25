@@ -36,7 +36,8 @@
     "postinstall": "prisma generate",
     "test:student-import": "node --import tsx --test features/students/import/csv.test.ts features/students/import/classify.test.ts features/students/import/upsert.test.ts features/students/import/contract.test.ts features/students/import/receiptContract.test.ts features/students/import/commandHash.test.ts features/students/import/issueReport.test.ts features/students/import/progressContract.test.ts features/students/import/parseSource.test.ts features/students/import/xlsx.test.ts globals/utils/pgLocks.test.ts && node --conditions=react-server --import tsx --test features/students/import/token.test.ts features/students/import/upsert.server.test.ts features/students/import/batching.server.test.ts && node --import tsx scripts/test-student-import.mjs",
     "test:student-import-durability": "node --import tsx scripts/test-student-import-durability.mjs",
-    "benchmark:import-scale": "node --conditions=react-server --import tsx scripts/benchmark/student-import-scale.ts"
+    "benchmark:import-scale": "node --conditions=react-server --import tsx scripts/benchmark/student-import-scale.ts",
+    "test:e2e:attendance": "node --test scripts/prepare-qr-decoder.test.mjs scripts/attendance-e2e/*.test.mjs && node scripts/test-attendance-e2e.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",

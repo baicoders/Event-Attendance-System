@@ -505,3 +505,27 @@ See the main project README for the required environment variables.
 ## Final Rehearsal
 
 Perform the complete workflow using the actual server laptop, Wi-Fi network, and staff devices that will be used during the event.
+
+
+# Offline QR Scanning
+
+Prepare dependencies and build the app before the event. Dependency installation
+and the Google Fonts build step need internet; attendance operation does not.
+Next copies the scanner's matching decoder from `node_modules` into
+`public/qr-decoder/` when loading its configuration. The generated files are not
+committed, and no runtime download from a public CDN is needed.
+
+Keep the generated public assets with the production app. A request to
+`https://<server-ip>/qr-decoder/zxing_reader.wasm` should return HTTP 200 with
+`application/wasm`. Caddy proxies this file along with the rest of the site.
+
+Use an updated **Chrome for Android** for attendance. Samsung Internet for Android
+and Opera for Android also provide native barcode detection. Chrome's native API
+is platform-specific: desktop Linux/Windows do not provide it by default. The app
+now serves its own decoder, so it does not depend on native detection being present.
+See [MDN's compatibility data](https://github.com/mdn/browser-compat-data/blob/main/api/BarcodeDetector.json).
+
+Before the event, turn off cellular data and outside internet while keeping the
+phone connected to school Wi-Fi. Open a fresh browser session at the trusted
+Caddy HTTPS address and scan a printed card. This tests certificate trust, the
+physical camera, and the actual school network together.

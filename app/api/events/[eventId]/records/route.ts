@@ -14,6 +14,7 @@ const sectionOf = (groups: Group[]): Group | null =>
 // Fetch attendance for an event.
 // - default: records with a time-in, for the live table.
 // - ?onlyNeedsReview=true: eligible records missing a time-in, for recovery.
+// - ?includeWithoutTimeIn=true: all stored eligible records, for entry status.
 // - ?includeAbsent=true: every currently-eligible student with present/absent
 //   status, so a report's rows and its present/absent totals always agree
 //   (both derived from the same current-eligibility set).
@@ -40,8 +41,10 @@ export async function GET(
       new URL(req.url).searchParams.get("includeAbsent") === "true";
     const onlyNeedsReview =
       new URL(req.url).searchParams.get("onlyNeedsReview") === "true";
-    if (includeAbsent && onlyNeedsReview) {
-      return NextResponse.json(err("Choose either the eligible roster or records needing review."), { status: 400 });
+    const includeWithoutTimeIn =
+      new URL(req.url).searchParams.get("includeWithoutTimeIn") === "true";
+    if ([includeAbsent, onlyNeedsReview, includeWithoutTimeIn].filter(Boolean).length > 1) {
+      return NextResponse.json(err("Choose one attendance record view."), { status: 400 });
     }
 
     // Scope records to currently-eligible students so the present rows match
@@ -50,7 +53,7 @@ export async function GET(
     // drops from both, keeping counts and visible rows consistent.
     const recordsWithStudent = await prisma.record.findMany({
       where: { eventId, student: buildEventStudentFilter(event),
-        ...(onlyNeedsReview ? { timein: null } : !includeAbsent ? { timein: { not: null } } : {}) },
+        ...(onlyNeedsReview ? { timein: null } : !includeAbsent && !includeWithoutTimeIn ? { timein: { not: null } } : {}) },
       include: { student: { include: { groups: true } } },
       orderBy: { createdAt: "desc" },
     });

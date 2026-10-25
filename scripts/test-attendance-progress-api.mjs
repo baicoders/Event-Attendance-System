@@ -71,6 +71,16 @@ try {
   assert.deepEqual(stats.body.data, { eligible: 3, present: 1, absent: 2 });
   const liveRows = await request(`/api/events/${event.id}/records`, viewerCookie);
   assert.deepEqual(liveRows.body.data.map((row) => row.studentId), ["S1"]);
+  const storedRows = await request(`/api/events/${event.id}/records?includeWithoutTimeIn=true`, viewerCookie);
+  assert.equal(storedRows.status, 200);
+  assert.deepEqual(storedRows.body.data.map((row) => row.studentId).sort(), ["S1", "S2"]);
+  const timeoutOnly = storedRows.body.data.find((row) => row.studentId === "S2");
+  assert.equal(timeoutOnly.timein, null);
+  assert.ok(timeoutOnly.timeout);
+  assert.equal(timeoutOnly.status, "absent");
+  for (const flags of ["includeWithoutTimeIn=true&includeAbsent=true", "includeWithoutTimeIn=true&onlyNeedsReview=true"]) {
+    assert.equal((await request(`/api/events/${event.id}/records?${flags}`, viewerCookie)).status, 400);
+  }
   const reviewRows = await request(`/api/events/${event.id}/records?onlyNeedsReview=true`, viewerCookie);
   assert.deepEqual(reviewRows.body.data.map((row) => row.studentId), ["S2"]);
   assert.equal(reviewRows.body.data[0].status, "absent");

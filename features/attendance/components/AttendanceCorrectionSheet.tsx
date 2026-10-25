@@ -28,6 +28,7 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
   const [older, setOlder] = useState<HistoryChange[]>([]);
   const [nextBeforeId, setNextBeforeId] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const initializedFor = useRef<string | null>(null);
   const submitting = useRef(false);
 
@@ -60,7 +61,6 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
     try {
       const receipt = await correction.mutateAsync(command);
       setUnknownCommand(null);
-      setMessage(receipt.replayed ? "This command was already saved. Current evidence has been refreshed." : "Attendance change saved.");
       setAction("HISTORY");
       setReason("");
       setOlder([]);
@@ -70,6 +70,7 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
         setTimeoutValue(toManilaInput(fresh.data.record?.timeout ?? null));
       }
       setNextBeforeId(fresh.data?.nextBeforeId ?? null);
+      setMessage(receipt.replayed ? "This command was already saved. Current evidence has been refreshed." : "Attendance change saved.");
     } catch (error) {
       if (error instanceof ApiError) {
         setUnknownCommand(null);
@@ -83,6 +84,14 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
         setMessage("Outcome unknown. Retry this exact command to learn whether it saved. Keep this page open if you want to retry.");
       }
     }
+  };
+
+  const performSubmission = async (operation: () => Promise<void>) => {
+    if (submitting.current) return;
+    submitting.current = true;
+    setIsSubmitting(true);
+    try { await operation(); }
+    finally { submitting.current = false; setIsSubmitting(false); }
   };
 
   const submit = async () => {
@@ -104,11 +113,11 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
       if (record || latest?.action !== "VOID") return;
       command = { commandId: crypto.randomUUID(), action, studentId, sourceChangeId: latest.id, reason: reason.trim() };
     } else return;
-    submitting.current = true;
-    const accepted = await confirm({ title: `${action[0]}${action.slice(1).toLowerCase()} attendance?`,
-      description: `This changes the official current evidence for ${history.data?.studentLabel ?? studentId}. The previous values will remain in history.` });
-    try { if (accepted) await send(command); }
-    finally { submitting.current = false; }
+    await performSubmission(async () => {
+      const accepted = await confirm({ title: `${action[0]}${action.slice(1).toLowerCase()} attendance?`,
+        description: `This changes the official current evidence for ${history.data?.studentLabel ?? studentId}. The previous values will remain in history.` });
+      if (accepted) await send(command);
+    });
   };
 
   const loadOlder = async () => {
@@ -131,13 +140,14 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
         {history.isLoading && <p role="status">Loading attendance evidence…</p>}
         {history.isError && <p role="alert">Could not load attendance evidence. <Button variant="outline" onClick={() => void history.refetch()}>Retry</Button></p>}
+        {isSubmitting && <p role="status">Updating attendance evidence…</p>}
         {history.data && <>
           {!history.data.inCurrentAudience && <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">This student is outside the event’s current audience. Existing evidence may still be corrected or voided; restoration requires current eligibility.</p>}
           <div className="flex flex-wrap gap-2">
-            <Button disabled={!!unknownCommand} variant={action === "HISTORY" ? "default" : "outline"} onClick={() => setAction("HISTORY")}>History</Button>
-            {record && <Button disabled={!!unknownCommand} variant={action === "CORRECT" ? "default" : "outline"} onClick={() => setAction("CORRECT")}>Correct</Button>}
-            {record && <Button disabled={!!unknownCommand} variant={action === "VOID" ? "default" : "outline"} onClick={() => setAction("VOID")}>Void</Button>}
-            {!record && latest?.action === "VOID" && <Button disabled={!!unknownCommand} variant={action === "RESTORE" ? "default" : "outline"} onClick={() => setAction("RESTORE")}>Restore</Button>}
+            <Button disabled={isSubmitting || !!unknownCommand} variant={action === "HISTORY" ? "default" : "outline"} onClick={() => setAction("HISTORY")}>History</Button>
+            {record && <Button disabled={isSubmitting || !!unknownCommand} variant={action === "CORRECT" ? "default" : "outline"} onClick={() => setAction("CORRECT")}>Correct</Button>}
+            {record && <Button disabled={isSubmitting || !!unknownCommand} variant={action === "VOID" ? "default" : "outline"} onClick={() => setAction("VOID")}>Void</Button>}
+            {!record && latest?.action === "VOID" && <Button disabled={isSubmitting || !!unknownCommand} variant={action === "RESTORE" ? "default" : "outline"} onClick={() => setAction("RESTORE")}>Restore</Button>}
           </div>
           {message && <p role="alert" className="rounded-md border border-slate-300 bg-slate-50 p-3 text-sm">{message}</p>}
           {action === "HISTORY" && <section aria-label="Attendance change history" className="space-y-3">
@@ -148,7 +158,7 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
               <p className="mt-1">In: {displayTime(change.before?.timein ?? null)} → {displayTime(change.after?.timein ?? null)}</p>
               <p>Out: {displayTime(change.before?.timeout ?? null)} → {displayTime(change.after?.timeout ?? null)}</p>
             </article>)}
-            {nextBeforeId && <Button variant="outline" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Loading…" : "Load earlier changes"}</Button>}
+            {nextBeforeId && <Button variant="outline" disabled={loadingOlder || isSubmitting} onClick={() => void loadOlder()}>{loadingOlder ? "Loading…" : "Load earlier changes"}</Button>}
             <p className="text-xs text-slate-500">Earlier history, if any, was not recorded before history tracking began.</p>
           </section>}
           {action !== "HISTORY" && <div className="space-y-4">
@@ -156,24 +166,24 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
             {action === "CORRECT" && <div className="grid gap-4 sm:grid-cols-2">
               <div className="text-sm"><p className="font-medium">Current</p><p>Time in: {displayTime(record?.timein ?? null)}</p><p>Time out: {displayTime(record?.timeout ?? null)}</p></div>
               <div className="space-y-3"><p className="text-sm font-medium">Proposed ({ZONE})</p>
-                <label className="block text-sm">Time in<input disabled={!!unknownCommand} className="mt-1 w-full rounded-md border p-2" type="datetime-local" step="1" value={timein} onChange={(event) => setField("timein", event.target.value)} /></label>
-                <label className="block text-sm">Time out<input disabled={!!unknownCommand} className="mt-1 w-full rounded-md border p-2" type="datetime-local" step="1" value={timeout} onChange={(event) => setField("timeout", event.target.value)} /></label>
-                <Button disabled={!!unknownCommand} type="button" variant="outline" onClick={() => setField("timein", "")}>Clear time-in</Button>
-                <Button disabled={!!unknownCommand} type="button" variant="outline" onClick={() => setField("timeout", "")}>Clear accidental time-out</Button>
+                <label className="block text-sm">Time in<input disabled={isSubmitting || !!unknownCommand} className="mt-1 w-full rounded-md border p-2" type="datetime-local" step="1" value={timein} onChange={(event) => setField("timein", event.target.value)} /></label>
+                <label className="block text-sm">Time out<input disabled={isSubmitting || !!unknownCommand} className="mt-1 w-full rounded-md border p-2" type="datetime-local" step="1" value={timeout} onChange={(event) => setField("timeout", event.target.value)} /></label>
+                <Button disabled={isSubmitting || !!unknownCommand} type="button" variant="outline" onClick={() => setField("timein", "")}>Clear time-in</Button>
+                <Button disabled={isSubmitting || !!unknownCommand} type="button" variant="outline" onClick={() => setField("timeout", "")}>Clear accidental time-out</Button>
               </div>
             </div>}
             {action === "CORRECT" && <p className="text-sm">Proposed result: {timein ? (timeout ? "Present · time-out recorded" : "Present · no time-out recorded") : timeout ? "No time-in · time-out recorded" : "At least one time required"}.</p>}
             {action === "CORRECT" && outsideSchedule && <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">A proposed time is outside the event schedule. Review it before saving.</p>}
             {action === "VOID" && <p className="text-sm">Voiding removes current evidence. The before image and reason remain in history. A later scan can create new attendance.</p>}
             {action === "RESTORE" && <p className="text-sm">Restoration creates a new record from the latest void, if no newer evidence exists and the student is currently eligible.</p>}
-            <label className="block text-sm font-medium">Reason<textarea disabled={!!unknownCommand} className="mt-1 min-h-24 w-full rounded-md border p-2 font-normal" maxLength={1000} value={reason} onChange={(event) => setField("reason", event.target.value)} placeholder="Explain the attendance correction without sensitive personal details" /></label>
+            <label className="block text-sm font-medium">Reason<textarea disabled={isSubmitting || !!unknownCommand} className="mt-1 min-h-24 w-full rounded-md border p-2 font-normal" maxLength={1000} value={reason} onChange={(event) => setField("reason", event.target.value)} placeholder="Explain the attendance correction without sensitive personal details" /></label>
             <p className="text-xs text-slate-500">Another device may have changed this evidence. Saving requires a final confirmation.</p>
           </div>}
         </>}
       </div>
       {history.data && action !== "HISTORY" && <div className="flex flex-wrap gap-2 border-t bg-white p-4">
-        <Button disabled={correction.isPending || !!unknownCommand} onClick={() => void submit()}>{correction.isPending ? "Saving…" : `Review and ${action.toLowerCase()}`}</Button>
-        {unknownCommand && <Button variant="outline" disabled={correction.isPending} onClick={() => void send(unknownCommand)}>Retry exact command</Button>}
+        <Button disabled={isSubmitting || correction.isPending || !!unknownCommand} onClick={() => void submit()}>{isSubmitting ? "Updating…" : `Review and ${action.toLowerCase()}`}</Button>
+        {unknownCommand && <Button variant="outline" disabled={isSubmitting || correction.isPending} onClick={() => void performSubmission(() => send(unknownCommand))}>Retry exact command</Button>}
       </div>}
     </SheetContent>
   </Sheet>;

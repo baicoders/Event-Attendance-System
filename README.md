@@ -78,6 +78,11 @@ Plus sample students, events, and attendance records.
 | `pnpm db:studio` | Browse the database |
 | `pnpm account:recover -- --email <email>` | Local no-admin password recovery (interactive, host only) |
 | `pnpm test:account-recovery` | Credential-version unit tests + disposable HTTP/concurrency fixture |
+| `pnpm test:e2e:attendance` | Browser attendance flow with disposable PostgreSQL and Caddy HTTPS |
+
+See [attendance E2E setup and coverage](docs/testing/attendance-e2e.md) and
+[the attendance test findings](docs/testing/attendance-e2e-findings.md) for reusable
+mobile/desktop checks and the remaining physical Android checklist.
 
 ## Deployment notes
 

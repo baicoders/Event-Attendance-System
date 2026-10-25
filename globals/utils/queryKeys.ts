@@ -45,10 +45,11 @@ export const queryKeys = {
   records: {
     all: () => ["records"] as const,
     withId: (id: string) => ["records", "byId", id] as const,
-    fromEvent: (eventId: string, includeAbsent = false, onlyNeedsReview = false) =>
-      ["records", "fromEvent", eventId, includeAbsent, onlyNeedsReview] as const,
-    // Prefix (omits the includeAbsent flag) so invalidation covers BOTH the
-    // present-only live table and the includeAbsent report variants.
+    fromEvent: (eventId: string, includeAbsent = false, onlyNeedsReview = false, includeWithoutTimeIn = false) =>
+      includeWithoutTimeIn
+        ? ["records", "fromEvent", eventId, includeAbsent, onlyNeedsReview, true] as const
+        : ["records", "fromEvent", eventId, includeAbsent, onlyNeedsReview] as const,
+    // Invalidate every view, including the manual-entry timestamp lookup.
     fromEventPrefix: (eventId: string) =>
       ["records", "fromEvent", eventId] as const,
     fromStudent: (studentId: string) =>

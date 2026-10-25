@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import { prepareQrDecoder } from "./scripts/prepare-qr-decoder.mjs";
+
+// Ship the scanner's matching decoder with the site, including LAN-only installs.
+prepareQrDecoder();
 
 const nextConfig: NextConfig = {
   async headers() {
