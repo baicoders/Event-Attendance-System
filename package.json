@@ -27,6 +27,8 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "uswag:setup": "node --import tsx scripts/uswag/setup.ts",
+    "test:uswag": "node --import tsx --test scripts/uswag/*.test.ts && node --import tsx --test scripts/test-uswag-setup.mjs",
     "test:db-config": "node --import tsx --test globals/libs/dbConfig.test.ts",
     "test:db-tls": "node --import tsx --test scripts/test-database-tls.mjs",
     "benchmark:roster": "tsx scripts/benchmark/generate-roster.ts",

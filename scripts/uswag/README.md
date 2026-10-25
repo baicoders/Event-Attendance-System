@@ -1,5 +1,10 @@
 # USWAG workbook reconciliation
 
+For the approved 94-student combined setup, use the single
+[`pnpm uswag:setup` workflow](../../docs/uswag-setup.md). It handles academic groups,
+houses, students and officer assignments together. The older script documented
+below is a legacy name-based officer reconciliation tool, not that setup workflow.
+
 This CLI reads `USWAG ATTENDANCE.xlsx` (`ATTENDANCE` sheet), validates the seven
 expected group counts (95 participants), and reconciles names against existing
 students. It needs Node with the repository's installed dependencies and Python 3;
