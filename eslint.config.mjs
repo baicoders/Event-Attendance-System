@@ -14,6 +14,8 @@ const eslintConfig = [
   {
     ignores: [
       ".next/**",
+      "test-results/**",
+      ".superpowers/**",
       "node_modules/**",
       "graphify-out/**",
       "prisma/migrations/**",

@@ -1,5 +1,10 @@
 # Bulk import benchmark & test fixtures
 
+For five-phone event load, use `pnpm benchmark:attendance` instead. See
+[the event stress-test and physical-phone runbook](../../docs/testing/attendance-stress-test.md).
+The older `benchmark:operator` below is a small direct-database probe, not an
+end-to-end capacity test, and must never target an event database.
+
 Fixtures and harnesses for verifying that the student bulk import handles a full
 2,000+ student roster reliably (issue
 [#38](https://github.com/mjfelecio/Event-Attendance-System/issues/38)).

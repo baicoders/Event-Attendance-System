@@ -125,12 +125,17 @@ async def click_record(page, button, student):
     assert body["data"]["studentId"] == student["id"]
 
 
+def display_id(student):
+    """Visible identifier; network and database assertions retain canonical IDs."""
+    return (student.get("usn") or "").strip() or (student.get("lrn") or "").strip() or "—"
+
+
 async def manual(page, student, query=None, mode="in", operator=False):
     if operator and not await page.get_by_label("Search name, USN or LRN").is_visible():
         await page.get_by_role("button", name="Manual entry", exact=True).click()
     search = page.get_by_label("Search name, USN or LRN")
     await search.fill(query or student["id"])
-    button = page.get_by_role("button", name=f"Record time {mode} for E2E {student['lastName']}, {student['id']}", exact=True)
+    button = page.get_by_role("button", name=f"Record time {mode} for E2E {student['lastName']}, {display_id(student)}", exact=True)
     await expect(button).to_be_enabled()
     await click_record(page, button, student)
     await expect(page.get_by_text(f"Time-{mode} recorded", exact=True).first).to_be_visible()
@@ -289,8 +294,8 @@ async def main():
             await page.get_by_label("Search name, USN or LRN").fill(F["students"][4]["id"])
             await expect(page.get_by_role("button", name=re.compile("Already timed out for E2E Student0005"))).to_be_disabled()
             table = page.get_by_role("table")
-            await expect(table.get_by_text(F["students"][0]["id"], exact=True)).to_be_visible()
-            assert await table.get_by_text(F["students"][4]["id"], exact=True).count() == 0, "Time-out-only row was counted as checked in"
+            await expect(table.get_by_text(display_id(F["students"][0]), exact=True)).to_be_visible()
+            assert await table.get_by_text(display_id(F["students"][4]), exact=True).count() == 0, "Time-out-only row was counted as checked in"
             operator = await page_for(browser, event, operator=True)
             await operator.get_by_role("button", name="Manual entry", exact=True).click()
             await operator.get_by_label("Search name, USN or LRN").fill(F["students"][4]["id"])
@@ -352,7 +357,7 @@ async def main():
             # Prepare all five actions before releasing clicks together.
             async def prepare(page, student):
                 await page.get_by_label("Search name, USN or LRN").fill(student["id"])
-                button = page.get_by_role("button", name=f"Record time in for E2E {student['lastName']}, {student['id']}", exact=True)
+                button = page.get_by_role("button", name=f"Record time in for E2E {student['lastName']}, {display_id(student)}", exact=True)
                 await expect(button).to_be_enabled()
                 return button
             buttons = await asyncio.gather(*(prepare(page, F["students"][10+i]) for i, page in enumerate(pages)))
@@ -394,7 +399,7 @@ async def main():
             page = await page_for(browser, event, operator=True)
             await page.get_by_role("button", name="Manual entry", exact=True).click()
             await page.get_by_label("Search name, USN or LRN").fill(student["id"])
-            button = page.get_by_role("button", name=f"Record time in for E2E {student['lastName']}, {student['id']}", exact=True)
+            button = page.get_by_role("button", name=f"Record time in for E2E {student['lastName']}, {display_id(student)}", exact=True)
             await expect(button).to_be_enabled()
             sent = []
             async def drop(route):
@@ -447,7 +452,7 @@ async def main():
             ctx = await context(browser, user="admin", mobile=False)
             admin = await ctx.new_page()
             await set_timeout(admin, event)
-            await phone.get_by_role("button", name=f"Record time in for E2E {student['lastName']}, {student['id']}", exact=True).click()
+            await phone.get_by_role("button", name=f"Record time in for E2E {student['lastName']}, {display_id(student)}", exact=True).click()
             await expect(phone.get_by_label("Manual attendance", exact=True).get_by_text("mode changed", exact=True)).to_be_visible()
             assert evidence(event)["records"] == [], "Stale time-in request wrote the opposite mode"
             await phone.unroute(f"**/api/events/{event}", stale)

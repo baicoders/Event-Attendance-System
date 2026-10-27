@@ -79,10 +79,15 @@ Plus sample students, events, and attendance records.
 | `pnpm account:recover -- --email <email>` | Local no-admin password recovery (interactive, host only) |
 | `pnpm test:account-recovery` | Credential-version unit tests + disposable HTTP/concurrency fixture |
 | `pnpm test:e2e:attendance` | Browser attendance flow with disposable PostgreSQL and Caddy HTTPS |
+| `pnpm benchmark:attendance` | Five-operator, 3,000-attendee Caddy HTTPS rehearsal; about 82 minutes |
+| `pnpm benchmark:attendance -- --phones` | Disposable rehearsal behind the existing Caddy address for five real phones |
+| `pnpm test:attendance-benchmark` | Benchmark scheduling, HTTPS, comparison, safety and cleanup checks |
 
 See [attendance E2E setup and coverage](docs/testing/attendance-e2e.md) and
 [the attendance test findings](docs/testing/attendance-e2e-findings.md) for reusable
 mobile/desktop checks and the remaining physical Android checklist.
+See [the event stress-test runbook](docs/testing/attendance-stress-test.md) for
+full/quick load profiles, before/after comparisons, and the actual phone rehearsal.
 
 ## Deployment notes
 
