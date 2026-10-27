@@ -56,19 +56,34 @@ type ChangeInput = {
   sourceChangeId?: bigint;
 };
 
-export async function appendAttendanceChange(tx: Prisma.TransactionClient, input: ChangeInput) {
-  const event = await tx.event.findUniqueOrThrow({ where: { id: input.eventId }, select: { title: true } });
-  const student = await tx.student.findUniqueOrThrow({ where: { id: input.studentId }, select: { firstName: true, middleName: true, lastName: true } });
-  const actor = await tx.user.findUnique({ where: { id: input.actorId }, select: { name: true } });
+export type AttendanceAuditContext = {
+  actorName: string | null;
+  eventTitle: string;
+  studentLabel: string;
+};
+
+/** Context may only come from authoritative reads inside this same guarded transaction. */
+export async function appendAttendanceChange(tx: Prisma.TransactionClient, input: ChangeInput, context?: AttendanceAuditContext) {
+  let labels = context;
+  if (!labels) {
+    const event = await tx.event.findUniqueOrThrow({ where: { id: input.eventId }, select: { title: true } });
+    const student = await tx.student.findUniqueOrThrow({ where: { id: input.studentId }, select: { firstName: true, middleName: true, lastName: true } });
+    const actor = await tx.user.findUnique({ where: { id: input.actorId }, select: { name: true } });
+    labels = {
+      actorName: actor?.name ?? null,
+      eventTitle: event.title,
+      studentLabel: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "),
+    };
+  }
   return tx.attendanceChange.create({ data: {
     eventId: input.eventId,
     studentId: input.studentId,
     recordId: input.recordId,
     action: input.action,
     actorId: input.actorId,
-    actorName: actor?.name ?? null,
-    eventTitle: event.title,
-    studentLabel: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "),
+    actorName: labels.actorName,
+    eventTitle: labels.eventTitle,
+    studentLabel: labels.studentLabel,
     reason: input.reason ?? null,
     before: input.before ? snapshot(input.before) : Prisma.DbNull,
     after: input.after ? snapshot(input.after) : Prisma.DbNull,

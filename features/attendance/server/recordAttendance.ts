@@ -61,7 +61,7 @@ export async function recordAttendance(
     try {
       return await db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} FOR SHARE`;
-        const freshActor = await tx.user.findUnique({ where: { id: actor.id }, select: { id: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
+        const freshActor = await tx.user.findUnique({ where: { id: actor.id }, select: { id: true, name: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
         if (!freshActor || freshActor.status !== "ACTIVE" || freshActor.mustChangePassword || freshActor.credentialVersion !== actor.credentialVersion) {
           throw new RecordingError("Unauthorized", 401, "UNAUTHORIZED");
         }
@@ -90,11 +90,17 @@ export async function recordAttendance(
         if (!studentId) throw new RecordingError("Student is not included in the event.", 404, "STUDENT_UNAVAILABLE");
         const student = await tx.student.findFirst({
           where: { id: studentId, ...buildEventStudentFilter(event) },
-          select: { id: true },
+          select: { id: true, firstName: true, middleName: true, lastName: true },
         });
         if (!student) throw new RecordingError(event.category === "CUSTOM"
           ? "Student is not a member of the custom groups selected for this event."
           : "Student is not included in the event.", 404, "STUDENT_UNAVAILABLE");
+
+        const auditContext = {
+          actorName: freshActor.name,
+          eventTitle: event.title,
+          studentLabel: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "),
+        };
 
         await takeRecordPairLock(tx, eventId, studentId);
 
@@ -107,15 +113,16 @@ export async function recordAttendance(
             const record = await tx.record.create({
               data: { eventId, studentId, method, timeout: now, recordedById: actor.id, revision: 1 },
             });
-            await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "CREATE", actorId: actor.id, before: null, after: record });
+            await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "CREATE", actorId: actor.id, before: null, after: record }, auditContext);
             return { record, changed: true, operation, created: true };
           }
-          const changed = !existing.timeout && (await tx.record.updateMany({
+          if (existing.timeout) return { record: existing, changed: false, operation, created: false };
+          const changed = (await tx.record.updateMany({
             where: { id: existing.id, revision: existing.revision, timeout: null },
             data: { timeout: now, lastModifiedById: actor.id, revision: { increment: 1 } },
           })).count > 0;
           const record = await tx.record.findUniqueOrThrow({ where: { id: existing.id } });
-          if (changed) await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "TIME_OUT", actorId: actor.id, before: existing, after: record });
+          if (changed) await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "TIME_OUT", actorId: actor.id, before: existing, after: record }, auditContext);
           return { record, changed: !!changed, operation, created: false };
         }
 
@@ -123,15 +130,16 @@ export async function recordAttendance(
           const record = await tx.record.create({
             data: { eventId, studentId, method, timein: now, recordedById: actor.id, revision: 1 },
           });
-          await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "CREATE", actorId: actor.id, before: null, after: record });
+          await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "CREATE", actorId: actor.id, before: null, after: record }, auditContext);
           return { record, changed: true, operation, created: true };
         }
-        const changed = !existing.timein && (await tx.record.updateMany({
+        if (existing.timein) return { record: existing, changed: false, operation, created: false };
+        const changed = (await tx.record.updateMany({
           where: { id: existing.id, revision: existing.revision, timein: null },
           data: { timein: now, lastModifiedById: actor.id, revision: { increment: 1 } },
         })).count > 0;
         const record = await tx.record.findUniqueOrThrow({ where: { id: existing.id } });
-        if (changed) await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "TIME_IN", actorId: actor.id, before: existing, after: record });
+        if (changed) await appendAttendanceChange(tx, { eventId, studentId, recordId: record.id, action: "TIME_IN", actorId: actor.id, before: existing, after: record }, auditContext);
         return { record, changed: !!changed, operation, created: false };
       }, { maxWait: 1500, timeout: 4000 });
     } catch (error) {
