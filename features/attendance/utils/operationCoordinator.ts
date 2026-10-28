@@ -48,7 +48,7 @@ export function createOperationCoordinator({ lookup, save, onChange }: Dependenc
 
   const finish = (attempt: Attempt, capturedGeneration: number) => {
     if (capturedGeneration !== generation) return null;
-    const needsAck = ["REJECTED", "LOOKUP_FAILED", "MODE_CHANGED", "RESULT_UNKNOWN"].includes(attempt.outcome);
+    const needsAck = ["LOOKUP_FAILED", "MODE_CHANGED", "RESULT_UNKNOWN"].includes(attempt.outcome);
     publish({
       phase: needsAck ? "AWAITING_ACKNOWLEDGEMENT" : "IDLE",
       lastResult: attempt,

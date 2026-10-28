@@ -125,7 +125,7 @@ test("malformed QR text makes no request and is never stored in recent attempts"
   assert.equal(lookups, 0);
   assert.equal(writes, 0);
   assert.equal(coordinator.getState().recent.length, 1);
-  assert.equal(coordinator.getState().phase, "AWAITING_ACKNOWLEDGEMENT");
+  assert.equal(coordinator.getState().phase, "IDLE");
 });
 
 test("mode changes preserve this view's recent attempts while event and viewer changes clear them", async () => {
@@ -168,3 +168,21 @@ test('external LRN lookup records the returned canonical identity', async () => 
   assert.equal(result?.studentId,canonical.id);
   assert.equal(result?.displayIdentifier,'00000123456');
 });
+
+for (const stage of ["lookup", "save"] as const) {
+  test(`a definitive ${stage} rejection releases scanning for the next student`, async () => {
+    let reject = true;
+    let writes = 0;
+    const rejection = Object.assign(new Error("Student unavailable"), { status: 404 });
+    const coordinator = createOperationCoordinator({
+      lookup: async () => { if (reject && stage === "lookup") throw rejection; return student; },
+      save: async () => { writes++; if (reject) throw rejection; return saved; },
+    });
+    coordinator.setContext(context);
+    assert.equal((await coordinator.submit({ studentId: student.id, method: "SCANNED" }))?.outcome, "REJECTED");
+    assert.equal(coordinator.getState().phase, "IDLE");
+    assert.equal(writes, stage === "lookup" ? 0 : 1);
+    reject = false;
+    assert.equal((await coordinator.submit({ studentId: student.id, method: "SCANNED" }))?.outcome, "RECORDED");
+  });
+}
