@@ -49,6 +49,17 @@ test("read transaction returns one authorized current-roster evaluation", async 
   assert.equal(JSON.stringify(result).includes("password"), false);
 });
 
+test("custom progress reads the separate custom relation and drills down within eligible students", async () => {
+  const group = await db.group.create({ data: { name: "Council", slug: "council", category: "CUSTOM" } });
+  await db.customGroupMembership.createMany({ data: [{ studentId: "S1", groupId: group.id }, { studentId: "S2", groupId: group.id }] });
+  const result = await readAttendanceProgress(db, eventId, viewer,
+    parseProgressQuery(new URLSearchParams(`groupBy=CUSTOM&includeRows=1&bucket=g:${group.id}`)));
+  assert.equal(result.totals.eligible, 3);
+  assert.deepEqual(result.breakdown.map(b => [b.bucketKey, b.eligible, b.checkedIn]), [[`g:${group.id}`, 2, 1], ["none", 1, 0]]);
+  assert.equal(result.detail?.bucketLabel, "Council");
+  assert.deepEqual(result.detail?.rows.map(r => r.studentId), ["S2"]);
+});
+
 test("wrong-category and deleted group buckets fail instead of widening scope", async () => {
   const other = await db.group.create({ data: { name: "House", slug: "house", category: "HOUSE" } });
   for (const id of [other.id, "deleted-group"]) {

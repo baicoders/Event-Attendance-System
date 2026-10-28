@@ -1,6 +1,6 @@
 import { YearLevel } from "@prisma/client";
 
-export const PROGRESS_DIMENSIONS = ["SECTION", "DEPARTMENT", "PROGRAM", "STRAND", "HOUSE", "YEAR"] as const;
+export const PROGRESS_DIMENSIONS = ["SECTION", "DEPARTMENT", "PROGRAM", "STRAND", "HOUSE", "YEAR", "CUSTOM"] as const;
 export type ProgressDimension = (typeof PROGRESS_DIMENSIONS)[number];
 export const PROGRESS_STATUSES = ["NOT_YET", "CHECKED_IN", "ALL"] as const;
 export type ProgressStatus = (typeof PROGRESS_STATUSES)[number];

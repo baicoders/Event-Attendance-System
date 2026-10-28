@@ -14,7 +14,7 @@ const row = z.object({
 const response = z.object({
   event: z.object({ id: z.string(), title: z.string(), status: z.literal("APPROVED"), isTimeout: z.boolean() }),
   evaluatedAt: z.string(), audienceSignature: z.string(), populationBasis: z.literal("CURRENT_ROSTER"),
-  groupBy: z.enum(["SECTION", "DEPARTMENT", "PROGRAM", "STRAND", "HOUSE", "YEAR"]),
+  groupBy: z.enum(["SECTION", "DEPARTMENT", "PROGRAM", "STRAND", "HOUSE", "YEAR", "CUSTOM"]),
   totals: counts, diagnostics: z.object({ recordsWithoutTimeIn: z.number().int().nonnegative() }),
   breakdown: z.array(counts.extend({ bucketKey: z.string(), label: z.string(), groupId: z.string().optional(), slug: z.string().optional() })),
   detail: z.object({

@@ -49,13 +49,17 @@ export async function readAttendanceProgress(
 
     // The selected dimension and section label are the only memberships the
     // response needs; avoid loading every academic relation on every poll.
-    const groupCategories: EventCategory[] = query.groupBy === "YEAR" || query.groupBy === "SECTION"
+    const groupCategories: EventCategory[] = query.groupBy === "YEAR" || query.groupBy === "SECTION" || query.groupBy === "CUSTOM"
       ? ["SECTION"] : ["SECTION", query.groupBy];
     const students = await tx.student.findMany({
       where: buildEventStudentFilter(event),
       select: {
         id: true, usn: true, lrn: true, firstName: true, middleName: true, lastName: true, schoolLevel: true, yearLevel: true,
         groups: { where: { category: { in: groupCategories } }, select: { id: true, name: true, slug: true, category: true } },
+        customMemberships: {
+          where: query.groupBy === "CUSTOM" ? {} : { groupId: { in: [] } },
+          select: { group: { select: { id: true, name: true, slug: true, category: true } } },
+        },
         records: { where: { eventId }, select: { timein: true, timeout: true } },
       },
     });

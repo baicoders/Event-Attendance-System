@@ -12,6 +12,7 @@ export type ProgressStudent = {
   schoolLevel: string | null;
   yearLevel: string | null;
   groups: ProgressGroup[];
+  customMemberships?: { group: ProgressGroup }[];
   records: { timein: Date | null; timeout: Date | null }[];
 };
 export type ProgressCounts = { eligible: number; checkedIn: number; notYet: number; rate: number | null };
@@ -42,7 +43,8 @@ function counts(students: ProgressStudent[]): ProgressCounts {
 
 function bucketOf(student: ProgressStudent, groupBy: ProgressQuery["groupBy"]): string {
   if (groupBy === "YEAR") return student.yearLevel ? `y:${student.yearLevel}` : "none";
-  const groups = new Set(student.groups.filter((group) => group.category === groupBy).map((group) => group.id));
+  const memberships = groupBy === "CUSTOM" ? (student.customMemberships ?? []).map(membership => membership.group) : student.groups;
+  const groups = new Set(memberships.filter((group) => group.category === groupBy).map((group) => group.id));
   if (groups.size === 0) return "none";
   if (groups.size > 1) return "multiple";
   return `g:${[...groups][0]}`;
@@ -50,7 +52,7 @@ function bucketOf(student: ProgressStudent, groupBy: ProgressQuery["groupBy"]): 
 
 function bucketLabel(key: string, groupBy: ProgressQuery["groupBy"], group?: ProgressGroup): string {
   if (key === "all") return "All eligible students";
-  if (key === "none") return `No ${groupBy.toLowerCase()} / not applicable`;
+  if (key === "none") return `No ${groupBy === "CUSTOM" ? "custom group" : groupBy.toLowerCase()} / not applicable`;
   if (key === "multiple") return `Multiple ${groupBy.toLowerCase()} assignments`;
   if (key.startsWith("y:")) return yearLabels[key.slice(2)] ?? key.slice(2);
   return group?.name ?? "Unknown group";
@@ -62,7 +64,7 @@ export function buildAttendanceProgress({ students, query, selectedGroup }: {
   const grouped = new Map<string, ProgressStudent[]>();
   const groupById = new Map<string, ProgressGroup>();
   for (const student of students) {
-    for (const group of student.groups) groupById.set(group.id, group);
+    for (const group of [...student.groups, ...(student.customMemberships ?? []).map(membership => membership.group)]) groupById.set(group.id, group);
     const key = bucketOf(student, query.groupBy);
     const bucket = grouped.get(key) ?? [];
     bucket.push(student);

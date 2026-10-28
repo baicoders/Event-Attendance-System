@@ -96,6 +96,20 @@ test('the missing year bucket remains selectable for partial students',()=>{
  assert.equal(result.detail?.matchedCount,1);
 });
 
+test("custom breakdown uses custom memberships and retains students without one", () => {
+  const council = group("council", "Council", "CUSTOM");
+  const students = [
+    { ...student("01", [group("section", "Section")], new Date()), customMemberships: [{ group: council }] },
+    { ...student("02", []), customMemberships: [{ group: council }] },
+    student("03", []),
+  ];
+  const result = buildAttendanceProgress({ students, selectedGroup: council,
+    query: parseProgressQuery(new URLSearchParams("groupBy=CUSTOM&includeRows=1&bucket=g:council")) });
+  assert.deepEqual(result.breakdown.map(b => [b.bucketKey, b.eligible, b.checkedIn]), [["g:council", 2, 1], ["none", 1, 0]]);
+  assert.deepEqual(result.detail?.rows.map(r => r.studentId), ["02"]);
+  assert.equal(result.detail?.bucketLabel, "Council");
+});
+
 test("progress displays USN then LRN without exposing or replacing internal row identity", () => {
   for (const [usn, lrn, expected] of [["00000123456", "000000123456", "00000123456"], [null, "000000123456", "000000123456"], [null, null, "—"]]) {
     const result = buildAttendanceProgress({ students: [{ ...student("internal", []), usn, lrn }], selectedGroup: null,

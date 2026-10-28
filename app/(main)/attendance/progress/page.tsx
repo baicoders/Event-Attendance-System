@@ -19,6 +19,7 @@ import type { AttendanceProgressResponse } from "@/globals/utils/attendanceProgr
 const dimensions: { value: ProgressDimension; label: string }[] = [
   { value: "SECTION", label: "Section" }, { value: "DEPARTMENT", label: "Department" },
   { value: "PROGRAM", label: "Program" }, { value: "STRAND", label: "Strand" },
+  { value: "CUSTOM", label: "Custom group" },
   { value: "HOUSE", label: "House" }, { value: "YEAR", label: "Year / grade" },
 ];
 const statuses: { value: ProgressStatus; label: string }[] = [
