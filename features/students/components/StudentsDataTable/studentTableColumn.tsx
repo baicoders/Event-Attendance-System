@@ -1,3 +1,4 @@
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { ColumnDef } from "@tanstack/react-table";
 import { Student } from "@/globals/types/students";
 import { formatSection, normalizeName } from "@/globals/utils/formatting";
@@ -29,7 +30,7 @@ export const getStudentColumns = ({
         return next;
       });
     }} />,
-    cell: ({ row }) => <Checkbox aria-label={`Select ${row.original.id}`} checked={row.getIsSelected()} onCheckedChange={(checked) => row.toggleSelected(!!checked)} />,
+    cell: ({ row }) => <Checkbox aria-label={`Select ${studentDisplayIdentifier(row.original)}`} checked={row.getIsSelected()} onCheckedChange={(checked) => row.toggleSelected(!!checked)} />,
     enableSorting: false,
     enableHiding: false,
   },
@@ -37,7 +38,7 @@ export const getStudentColumns = ({
     accessorKey: "id",
     header: () => <div className="text-center">Student ID</div>,
     cell: ({ row }) => (
-      <div className="text-center"><Link className="text-indigo-700 underline underline-offset-2" href={profileHref(row.original)}>{row.original.id}</Link></div>
+      <div className="text-center"><Link className="text-indigo-700 underline underline-offset-2" href={profileHref(row.original)}>{studentDisplayIdentifier(row.original)}</Link></div>
     ),
   },
   { accessorKey: "usn", header: "USN", cell: ({row}) => row.original.usn ?? "—" },

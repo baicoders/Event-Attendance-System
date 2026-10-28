@@ -1,3 +1,4 @@
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { Student } from "@/globals/types/students";
 import { FaUser } from "react-icons/fa6";
 import AttendanceActionButtons from "@/features/attendance/components/AttendanceActionButtons";
@@ -83,7 +84,6 @@ const StudentDetails = ({ event, student, record, isLoading, onRecord, operation
   if (!student) return <EmptyState />;
 
   const {
-    id,
     firstName,
     middleName,
     lastName,
@@ -101,7 +101,7 @@ const StudentDetails = ({ event, student, record, isLoading, onRecord, operation
   const isSHS = schoolLevel === "SHS";
   // program or strand + year + section letter
   const programOrStrand = (isCollege ? program : strand)?.toUpperCase() ?? "";
-  const fullSection = `${programOrStrand} - ${formatSection(section)} • ${id}`;
+  const fullSection = `${programOrStrand} - ${formatSection(section)} • ${studentDisplayIdentifier(student)}`;
   const timeIn = record?.timein ? formatDate(new Date(record?.timein)) : "N/A";
   const timeOut = record?.timeout
     ? formatDate(new Date(record?.timeout))

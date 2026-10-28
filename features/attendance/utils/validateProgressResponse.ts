@@ -7,7 +7,7 @@ const counts = z.object({
   notYet: z.number().int().nonnegative(), rate: z.number().finite().nullable(),
 });
 const row = z.object({
-  studentId: z.string(), fullName: z.string(), schoolLevel: z.string().nullable(), yearLevel: z.string().nullable(),
+  studentId: z.string(), displayIdentifier: z.string().default("—"), fullName: z.string(), schoolLevel: z.string().nullable(), yearLevel: z.string().nullable(),
   sectionLabel: z.string(), checkedIn: z.boolean(), timein: z.string().nullable(),
   timeout: z.string().nullable(), recordNeedsReview: z.boolean(),
 });

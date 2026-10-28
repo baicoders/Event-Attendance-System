@@ -1,5 +1,6 @@
 "use client";
 
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/globals/components/shad-cn/button";
 import { useAuth } from "@/globals/contexts/AuthContext";
@@ -166,16 +167,16 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
             const rowState = manualRecordState(true, eventRecords.isPending && !eventRecords.data, eventRecords.isError, rowRecord);
             const rowLabel = recordActionLabel(mode, rowState);
             return <li key={student.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0"><p className="break-words font-semibold">{displayName}</p><p className="text-sm">{student.id}</p><p className="text-sm">USN: {student.usn ?? "—"} · LRN: {student.lrn ?? "—"}</p>
+            <div className="min-w-0"><p className="break-words font-semibold">{displayName}</p><p className="text-sm">{studentDisplayIdentifier(student)}</p><p className="text-sm">USN: {student.usn ?? "—"} · LRN: {student.lrn ?? "—"}</p>
               <p className="break-words text-xs text-slate-600">{identity(student)}</p>
               {rowRecord && <p className="mt-1 text-xs font-medium text-slate-700">{mode === "TIME_IN" && rowRecord.timein ? "Timed in " + new Date(rowRecord.timein).toLocaleTimeString() :
                 mode === "TIME_OUT" && rowRecord.timeout ? "Timed out " + new Date(rowRecord.timeout).toLocaleTimeString() :
                 mode === "TIME_OUT" && !rowRecord.timein ? "No time-in recorded" : ""}</p>}</div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <Button ref={index === 0 ? firstDetailRef : undefined} type="button" size="sm" variant="outline" onClick={() => { if (floatingResults) setResultsOpen(false); onSelect(student); }}
-                aria-label={"View details for " + displayName + ", " + student.id}>View details</Button>
+                aria-label={"View details for " + displayName + ", " + studentDisplayIdentifier(student)}>View details</Button>
               <Button type="button" size="sm" disabled={!onRecord || operationBusy || detailActionDisabled(mode, rowState)} onClick={() => { if (floatingResults) setResultsOpen(false); onRecord?.(student); }}
-                aria-label={rowLabel + " for " + displayName + ", " + student.id}>{rowLabel}</Button>
+                aria-label={rowLabel + " for " + displayName + ", " + studentDisplayIdentifier(student)}>{rowLabel}</Button>
             </div>
           </li>; })}
         </ul>
@@ -208,7 +209,7 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
       <h3 className="font-semibold">Last result</h3>
       <p className="mt-1">{relevantResult.outcome === "RECORDED" ? (relevantResult.expectedMode === "TIME_IN" ? "Time-in recorded" : "Time-out recorded") :
         relevantResult.outcome === "ALREADY_RECORDED" ? "Already recorded" : relevantResult.outcome.replaceAll("_", " ").toLowerCase()}</p>
-      <p className="text-sm">{relevantResult.name || "Student"} · {relevantResult.studentId}</p>
+      <p className="text-sm">{relevantResult.name || "Student"} · {relevantResult.displayIdentifier ?? "—"}</p>
       <p className="text-xs text-slate-600">{relevantResult.expectedMode === "TIME_IN" ? "Time in" : "Time out"} · attempted {new Date(relevantResult.attemptedAt).toLocaleTimeString()} (device time)</p>
       {relevantResult.time && <p className="text-sm">{relevantResult.outcome === "ALREADY_RECORDED" ? "Original server time" : "Server time"}: {new Date(relevantResult.time).toLocaleTimeString()}</p>}
       {relevantResult.message && <p role="alert" className="text-sm text-amber-800">{relevantResult.message}</p>}

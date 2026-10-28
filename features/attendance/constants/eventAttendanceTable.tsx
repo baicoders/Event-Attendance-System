@@ -1,3 +1,4 @@
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { StudentAttendanceRecord } from "@/globals/types/students";
 import { Button } from "@/globals/components/shad-cn/button";
@@ -103,8 +104,8 @@ export const getAttendanceColumns = (
         </Button>
       </div>
     ),
-    cell: ({ getValue }) => (
-      <div className="text-center">{getValue() as string}</div>
+    cell: ({ row }) => (
+      <div className="text-center">{studentDisplayIdentifier(row.original)}</div>
     ),
   },
   {

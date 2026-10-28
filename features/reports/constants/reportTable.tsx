@@ -1,3 +1,4 @@
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 
@@ -35,9 +36,9 @@ export const reportColumns: ColumnDef<ReportRow>[] = [
   {
     accessorKey: "studentId",
     header: "Student No.",
-    cell: ({ getValue }) => (
+    cell: ({ row }) => (
       <span className="font-mono text-sm text-slate-700">
-        {getValue() as string}
+        {studentDisplayIdentifier(row.original)}
       </span>
     ),
   },

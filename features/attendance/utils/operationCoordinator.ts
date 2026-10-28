@@ -2,7 +2,7 @@ import { studentIdSchema } from "@/globals/schemas/studentId";
 
 export type AttendanceMode = "TIME_IN" | "TIME_OUT";
 export type OperationContext = { eventId: string; viewerId: string; expectedMode: AttendanceMode };
-export type OperationStudent = { id: string; name: string };
+export type OperationStudent = { id: string; name: string; displayIdentifier?: string };
 export type OperationRequest = { studentId: string; method: "SCANNED" | "MANUAL"; student?: OperationStudent };
 export type SaveInput = OperationRequest & { eventId: string; expectedMode: AttendanceMode };
 export type SaveResponse = {
@@ -11,7 +11,7 @@ export type SaveResponse = {
 };
 export type Outcome = "RECORDED" | "ALREADY_RECORDED" | "REJECTED" | "LOOKUP_FAILED" | "MODE_CHANGED" | "RESULT_UNKNOWN";
 export type Attempt = {
-  id: number; eventId: string; studentId: string; name?: string; method: OperationRequest["method"];
+  id: number; eventId: string; studentId: string; displayIdentifier?: string; name?: string; method: OperationRequest["method"];
   expectedMode: AttendanceMode; outcome: Outcome; time?: string; attemptedAt: string; message?: string;
 };
 export type OperationState = {
@@ -114,6 +114,8 @@ export function createOperationCoordinator({ lookup, save, onChange }: Dependenc
         pendingRead = null;
         if (!isCurrent()) return null;
         base.studentId = student.id;
+        base.name = student.name;
+        base.displayIdentifier = student.displayIdentifier;
         publish({ ...state, phase: "SAVING" });
         const input: SaveInput = { eventId: captured.eventId, studentId: student.id, method: request.method, expectedMode: captured.expectedMode };
         writeSent = true;

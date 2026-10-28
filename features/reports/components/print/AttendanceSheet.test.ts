@@ -43,7 +43,7 @@ test("a full URL selection keeps every printed header aligned with its cell in f
   const html = renderToStaticMarkup(createElement(AttendanceSheet, { report: full, options: { includeAbsentees: true, groupBy: "NONE", columns: resolvePrintColumns("signature,method,timeout,year,timein,status,position,group,identifier,name") } }));
   assert.deepEqual(cells(html, "th"), ["No.", "Name", "USN/LRN", "Group", "Position", "Attendance Status", "Check-in Time", "Year", "Check-out Time", "Method", "Signature"]);
   assert.deepEqual(cells(html, "td"), [
-    "1", "Alex Rivera", "00000123456 / 000000654321", "Student Council", "President", "Present", "14:00", "1st Year", "—", "Scanned", "",
+    "1", "Alex Rivera", "00000123456", "Student Council", "President", "Present", "14:00", "1st Year", "—", "Scanned", "",
     "2", "Sam Rivera", "—", "—", "—", "Absent", "—", "Not provided", "—", "—", "",
   ]);
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Scanner from "@/features/attendance/components/Scanner";
@@ -58,7 +59,7 @@ export default function AttendanceSection({ selectedEvent }: { selectedEvent: Ev
       </div>
       {state.lastResult?.method === "SCANNED" && <div className="rounded-xl border bg-white p-4" aria-live="polite">
         <p className="font-semibold">{state.lastResult.outcome.replaceAll("_", " ")}</p>
-        <p className="text-sm">{state.lastResult.name || "Student"} · {state.lastResult.studentId}</p>
+        <p className="text-sm">{state.lastResult.name || "Student"} · {state.lastResult.displayIdentifier ?? "—"}</p>
         {state.lastResult.time && <p className="text-sm">Server time: {new Date(state.lastResult.time).toLocaleTimeString()}</p>}
         {state.lastResult.message && <p role="alert" className="text-sm">{state.lastResult.message}</p>}
         {state.phase === "AWAITING_ACKNOWLEDGEMENT" && <button type="button" className="mt-2 underline" onClick={acknowledge}>Acknowledge result</button>}
@@ -69,7 +70,7 @@ export default function AttendanceSection({ selectedEvent }: { selectedEvent: Ev
       floatingResults
       onSelect={(student) => setSelection(student && user ? { student, eventId: selectedEvent.id, viewerId: user.id } : null)}
       onRecord={(student) => { void submit({ studentId: student.id, method: "MANUAL", student: {
-        id: student.id, name: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "),
+        id: student.id, displayIdentifier: studentDisplayIdentifier(student), name: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "),
       } }); }}
       operationBusy={busy} onFocusSearch={() => {
         if (!manualActive) openManual();

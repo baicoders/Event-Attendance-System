@@ -1,5 +1,6 @@
 "use client";
 
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -125,7 +126,8 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
   };
   const copyId = async () => {
     try {
-      await navigator.clipboard.writeText(studentId);
+      if (!student) return;
+      await navigator.clipboard.writeText(studentDisplayIdentifier(student));
       setCopyMessage("Student ID copied.");
     } catch {
       setCopyMessage("Clipboard unavailable. Select and copy the Student ID above.");
@@ -148,7 +150,7 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-indigo-700">Student record</p>
                 <h1 className="mt-2 break-words text-2xl font-bold text-slate-900 sm:text-3xl">{[student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ")}</h1>
-                <p className="mt-2 break-all text-sm">Student ID: <span className="select-text font-semibold">{student.id}</span></p>
+                <p className="mt-2 break-all text-sm">Student ID: <span className="select-text font-semibold">{studentDisplayIdentifier(student)}</span></p>
                 <button type="button" className="mt-2 text-sm text-indigo-700 underline" onClick={() => void copyId()}>Copy student ID</button>
                 {copyMessage && <p role="status" className="mt-1 text-xs text-slate-600">{copyMessage}</p>}
               </div>

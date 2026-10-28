@@ -5,7 +5,7 @@ const yearLabel = (value: string | null) => (value ?? "Not provided").replace("Y
 const clock = (value: string | null) => value ? new Date(value).toLocaleString() : "—";
 
 export const progressColumns: ColumnDef<ProgressRow>[] = [
-  { accessorKey: "studentId", header: "Student ID", enableSorting: false },
+  { accessorKey: "studentId", header: "Student ID", enableSorting: false, cell: ({ row }) => row.original.displayIdentifier },
   { accessorKey: "fullName", header: "Name", enableSorting: false },
   { accessorKey: "yearLevel", header: "Year / Grade", enableSorting: false, cell: ({ row }) => yearLabel(row.original.yearLevel) },
   { accessorKey: "sectionLabel", header: "Section", enableSorting: false },

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useCreateRecord } from "@/globals/hooks/useRecords";
 import { fetchApi } from "@/globals/utils/api";
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { fullName } from "@/globals/utils/formatting";
 import { Student } from "@/globals/types/students";
 import {
@@ -21,7 +22,7 @@ export function useAttendanceOperation(context: OperationContext | null) {
       lookup: async (eventId, studentId, signal) => {
         const params = new URLSearchParams({ eventId, studentId });
         const student = await fetchApi<Student>(`/api/students?${params}`, { signal });
-        return { id: student.id, name: fullName(student.firstName, student.middleName ?? "", student.lastName) };
+        return { id: student.id, displayIdentifier: studentDisplayIdentifier(student), name: fullName(student.firstName, student.middleName ?? "", student.lastName) };
       },
       save: (input) => saveRef.current(input),
       onChange: setState,

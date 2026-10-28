@@ -1,3 +1,4 @@
+import { studentDisplayIdentifier } from "./studentDisplay";
 import { attendanceRate, hasRecordedTimeIn } from "./attendance";
 import type { ProgressQuery } from "./attendanceProgressQuery";
 
@@ -16,7 +17,7 @@ export type ProgressStudent = {
 export type ProgressCounts = { eligible: number; checkedIn: number; notYet: number; rate: number | null };
 export type ProgressBucket = ProgressCounts & { bucketKey: string; label: string; groupId?: string; slug?: string };
 export type ProgressRow = {
-  studentId: string; fullName: string; schoolLevel: string | null; yearLevel: string | null; sectionLabel: string;
+  studentId: string; displayIdentifier: string; fullName: string; schoolLevel: string | null; yearLevel: string | null; sectionLabel: string;
   checkedIn: boolean; timein: string | null; timeout: string | null; recordNeedsReview: boolean;
 };
 export type ProgressAggregate = {
@@ -100,7 +101,7 @@ export function buildAttendanceProgress({ students, query, selectedGroup }: {
     const sections = student.groups.filter((group) => group.category === "SECTION");
     const record = student.records[0];
     return {
-      studentId: student.id,
+      studentId: student.id, displayIdentifier: studentDisplayIdentifier(student),
       fullName: `${student.lastName}, ${[student.firstName, student.middleName].filter(Boolean).join(" ")}`,
       schoolLevel: student.schoolLevel, yearLevel: student.yearLevel,
       sectionLabel: sections.length === 0 ? "No section" : sections.length > 1 ? "Multiple sections" : sections[0].name,

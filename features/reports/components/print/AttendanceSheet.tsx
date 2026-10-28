@@ -1,3 +1,4 @@
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import * as React from "react";
 
 import { labelForGroup } from "@/globals/constants/groups";
@@ -31,7 +32,7 @@ const cell = "border border-gray-400 px-2 py-1 align-top break-words";
 function columnValue(row: ReportRow, key: PrintColumnKey): string {
   switch (key) {
     case "name": return row.fullName;
-    case "identifier": return [row.usn, row.lrn].filter(Boolean).join(" / ") || "—";
+    case "identifier": return studentDisplayIdentifier(row);
     case "group": return row.customGroup || "—";
     case "position": return row.position || "—";
     case "status": return ATTENDANCE_OUTCOME_LABEL[row.outcome];

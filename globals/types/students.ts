@@ -29,6 +29,8 @@ export type StudentAttendanceRecord = {
   id: string;
   eventId: string;
   studentId: string;
+  usn?: string | null;
+  lrn?: string | null;
   fullName: string;
   schoolLevel: SchoolLevel | null;
   section: Group | null;

@@ -95,3 +95,12 @@ test('the missing year bucket remains selectable for partial students',()=>{
  const result=buildAttendanceProgress({students:[person],query:parseProgressQuery(new URLSearchParams('groupBy=YEAR&includeRows=1&bucket=none&status=ALL')),selectedGroup:null});
  assert.equal(result.detail?.matchedCount,1);
 });
+
+test("progress displays USN then LRN without exposing or replacing internal row identity", () => {
+  for (const [usn, lrn, expected] of [["00000123456", "000000123456", "00000123456"], [null, "000000123456", "000000123456"], [null, null, "—"]]) {
+    const result = buildAttendanceProgress({ students: [{ ...student("internal", []), usn, lrn }], selectedGroup: null,
+      query: parseProgressQuery(new URLSearchParams("includeRows=1&status=ALL")) });
+    assert.equal(result.detail?.rows[0].studentId, "internal");
+    assert.equal(result.detail?.rows[0].displayIdentifier, expected);
+  }
+});

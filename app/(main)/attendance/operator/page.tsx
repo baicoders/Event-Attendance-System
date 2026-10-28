@@ -1,5 +1,6 @@
 "use client";
 
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/globals/components/shad-cn/button";
@@ -140,7 +141,7 @@ function OperatorPageInner() {
 
   const recordManual = (student: Student) => {
     if (!submitAttempt({ studentId: student.id, method: "MANUAL", student: {
-      id: student.id, name: fullName(student.firstName, student.middleName ?? "", student.lastName),
+      id: student.id, displayIdentifier: studentDisplayIdentifier(student), name: fullName(student.firstName, student.middleName ?? "", student.lastName),
     } })) return;
     restoreCamera.current = false;
     setCameraOpen(false);
@@ -241,7 +242,7 @@ function OperatorPageInner() {
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Last result</h2>
             {result ? <>
               <p className="mt-3 text-2xl font-bold">{label(result)}</p>
-              <p className="mt-2">{result.name || "Student"}{result.studentId && ` · ${result.studentId}`}</p>
+              <p className="mt-2">{result.name || "Student"}{result.displayIdentifier && ` · ${result.displayIdentifier}`}</p>
               {result.time && <p className="mt-2 text-sm">{result.outcome === "ALREADY_RECORDED" ? "Original server time" : "Server time"}: {displayTime(result.time)}</p>}
               {result.message && <p role="alert" className="mt-2 text-sm text-amber-800">{result.message}</p>}
               {result.outcome !== "RECORDED" && result.outcome !== "ALREADY_RECORDED" &&
@@ -266,7 +267,7 @@ function OperatorPageInner() {
         <h2 className="text-lg font-semibold">Recent attempts · this device, since this view opened</h2>
         {state.recent.length === 0 ? <p className="mt-2 text-slate-500">No attempts yet.</p> : <ol className="mt-3 divide-y">
           {state.recent.map((attempt) => <li key={attempt.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-            <span><strong>{attempt.name || "Student"}</strong>{attempt.studentId && ` · ${attempt.studentId}`} · {label(attempt)}</span>
+            <span><strong>{attempt.name || "Student"}</strong>{attempt.displayIdentifier && ` · ${attempt.displayIdentifier}`} · {label(attempt)}</span>
             <span className="text-slate-500">{attempt.time ? `${displayTime(attempt.time)} ${attempt.outcome === "ALREADY_RECORDED" ? "(original)" : "(recorded)"}` : `${displayTime(attempt.attemptedAt)} (attempted)`}</span>
           </li>)}
         </ol>}
