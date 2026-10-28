@@ -5,7 +5,7 @@ import { formatReportClock, formatReportDateTime, formatReportEventDate, formatR
 
 test("report timestamps use Asia/Manila regardless of host locale", () => {
   assert.equal(formatReportDateTime("2026-09-25T08:10:24.000Z"), "2026-09-25 16:10:24");
-  assert.equal(formatReportClock("2026-09-25T08:10:24.000Z"), "16:10");
+  assert.equal(formatReportClock("2026-09-25T08:10:24.000Z"), "4:10 PM");
   assert.equal(formatReportDateTime(null), "");
   assert.equal(formatReportEventDate("2026-09-25T00:00:00.000Z", true), "2026-09-25");
 });
@@ -20,4 +20,11 @@ test("all-day print schedules use UTC calendar dates and support dates across ye
   assert.equal(formatReportEventSchedule("2026-10-23T00:00:00Z", "2026-10-23T00:00:00Z", true), "Oct 23, 2026 · All day");
   assert.equal(formatReportEventSchedule("2026-10-23T00:00:00Z", "2026-10-24T00:00:00Z", true), "Oct 23 – 24, 2026 · All day");
   assert.equal(formatReportEventSchedule("2026-12-31T00:00:00Z", "2027-01-01T00:00:00Z", true), "Dec 31, 2026 – Jan 1, 2027 · All day");
+});
+
+test("printed attendance clocks include AM/PM at midnight, noon and morning", () => {
+  assert.equal(formatReportClock("2026-10-23T16:00:00Z"), "12:00 AM");
+  assert.equal(formatReportClock("2026-10-23T04:00:00Z"), "12:00 PM");
+  assert.equal(formatReportClock("2026-10-23T01:05:00Z"), "9:05 AM");
+  assert.equal(formatReportClock(null), "—");
 });

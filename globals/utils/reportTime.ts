@@ -13,7 +13,7 @@ export function formatReportDateTime(value: string | Date | null): string {
 }
 
 export function formatReportClock(value: string | Date | null): string {
-  return formatReportDateTime(value).slice(11, 16) || "—";
+  return value ? scheduleClockFormatter.format(new Date(value)) : "—";
 }
 
 /** All-day event dates are stored as UTC midnight calendar dates. */

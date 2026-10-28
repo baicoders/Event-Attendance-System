@@ -30,7 +30,7 @@ test("selected columns render matching headings and cells, real external identif
 test("hiding columns and absentees keeps whole-event totals and section filtering intact", () => {
   const html = renderToStaticMarkup(createElement(AttendanceSheet, { report, options: { includeAbsentees: false, groupBy: "SECTION", columns: ["name", "timein", "timeout", "method", "signature"] } }));
   assert.deepEqual(cells(html, "th"), ["No.", "Name", "Check-in Time", "Check-out Time", "Method", "Signature"]);
-  assert.deepEqual(cells(html, "td"), ["1", "Alex Rivera", "14:00", "—", "Scanned", ""]);
+  assert.deepEqual(cells(html, "td"), ["1", "Alex Rivera", "2:00 PM", "—", "Scanned", ""]);
   assert.match(html, /<strong>Eligible:<\/strong> 2/);
   assert.match(html, /<strong>Absent:<\/strong> 1/);
   assert.match(html, /1 absent student is omitted/);
@@ -43,7 +43,7 @@ test("a full URL selection keeps every printed header aligned with its cell in f
   const html = renderToStaticMarkup(createElement(AttendanceSheet, { report: full, options: { includeAbsentees: true, groupBy: "NONE", columns: resolvePrintColumns("signature,method,timeout,year,timein,status,position,group,identifier,name") } }));
   assert.deepEqual(cells(html, "th"), ["No.", "Name", "USN/LRN", "Group", "Position", "Attendance Status", "Check-in Time", "Year", "Check-out Time", "Method", "Signature"]);
   assert.deepEqual(cells(html, "td"), [
-    "1", "Alex Rivera", "00000123456", "Student Council", "President", "Present", "14:00", "1st Year", "—", "Scanned", "",
+    "1", "Alex Rivera", "00000123456", "Student Council", "President", "Present", "2:00 PM", "1st Year", "—", "Scanned", "",
     "2", "Sam Rivera", "—", "—", "—", "Absent", "—", "Not provided", "—", "—", "",
   ]);
 });
@@ -102,4 +102,11 @@ test("printed event metadata uses a readable schedule and a single timezone note
   assert.ok(metadata.includes("Oct 23, 2026 · 2:00 PM – 6:00 PM"));
   assert.equal((metadata.match(/Philippine time \(UTC\+08:00\)/g) ?? []).length, 1);
   assert.equal(metadata.includes("2026-10-23"), false);
+});
+
+test("printed check-in and check-out cells include AM/PM in Philippine time", () => {
+  const timed = { ...report, rows: [{ ...report.rows[0], timein: "2026-10-23T01:05:00Z", timeout: "2026-10-23T09:30:00Z" }] };
+  const html = renderToStaticMarkup(createElement(AttendanceSheet, { report: timed,
+    options: { includeAbsentees: true, groupBy: "NONE", columns: ["name", "timein", "timeout"] } }));
+  assert.deepEqual(cells(html, "td"), ["1", "Alex Rivera", "9:05 AM", "5:30 PM"]);
 });
