@@ -58,6 +58,7 @@ export async function updateClassOffering(db:PrismaClient,actor:ActorContext,cla
   const archived=input.archived===undefined?!!row.archivedAt:input.archived;
   const changed=(input.displayName!==undefined&&input.displayName!==row.displayName)||(input.graceMinutes!==undefined&&input.graceMinutes!==row.graceMinutes)||commandHash(schedule)!==commandHash(row.schedule)||archived!==!!row.archivedAt;
   if(changed){
+   if(input.archived&&!row.archivedAt){const active=await tx.classroomSession.findFirst({where:{classId,state:'ACTIVE'},select:{id:true}});if(active)throw new AuthError('Continue or cancel the active meeting before archiving this class.',409,'ACTIVE_SESSION_EXISTS',{sessionId:active.id});}
    const before=classDto(row);await tx.classOffering.update({where:{id:classId},data:{displayName:input.displayName,graceMinutes:input.graceMinutes,...(input.schedule!==undefined?{schedule:input.schedule??Prisma.DbNull}:{}),...(input.archived!==undefined?{archivedAt:input.archived?(row.archivedAt??new Date()):null}:{}),configRevision:{increment:1}}});
    row=await lockOwnedClass(tx,classId,user,'UPDATE');const after=classDto(row);await tx.classroomAudit.create({data:{action:'CLASS_SETTINGS_UPDATED',entityType:'ClassOffering',entityId:classId,classId,actorId:user.id,actorName:user.name,reason:input.reason,commandId:input.commandId,before,after}});
   }

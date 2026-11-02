@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { withClassroomTestApp } from './classroom-test-app.mjs';
+await withClassroomTestApp(async({db,request})=>{
+ const password='session-test-password';
+ async function teacher(name,status='APPROVED'){
+  const user=await db.user.create({data:{name,email:name+'@example.test',password,role:'MEMBER'}});
+  await db.classroomMembership.create({data:{userId:user.id,status,departmentOrDesignation:'Teacher'}});
+  const login=await request('/api/auth/login',{method:'POST',body:{email:user.email,password,workspace:'CLASS'}});assert.equal(login.response.status,200,login.text);return {...user,cookie:login.cookie};
+ }
+ const owner=await teacher('session-owner');const other=await teacher('other-owner');const applicant=await teacher('applicant','PENDING');
+ for(const id of ['3a','other'])await db.group.create({data:{id,name:id,slug:id,category:'SECTION'}});
+ for(const id of ['a','b','c'])await db.student.create({data:{id,firstName:'Student',lastName:id,groups:{connect:{id:'3a'}}}});
+ const term=await request('/api/classroom/terms',{cookie:owner.cookie,method:'POST',body:{commandId:randomUUID(),name:'Term One',startDate:'2026-08-01',endDate:'2026-12-31'}});
+ const subject=await request('/api/classroom/subjects',{cookie:owner.cookie,method:'POST',body:{commandId:randomUUID(),title:'Programming'}});
+ const offering=await request('/api/classroom/classes',{cookie:owner.cookie,method:'POST',body:{commandId:randomUUID(),termId:term.json.data.data.id,subjectId:subject.json.data.data.id,displayName:'Programming A',sectionIds:['3a'],exceptions:[]}});assert.equal(offering.response.status,201,offering.text);const classId=offering.json.data.data.id;const classPath='/api/classroom/classes/'+classId;
+ const preview=await request(classPath+'/start-preview',{cookie:owner.cookie});assert.equal(preview.response.status,200,preview.text);assert.match(preview.response.headers.get('cache-control'),/private.*no-store/);assert.equal(preview.json.data.rosterCount,3);assert.equal(await db.classroomAttendance.count(),0);
+ const input={commandId:randomUUID(),scheduledStartAt:'2026-08-03T08:00:00+08:00',expectedConfigRevision:0,expectedRosterRevision:0,expectedRosterFingerprint:preview.json.data.rosterFingerprint};
+ const missingOffset=await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:{...input,scheduledStartAt:'2026-08-03T08:00:00'}});assert.equal(missingOffset.response.status,400);
+ const started=await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:input});assert.equal(started.response.status,201,started.text);const sessionId=started.json.data.data.id;const path='/api/classroom/sessions/'+sessionId;
+ assert.equal(started.json.data.data.scheduledStartAt,'2026-08-03T00:00:00.000Z');assert.equal(started.json.data.data.lateAfter,'2026-08-03T00:15:00.000Z');
+ for(const [cookie,status] of [[undefined,401],[applicant.cookie,403],[other.cookie,404]])assert.equal((await request(path,{cookie})).response.status,status);
+ assert.equal((await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:{...input,commandId:randomUUID()}})).json.code,'ACTIVE_SESSION_EXISTS');
+ const unmarked=await request(path+'/roster?status=UNMARKED',{cookie:owner.cookie});assert.equal(unmarked.json.data.pageSize,100);assert.equal(unmarked.json.data.counts.UNMARKED,3);assert.equal(unmarked.json.data.total,3);
+ assert.equal((await request(path+'/finalize',{cookie:other.cookie,method:'POST',body:{commandId:randomUUID(),expectedLifecycleRevision:0,expectedSnapshotRevision:0}})).response.status,404,'unrelated teacher cannot finalize a guessed session');
+ const command={commandId:randomUUID(),expectedLifecycleRevision:0,expectedSnapshotRevision:0};
+ const finalized=await request(path+'/finalize',{cookie:owner.cookie,method:'POST',body:command});assert.equal(finalized.response.status,200,finalized.text);assert.equal(finalized.json.data.data.defaultedAbsent,3);
+ assert.deepEqual((await request(path+'/finalize',{cookie:owner.cookie,method:'POST',body:command})).json.data.data,finalized.json.data.data);
+ const recovered=await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:input});assert.equal(recovered.json.data.replayed,true);assert.deepEqual(recovered.json.data.data,started.json.data.data,'committed start acknowledgment recoverable after finalization');
+ const earlier=(await request(path+'/roster',{cookie:owner.cookie})).json.data.items;
+ await db.student.update({where:{id:'a'},data:{groups:{set:[{id:'other'}]},firstName:'Corrected'}});
+ const stale=await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:{...input,commandId:randomUUID()}});assert.equal(stale.json.code,'ROSTER_CHANGED');
+ assert.deepEqual((await request(path+'/roster',{cookie:owner.cookie})).json.data.items,earlier);
+ const fresh=(await request(classPath+'/start-preview',{cookie:owner.cookie})).json.data;
+ const second=await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:{...input,commandId:randomUUID(),expectedRosterFingerprint:fresh.rosterFingerprint}});assert.equal(second.response.status,201,second.text);assert.notEqual(second.json.data.data.id,sessionId);
+ const secondPath='/api/classroom/sessions/'+second.json.data.data.id;
+ const amended=await request(secondPath+'/policy-amendments',{cookie:owner.cookie,method:'POST',body:{commandId:randomUUID(),expectedLifecycleRevision:0,startAt:input.scheduledStartAt,graceMinutes:5,reason:'Correct meeting grace period'}});assert.equal(amended.response.status,200);assert.equal(amended.json.data.data.graceMinutes,5);assert.equal(amended.json.data.data.originalPolicySnapshot.graceMinutes,15);
+ const canceled=await request(secondPath+'/cancel',{cookie:owner.cookie,method:'POST',body:{commandId:randomUUID(),expectedLifecycleRevision:1,reason:'Meeting was started in error'}});assert.equal(canceled.response.status,200,canceled.text);assert.equal((await request(secondPath+'/roster',{cookie:owner.cookie})).json.data.counts.UNMARKED,2);
+ const list=await request(classPath+'/sessions?date=2026-08-03',{cookie:owner.cookie});assert.equal(list.json.data.total,2);
+ const archive=await request(classPath,{cookie:owner.cookie,method:'PATCH',body:{commandId:randomUUID(),expectedConfigRevision:0,archived:true}});assert.equal(archive.response.status,200);
+ await db.classroomMembership.update({where:{userId:owner.id},data:{status:'SUSPENDED'}});
+ assert.equal((await request(path,{cookie:owner.cookie})).response.status,403);
+ assert.equal((await request(path+'/finalize',{cookie:owner.cookie,method:'POST',body:command})).response.status,403);
+ console.log('PASS private session preview/start/lifecycle, UTC-Manila policy, unmarked/finalize/cancel, exact receipt recovery, stale directory fingerprint, immutable history, multiple same-day meetings, amendment, archive and suspension.');
+});

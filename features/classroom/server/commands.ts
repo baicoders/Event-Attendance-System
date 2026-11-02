@@ -22,7 +22,7 @@ export function commandHash(input: unknown) {
 export async function executeClassroomCommand<T>(
   db: PrismaClient, actor: ActorContext, policy: CommandPolicy, raw: CommandEnvelope,
   operation: (tx: Prisma.TransactionClient, user: Awaited<ReturnType<typeof guardCommandActor>>) => Promise<T>,
-  options: { httpStatus?: number; authorizeReplay?: (tx: Prisma.TransactionClient, user: Awaited<ReturnType<typeof guardCommandActor>>, result: Prisma.JsonValue) => Promise<void>; userIds?: string[]; updateUsers?: boolean; membershipUserIds?: string[]; updateMemberships?: boolean; authorizeResource?: (tx: Prisma.TransactionClient, user: Awaited<ReturnType<typeof guardCommandActor>>) => Promise<void>; timeout?: number } = {},
+  options: { httpStatus?: number; authorizeReplay?: (tx: Prisma.TransactionClient, user: Awaited<ReturnType<typeof guardCommandActor>>, result: Prisma.JsonValue) => Promise<void>; userIds?: string[]; updateUsers?: boolean; membershipUserIds?: string[]; updateMemberships?: boolean; authorizeResource?: (tx: Prisma.TransactionClient, user: Awaited<ReturnType<typeof guardCommandActor>>) => Promise<void>; timeout?: number; maxWait?: number } = {},
 ): Promise<CommandResult<T>> {
   const commandId = commandIdSchema.parse(raw.commandId);
   const input = { ...raw, commandId };
@@ -55,7 +55,7 @@ export async function executeClassroomCommand<T>(
         const result = JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
         await tx.classroomCommandReceipt.create({ data: { actorId: actor.userId, commandId, operation: raw.operation, resourceId: raw.resourceId, requestHash: hash, result, httpStatus: options.httpStatus ?? 200 } });
         return { data: result as T, replayed: false };
-      }, { maxWait: 1500, timeout: options.timeout ?? 5000 });
+      }, { maxWait: options.maxWait ?? 1500, timeout: options.timeout ?? 5000 });
     } catch (error) {
       if (attempt === 0 && isRetryableTransactionError(error)) continue;
       throw error;

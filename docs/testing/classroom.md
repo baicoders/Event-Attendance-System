@@ -81,3 +81,16 @@ Implementation contract: [classes, rosters and setup](../implementation/classroo
 - Initial development browser run also passed. Final production build includes the later UTF-8 bound; API rejects oversized drafts without saving them. Build/types/lint/whitespace pass; existing groups `_req` warning remains.
 
 `pnpm test:classroom:onboarding` runs the focused suite; add `CLASSROOM_TEST_BROWSER=true` for browser coverage. The Ready action currently completes setup and opens My Classes. Real Start/first-mark/finalize guidance is explicitly completed in Task9 with actual session APIs. This milestone does not satisfy the real-teacher/HTTPS-phone launch gates by itself.
+
+## Session snapshots and lifecycle (Task 7)
+
+Contract: [sessions](../implementation/classroom-sessions.md). Timestamp prerequisite: [UTC wire sessions and historical release gate](../implementation/classroom-time.md), commit82f7886. No historical Events values were rewritten.
+
+- `pnpm test:classroom:unit`:29/29, including exact grace boundary, zero grace, offset/term/future validation and Manila schedule suggestions.
+- Session database suites:18/18 (`sessionConstraints.db.test.ts`4, `sessions.db.test.ts`9, `sessionConcurrency.db.test.ts`5). Original immutability/materialization, no absence on preview, Unmarked start, atomic finalize/cancel, multiple same-day meetings, policy amendment, current-directory fingerprint mismatch,40 persistent meetings, halfway enrollment, audit-failure rollback, exact concurrent receipts and genuine PostgreSQL lock barriers.
+- Capacity:1,001-member start fails before session/receipt writes; the full1,000-member boundary starts/materializes/finalizes without truncation. Local start plus page100 read≈1,624ms; finalize≈1,838ms. This disposable cluster has durability settings disabled; these are local observations, not hosted/p95/durability claims.
+- `node --import tsx scripts/test-classroom-sessions-api.mjs`: current production build passes private preview/start/session/roster/lifecycle, ownership denials, replay after finalization, historic roster preservation, policy amendment, archive and fresh suspension checks.
+- Existing Class applications/commands/rate-limit/classes/onboarding DB regression25/25; existing Events attendance/corrections/student workflow29/29; DB configuration15/15; physical instant round-trip1/1 with a deliberately non-UTC disposable database default.
+- Final production build, TypeScript, scoped lint and whitespace checks pass. pg8.23 emits a queued-query deprecation during Prisma relation/transaction work; the locked supported driver passes. No adapter internals were changed.
+
+`pnpm test:classroom:sessions` runs the focused policy/database/API suite. Real QR/manual marking, phone session UI, reports, administrative monitoring and external release gates remain later milestones.

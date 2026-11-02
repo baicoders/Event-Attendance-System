@@ -621,11 +621,11 @@ Commit: `feat(classroom): guide and resume teacher onboarding`.
 
 **Consumes:** T5 composeClassRoster and revisions, T4 identity versioning, T2 command/locks. **Produces:** `startClassroomSession`, `finalizeClassroomSession`, `cancelClassroomSession`, `amendSessionPolicy` and frozen session/member DTOs from §6.
 
-- [ ] Test no absence/page-open side effects, starts with all UNMARKED, cancel generates no absences, finalization atomically defaults included Unmarked to Absent, repeated command replays, distinct same-day meetings and two start clicks/devices produce at most one active meeting.
-- [ ] Add policy boundaries at 08:15:00.000 and 08:15:00.001 Asia/Manila; server/device timezone mismatch; zero grace; missing schedule; prior term/start validation; edit class policy without historical status changes; amended policy leaves earlier marks intact.
-- [ ] Race a directory section transfer/import and class roster edit against snapshot creation using independent pg clients/barriers. Assert complete old or complete new roster, no mixed snapshot, unchanged earlier sessions and correct halfway enrollment report inputs. Also transfer/import after Start preview but before POST: unchanged class revisions must still yield ROSTER_CHANGED due to fingerprint mismatch, with no session or receipt created; refreshing and starting succeeds.
-- [ ] Implement batched member+attendance materialization, immutable original snapshots, partial active index and set-based finalization + per-row audit in one transaction. Server class count limits fail before creation, never truncate.
-- [ ] Verify unit/DB/API suites and direct-SQL invalid-state/duplicate checks. Acceptance: scenarios C and E lifecycle pass without scanner UI.
+- [x] Test no absence/page-open side effects, starts with all UNMARKED, cancel generates no absences, finalization atomically defaults included Unmarked to Absent, repeated command replays, distinct same-day meetings and two start clicks/devices produce at most one active meeting.
+- [x] Add policy boundaries at 08:15:00.000 and 08:15:00.001 Asia/Manila; server/device timezone mismatch; zero grace; missing schedule; prior term/start validation; edit class policy without historical status changes; amended policy leaves earlier marks intact.
+- [x] Race a directory section transfer/import and class roster edit against snapshot creation using independent pg clients/barriers. Assert complete old or complete new roster, no mixed snapshot, unchanged earlier sessions and correct halfway enrollment report inputs. Also transfer/import after Start preview but before POST: unchanged class revisions must still yield ROSTER_CHANGED due to fingerprint mismatch, with no session or receipt created; refreshing and starting succeeds.
+- [x] Implement batched member+attendance materialization, immutable original snapshots, partial active index and set-based finalization + per-row audit in one transaction. Server class count limits fail before creation, never truncate.
+- [x] Verify unit/DB/API suites and direct-SQL invalid-state/duplicate checks. Acceptance: scenarios C and E lifecycle pass without scanner UI.
 
 Commit: `feat(classroom): snapshot rosters and finalize attendance sessions`.
 
