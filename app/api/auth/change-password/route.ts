@@ -5,7 +5,7 @@ import { err, ok } from "@/globals/utils/api";
 import { respondWithError } from "@/globals/utils/httpError";
 import {
   AuthError,
-  requireAuth,
+  requireIdentity,
   setAuthSession,
 } from "@/globals/utils/auth";
 import { hashPassword, verifyPassword } from "@/globals/utils/password";
@@ -17,12 +17,12 @@ import { rateLimit } from "@/globals/utils/rateLimit";
  * POST /api/auth/change-password
  *
  * The one route a forced-change session may call besides session-read and
- * logout. `requireAuth({ allowForcedPasswordChange: true })` is a deliberate
+ * logout. `requireIdentity({ allowForcedPasswordChange: true })` is a deliberate
  * server-only opt-in — never accept it from HTTP parameters.
  */
 export async function POST(req: Request) {
   try {
-    const session = await requireAuth({ allowForcedPasswordChange: true });
+    const session = await requireIdentity({ allowForcedPasswordChange: true });
     const { currentPassword, newPassword } = changePasswordSchema.parse(
       await req.json(),
     );
@@ -102,11 +102,12 @@ export async function POST(req: Request) {
       id: updated.id as string,
       name: updated.name as string,
       email: updated.email as string,
-      role: updated.role as "ADMIN" | "ORGANIZER",
+      role: updated.role as "ADMIN" | "ORGANIZER" | "MEMBER",
       status: updated.status as "PENDING" | "ACTIVE" | "REJECTED",
       rejectionReason: (updated.rejectionReason as string | null) ?? null,
       mustChangePassword: updated.mustChangePassword as boolean,
       credentialVersion: updated.credentialVersion as number,
+      accountState: updated.accountState as "ENABLED" | "DISABLED",
     });
 
     return NextResponse.json(ok(updated), {

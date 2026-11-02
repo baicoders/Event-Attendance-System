@@ -5,14 +5,16 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { prisma } from "@/globals/libs/prisma";
+import { AuthError } from "./authError";
+import { workspaceCapabilities } from "@/features/auth/utils/accessPolicy";
+export { AuthError } from "./authError";
 
-const userRoleEnum = z.enum(["ORGANIZER", "ADMIN"]);
+const userRoleEnum = z.enum(["ORGANIZER", "ADMIN", "MEMBER"]);
 const userStatusEnum = z.enum(["PENDING", "ACTIVE", "REJECTED"]);
-const eventStatusEnum = z.enum(["DRAFT", "PENDING", "APPROVED", "REJECTED"]);
+
 
 type UserRole = z.infer<typeof userRoleEnum>;
-type UserStatus = z.infer<typeof userStatusEnum>;
-type EventStatus = z.infer<typeof eventStatusEnum>;
+type EventStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
 
 export const AUTH_COOKIE = "event-attendance-auth";
 
@@ -21,6 +23,9 @@ const authSessionSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   role: userRoleEnum,
+  accountState: z.enum(["ENABLED", "DISABLED"]).optional(),
+  classroomStatus: z.enum(["PENDING", "APPROVED", "REJECTED", "SUSPENDED", "REVOKED"]).nullable().optional(),
+  capabilities: z.object({ events: z.boolean(), classroom: z.boolean(), admin: z.boolean() }).optional(),
   status: userStatusEnum,
   rejectionReason: z.string().nullable().optional(),
   // Optional so sessions signed before this field existed still verify;
@@ -83,18 +88,6 @@ function serializeSession(session: AuthSession) {
     "utf8"
   ).toString("base64url");
   return `${payload}.${signPayload(payload)}`;
-}
-
-export class AuthError extends Error {
-  status: number;
-  code?: string;
-
-  constructor(message: string, status = 401, code?: string) {
-    super(message);
-    this.name = "AuthError";
-    this.status = status;
-    this.code = code;
-  }
 }
 
 export async function setAuthSession(session: AuthSession) {
@@ -178,6 +171,8 @@ export async function getFreshAuthSession(): Promise<AuthSession | null> {
       rejectionReason: true,
       mustChangePassword: true,
       credentialVersion: true,
+      accountState: true,
+      classroomMembership: { select: { status: true } },
     },
   });
 
@@ -192,7 +187,8 @@ export async function getFreshAuthSession(): Promise<AuthSession | null> {
     return null;
   }
 
-  return user;
+  const { classroomMembership, ...identity } = user;
+  return { ...identity, classroomStatus: classroomMembership?.status ?? null, capabilities: workspaceCapabilities(user, classroomMembership?.status) };
 }
 
 /**
@@ -210,27 +206,42 @@ export function assertPasswordChangeCompleted(user: AuthSession) {
   }
 }
 
-export async function requireAuth(
-  options?: RequireAuthOptions,
-): Promise<AuthSession> {
-  // Revalidate against the database on every protected request so
-  // demotions, rejections, deletions, and credential changes take effect
-  // immediately instead of at cookie expiry.
+export async function requireIdentity(options?: RequireAuthOptions): Promise<AuthSession> {
   const user = await getFreshAuthSession();
-  if (!user) {
-    throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
-  }
+  if (!user) throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
+  if (user.accountState === "DISABLED") throw new AuthError("Account disabled", 403, "ACCOUNT_DISABLED");
+  if (!options?.allowForcedPasswordChange) assertPasswordChangeCompleted(user);
+  return user;
+}
+
+export async function requireEventsAccess(options?: RequireAuthOptions): Promise<AuthSession & { role: "ADMIN" | "ORGANIZER" }> {
+  const user = await requireIdentity(options);
   assertActiveUser(user);
-  if (!options?.allowForcedPasswordChange) {
-    assertPasswordChangeCompleted(user);
+  return { ...user, role: user.role as "ADMIN" | "ORGANIZER" };
+}
+
+/** Compatibility boundary: legacy business routes remain Events-only. */
+export const requireAuth = requireEventsAccess;
+
+export async function requireClassroomAccess(): Promise<AuthSession> {
+  const user = await requireIdentity();
+  if (!workspaceCapabilities(user, user.classroomStatus).classroom) {
+    throw new AuthError("Classroom access required", 403,
+      user.classroomStatus === "SUSPENDED" || user.classroomStatus === "REVOKED" ? "CLASSROOM_SUSPENDED" : "CLASSROOM_ACCESS_REQUIRED");
   }
   return user;
 }
 
+export async function requireAdmin(): Promise<AuthSession> {
+  const user = await requireEventsAccess();
+  requireRole(user, "ADMIN");
+  return user;
+}
+
 export function assertActiveUser(user: AuthSession) {
-  if (user.status !== "ACTIVE") {
-    throw new AuthError("Account not active", 403, "INACTIVE_USER");
-  }
+  if (user.accountState === "DISABLED") throw new AuthError("Account disabled", 403, "ACCOUNT_DISABLED");
+  if (user.status !== "ACTIVE") throw new AuthError("Account not active", 403, "INACTIVE_USER");
+  if (user.role !== "ADMIN" && user.role !== "ORGANIZER") throw new AuthError("Events access required", 403, "EVENTS_ACCESS_REQUIRED");
 }
 
 export function requireRole(user: AuthSession, allowed: UserRole | UserRole[]) {

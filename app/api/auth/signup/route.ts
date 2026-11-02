@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { setAuthSession } from "@/globals/utils/auth";
+import { PUBLIC_IDENTITY_SELECT } from "@/features/classroom/server/access";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/globals/libs/prisma";
@@ -34,21 +37,25 @@ export async function POST(req: Request) {
       });
     }
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: await hashPassword(password),
-        role: "ORGANIZER",
-        status: "PENDING",
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        status: true,
-      },
+    const hashedPassword = await hashPassword(password);
+    const user = await prisma.$transaction(async tx => {
+      const created = await tx.user.create({
+        data: { name, email, password: hashedPassword, role: parsed.workspace === "CLASS" ? "MEMBER" : "ORGANIZER", status: "PENDING" },
+        select: PUBLIC_IDENTITY_SELECT,
+      });
+      if (parsed.workspace === "CLASS") {
+        const member = await tx.classroomMembership.create({ data: {
+          userId: created.id, departmentOrDesignation: parsed.departmentOrDesignation!,
+          staffReference: parsed.staffReference || null, applicationText: parsed.applicationText ?? "",
+        } });
+        await tx.classroomAudit.create({ data: {
+          action: "TEACHER_APPLICATION_SUBMITTED", entityType: "ClassroomMembership", entityId: created.id,
+          actorId: created.id, actorName: created.name, commandId: randomUUID(), after: JSON.parse(JSON.stringify(member)),
+        } });
+      }
+      return created;
     });
+    if (parsed.workspace === "CLASS") await setAuthSession(user);
 
     return NextResponse.json(
       ok({
@@ -57,7 +64,7 @@ export async function POST(req: Request) {
         email: user.email,
         status: user.status,
       }),
-      { status: 201 }
+      { status: 201, headers: { "Cache-Control": "private, no-store" } }
     );
   } catch (error) {
     return respondWithError(error);

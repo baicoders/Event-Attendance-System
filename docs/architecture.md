@@ -1,3 +1,5 @@
+> Classroom implementation update (2026-11-02): the dedicated Class domain shares User credentials and Student identity with Events, but has independent membership and server authorization. `requireAuth` remains an Events-only compatibility boundary; `requireIdentity` supports applicants and own password changes. No teacher runs local servers. Existing LAN-only deployment descriptions below are historical; verify the actual hosted topology before production rollout. See [integration audit](implementation/classroom-integration-audit.md).
+
 # Architecture
 
 **Audience:** you, six months from now, about to change how attendance works.

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { mkdirSync, openSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
@@ -141,10 +142,12 @@ try {
     },
   });
 
+  mkdirSync(".superpowers/classroom-tests", { recursive: true });
+  const serverLog = openSync(".superpowers/classroom-tests/account-recovery.log", "w");
   server = spawn("pnpm", ["start", "--port", String(port)], {
     env,
     detached: true,
-    stdio: "ignore",
+    stdio: ["ignore", serverLog, serverLog],
   });
   let ready = false;
   for (let i = 0; i < 80; i++) {

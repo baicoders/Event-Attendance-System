@@ -4,6 +4,7 @@ import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
 import { respondWithError } from "@/globals/utils/httpError";
 import { databaseErrorLog } from "@/globals/utils/databaseErrorLog";
+import { workspaceCapabilities } from "@/features/auth/utils/accessPolicy";
 import { setAuthSession } from "@/globals/utils/auth";
 import {
   hashPassword,
@@ -78,6 +79,7 @@ export async function POST(req: Request) {
           rejectionReason: true,
           mustChangePassword: true,
           credentialVersion: true,
+          accountState: true,
         },
       });
       if (!reread || reread.password !== user.password) {
@@ -89,14 +91,16 @@ export async function POST(req: Request) {
       current = { ...user, ...reread };
     }
 
-    if (current.status === "PENDING") {
+    if (current.accountState === "DISABLED") return NextResponse.json(err("Account disabled.", "ACCOUNT_DISABLED"), { status: 403, headers: NO_STORE });
+
+    if (parsed.workspace !== "CLASS" && current.status === "PENDING") {
       return NextResponse.json(err("Account pending admin approval."), {
         status: 403,
         headers: NO_STORE,
       });
     }
 
-    if (current.status === "REJECTED") {
+    if (parsed.workspace !== "CLASS" && current.status === "REJECTED") {
       return NextResponse.json(
         err(
           current.rejectionReason ??
@@ -110,7 +114,13 @@ export async function POST(req: Request) {
     // it can only read its session identity, replace its own password, or
     // sign out until replacement. Every other route's `requireAuth()` rejects
     // it server-side.
+    if (parsed.workspace !== "CLASS" && current.role === "MEMBER") return NextResponse.json(err("Events access required.", "EVENTS_ACCESS_REQUIRED"), { status: 403, headers: NO_STORE });
+    const membership = await prisma.classroomMembership.findUnique({ where: { userId: current.id }, select: { status: true } });
+    const capabilities = workspaceCapabilities(current, membership?.status);
     const session = {
+      accountState: current.accountState,
+      classroomStatus: membership?.status ?? null,
+      capabilities,
       id: current.id,
       name: current.name,
       email: current.email,
@@ -123,7 +133,7 @@ export async function POST(req: Request) {
 
     await setAuthSession(session);
 
-    return NextResponse.json(ok(session), {
+    return NextResponse.json(ok({ ...session, destination: current.mustChangePassword ? "/account/settings" : parsed.workspace === "CLASS" ? (capabilities.classroom ? "/class" : "/class/access") : "/dashboard" }), {
       status: 200,
       headers: NO_STORE,
     });

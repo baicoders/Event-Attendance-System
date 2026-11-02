@@ -15,7 +15,10 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "ORGANIZER";
+  role: "ADMIN" | "ORGANIZER" | "MEMBER";
+  accountState?: "ENABLED" | "DISABLED";
+  classroomStatus?: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED" | "REVOKED" | null;
+  capabilities?: { events: boolean; classroom: boolean; admin: boolean };
   status: UserStatus;
   rejectionReason?: string | null;
   /** True while an admin-issued temporary password is still in place. */

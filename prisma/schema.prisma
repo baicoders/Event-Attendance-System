@@ -162,6 +162,11 @@ model User {
   reviewedEvents  Event[]    @relation("EventReviewer")
   createdRecords  Record[]   @relation("RecordCreator")
   modifiedRecords Record[]   @relation("RecordModifier")
+  accountState    AccountState @default(ENABLED)
+  classroomMembership ClassroomMembership?
+  teacherOnboarding TeacherOnboarding?
+
+  @@index([accountState])
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -202,6 +207,7 @@ model CustomGroupMembership {
 }
 
 enum UserRole {
+  MEMBER
   ORGANIZER
   ADMIN
 }
@@ -258,4 +264,84 @@ enum EventCategory {
   PROGRAM
   SECTION
   YEAR
+}
+
+// Independent of legacy User.status, which continues to govern Events approval.
+enum AccountState {
+  ENABLED
+  DISABLED
+}
+
+enum ClassroomMembershipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+  REVOKED
+}
+
+model ClassroomMembership {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  status ClassroomMembershipStatus @default(PENDING)
+  departmentOrDesignation String @db.VarChar(160)
+  staffReference String? @db.VarChar(100)
+  applicationText String @default("") @db.VarChar(1000)
+  appliedAt DateTime @default(now()) @db.Timestamptz(3)
+  reviewedAt DateTime? @db.Timestamptz(3)
+  reviewerId String?
+  reviewerName String?
+  decisionReason String? @db.VarChar(1000)
+  revision Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  @@index([status, appliedAt, userId])
+}
+
+model TeacherOnboarding {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  flowVersion Int @default(1)
+  step String @default("WELCOME") @db.VarChar(40)
+  draft Json @default("{}") @db.JsonB
+  completedAt DateTime? @db.Timestamptz(3)
+  revision Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// Scalar attribution is deliberately retained if an account is later retired.
+model ClassroomAudit {
+  id BigInt @id @default(autoincrement())
+  action String @db.VarChar(80)
+  entityType String @db.VarChar(80)
+  entityId String
+  classId String?
+  sessionId String?
+  studentId String?
+  actorId String
+  actorName String
+  before Json? @db.JsonB
+  after Json? @db.JsonB
+  reason String? @db.VarChar(1000)
+  commandId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([classId, id])
+  @@index([sessionId, id])
+  @@index([studentId, id])
+  @@index([actorId, createdAt, id])
+  @@index([action, createdAt, id])
+}
+
+model ClassroomCommandReceipt {
+  actorId String
+  commandId String @db.Uuid
+  operation String @db.VarChar(80)
+  resourceId String
+  requestHash String @db.VarChar(64)
+  result Json @db.JsonB
+  httpStatus Int @default(200)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@id([actorId, commandId])
+  @@index([resourceId, createdAt])
 }
