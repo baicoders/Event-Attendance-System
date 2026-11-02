@@ -24,4 +24,4 @@ const mobileItems: MobileNavigationItem[] = [
   { text: 'Reports', route: '/class/reports', icon: BarChart3 },
 ];
 export function ClassroomSidebar({ admin = false }: { admin?: boolean }) { return <Sidebar items={admin ? adminItems : teacherItems} workspace="CLASS" />; }
-export function ClassroomBottomNav({ admin = false }: { admin?: boolean }) { return <MobileBottomNav items={admin ? [...adminItems, { text: 'Attendance', route: '/class', icon: QrCode }] : mobileItems} />; }
+export function ClassroomBottomNav({ admin = false }: { admin?: boolean }) { return <MobileBottomNav compact items={admin ? [...adminItems, { text: 'Attendance', route: '/class', icon: QrCode }] : mobileItems} />; }

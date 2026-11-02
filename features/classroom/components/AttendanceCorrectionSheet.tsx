@@ -1,0 +1,10 @@
+'use client';
+import { useState } from 'react';
+import { Button } from '@/globals/components/shad-cn/button';
+import type { SessionMember,FinalAttendanceStatus } from '../types/attendance';
+import { attendanceLabels } from '../types/attendance';
+import AttendanceActionSheet from './AttendanceActionSheet';
+export default function AttendanceCorrectionSheet({member,status,requiresReason,busy,error,onClose,onSave}:{member:SessionMember;status:FinalAttendanceStatus;requiresReason:boolean;busy:boolean;error:string;onClose:()=>void;onSave:(reason:string,note:string)=>void}){
+ const [reason,setReason]=useState('');const [note,setNote]=useState(status==='EXCUSED'?member.attendance.excuseNote??'':'');
+ return <AttendanceActionSheet open title={requiresReason?'Correct attendance':'Excuse student'} description={member.studentSnapshot.firstName+' '+member.studentSnapshot.lastName+' · '+attendanceLabels[status]} onClose={onClose}><p>Current result: {attendanceLabels[member.attendance.status]}. Save requires an internet connection.</p>{status==='EXCUSED'?<label className="block text-sm font-medium">Excuse note (optional)<textarea className="mt-2 min-h-24 w-full rounded-xl border p-3" maxLength={1000} value={note} onChange={event=>setNote(event.target.value)} placeholder="Optional excuse-letter details"/></label>:null}{requiresReason?<label className="block text-sm font-medium">Reason for correction<textarea className="mt-2 min-h-24 w-full rounded-xl border p-3" minLength={3} maxLength={1000} value={reason} onChange={event=>setReason(event.target.value)} required/></label>:null}{error?<p role="alert" className="break-words text-sm text-rose-800">{error}</p>:null}<Button className="min-h-12 w-full" disabled={busy||(requiresReason&&reason.trim().length<3)} onClick={()=>onSave(reason.trim(),note.trim())}>{busy?'Waiting for confirmation…':'Save '+attendanceLabels[status]}</Button><Button className="min-h-12 w-full" variant="outline" onClick={onClose}>Close</Button></AttendanceActionSheet>;
+}

@@ -25,7 +25,7 @@ export default function TeacherOnboarding({help=false}:{help?:boolean}){
   {state.nextStep==='ROSTER'?<RosterReviewStep key={state.classId} state={state} busy={blocked} retry={command.unconfirmed} onSave={save} onRefresh={refresh}/>:null}
   {state.nextStep==='SETTINGS'?<AttendanceSettingsStep state={state} busy={blocked} retry={command.unconfirmed} onSave={save} onRefresh={refresh}/>:null}
   {state.nextStep==='TUTORIAL'?<QrTutorialStep busy={blocked} retry={command.unconfirmed} onFinish={choice=>void save({step:'TUTORIAL',draft:{tutorial:choice}})}/>:null}
-  {state.nextStep==='READY'?<ReadyStep state={state} busy={blocked} onFinish={async()=>{if(await save({step:'READY',complete:true}))router.replace('/class');}}/>:null}
+  {state.nextStep==='READY'?<ReadyStep state={state} busy={blocked} onFinish={async(start)=>{if(await save({step:'READY',complete:true}))router.replace(start&&state.classId?'/class/classes/'+encodeURIComponent(state.classId)+'/start':'/class');}}/>:null}
   </>}
   {command.error?<div role="alert" className="space-y-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><p>{command.error}</p>{command.unconfirmed?<Button className="min-h-12 w-full" disabled={command.busy} onClick={()=>void retrySave()}>Retry same progress save</Button>:<Button className="min-h-12 w-full" variant="outline" onClick={()=>{command.clearError();refresh();}}>Reload saved progress</Button>}</div>:null}
   </>:null}</div>;

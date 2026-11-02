@@ -35,3 +35,18 @@ test('replay reauthorizes the resource and credential generation before returnin
   await client.db.user.update({ where: { id }, data: { credentialVersion: { increment: 1 } } });
   await assert.rejects(executeClassroomCommand(client.db, actor, 'EVENTS_DIRECTORY', input, async () => ({})), { code: 'UNAUTHORIZED' });
 });
+
+test('domain rejections certify a settled command only after locked receipt absence',async()=>{
+ const {AuthError}=await import('@/globals/utils/authError');
+ const current=await client.db.user.findUniqueOrThrow({where:{id}});const actor={userId:id,credentialVersion:current.credentialVersion};
+ const input={commandId:randomUUID(),operation:'SETTLED_REJECTION',resourceId:id,payload:{}};
+ await assert.rejects(executeClassroomCommand(client.db,actor,'EVENTS_DIRECTORY',input,async()=>{throw new AuthError('Attendance changed.',409,'ATTENDANCE_CHANGED');}),(error:unknown)=>{
+  assert.ok(error instanceof AuthError);assert.equal(error.details?.commandSettled,true);return true;
+ });
+ await assert.rejects(executeClassroomCommand(client.db,{...actor,credentialVersion:actor.credentialVersion-1},'EVENTS_DIRECTORY',input,async()=>({})),(error:unknown)=>{
+  assert.ok(error instanceof AuthError);assert.notEqual(error.details?.commandSettled,true);return true;
+ });
+ await assert.rejects(executeClassroomCommand(client.db,actor,'EVENTS_DIRECTORY',input,async()=>({}),{authorizeResource:async()=>{throw new AuthError('Class unavailable.',404,'CLASS_NOT_FOUND');}}),(error:unknown)=>{
+  assert.ok(error instanceof AuthError);assert.notEqual(error.details?.commandSettled,true);return true;
+ });
+});

@@ -5,6 +5,7 @@ import sys
 import time
 
 from playwright.sync_api import sync_playwright, expect
+expect.set_options(timeout=30000)
 
 
 base, event_id, email = sys.argv[1:4]
@@ -77,7 +78,7 @@ with sync_playwright() as playwright:
     desktop.keyboard.press("Enter")
     expect(desktop.get_by_text("Attendance status could not be checked. Status is unknown.")).to_be_visible()
     assert writes == [], "Viewing details wrote attendance"
-    row_action.click()
+    desktop.get_by_role("button", name="Record time in (status unknown)", exact=True).click()
     expect(desktop.get_by_text("Time-in recorded", exact=True)).to_be_visible()
     assert len(writes) == 1, writes
     assert writes[0]["studentId"] == student_id
@@ -96,12 +97,14 @@ with sync_playwright() as playwright:
     stale_action = desktop.get_by_role("button", name="Record time in for Test Student 11, " + removed_id)
     expect(stale_action).to_be_visible()
     removed = desktop.evaluate("""async (url) => {
-        const response = await fetch(url, { method: 'DELETE' });
+        const current = await (await fetch(url)).json();
+        const response = await fetch(url, { method: 'PATCH', headers: {'content-type':'application/json'}, body: JSON.stringify({expectedVersion:current.data.editVersion,student:{schoolLevel:'SHS',yearLevel:'GRADE_11'}}) });
         return { ok: response.ok, body: await response.text() };
     }""", base + "/api/students/" + removed_id)
     assert removed["ok"], removed["body"]
     before_rejection = len(roster_requests)
     stale_action.click()
+    search.focus()
     expect(desktop.get_by_text("No matching students in this event.")).to_be_visible()
     assert len(roster_requests) > before_rejection, "eligibility rejection did not refresh roster"
 

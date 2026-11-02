@@ -28,6 +28,7 @@ export async function executeClassroomCommand<T>(
   const input = { ...raw, commandId };
   const hash = commandHash({ ...input, actorId: actor.userId, policy });
   for (let attempt = 0; ; attempt++) {
+    let receiptAbsentUnderLock=false;
     try {
       return await db.$transaction(async tx => {
         await tx.$executeRaw`SET LOCAL lock_timeout = '1500ms'`;
@@ -50,6 +51,7 @@ export async function executeClassroomCommand<T>(
           await options.authorizeReplay?.(tx, user, prior.result);
           return { data: prior.result as T, replayed: true };
         }
+        receiptAbsentUnderLock=true;
         const data = await operation(tx, user);
         // JSON serialization is also the wire contract, so initial and replayed responses agree.
         const result = JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
@@ -58,6 +60,10 @@ export async function executeClassroomCommand<T>(
       }, { maxWait: options.maxWait ?? 1500, timeout: options.timeout ?? 5000 });
     } catch (error) {
       if (attempt === 0 && isRetryableTransactionError(error)) continue;
+      // Only a rolled-back domain rejection after command serialization and
+      // receipt absence settles an earlier uncertain attempt. Auth/limit/schema
+      // failures before this point cannot make that claim.
+      if(receiptAbsentUnderLock&&error instanceof AuthError)error.details={...error.details,commandSettled:true};
       throw error;
     }
   }

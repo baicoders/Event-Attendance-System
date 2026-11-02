@@ -53,7 +53,7 @@ try {
     password: "password-123", status: "ACTIVE",
   } })));
   await prisma.student.createMany({ data: Array.from({ length: 2_000 }, (_, index) => ({
-    id: String(index + 1).padStart(11, "0"), firstName: "Test", lastName: `Student ${index}`,
+    id: String(index + 1).padStart(11, "0"), usn: String(index + 1).padStart(11, "0"), firstName: "Test", lastName: `Student ${index}`,
     schoolLevel: "COLLEGE", yearLevel: "YEAR_1",
   })) });
   const eventData = {
@@ -161,7 +161,7 @@ try {
     assert.equal(raceRecord, null);
   }
 
-  const throughputEvent = await prisma.event.create({ data: { title: "HTTP load", ...eventData } });
+  const throughputEvent = await prisma.event.create({ data: { title: "HTTP load", ...eventData, category: "COLLEGE" } });
   const started = performance.now();
   const throughput = await Promise.all(Array.from({ length: 5 }, (_, index) => request("/api/records", {
     cookie: operatorCookies[index], method: "POST", body: {

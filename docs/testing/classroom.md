@@ -106,3 +106,19 @@ Contract: [Classroom attendance](../implementation/classroom-attendance.md).
 - Final build, TypeScript, scoped ESLint and whitespace checks pass. Existing pg queued-query deprecation remains captured; no adapter internals changed.
 
 `pnpm test:classroom:attendance` runs the focused database/API suite. Phone capture/manual interaction, reload recovery descriptors, reports and administrative monitoring remain required before release. No production data, migration or deployment occurred.
+
+## Phone attendance and first real meeting (Task9)
+
+Contract: [Mobile attendance](../implementation/classroom-mobile-attendance.md).
+
+- `pnpm test:classroom:unit`:50/50, including valid/invalid wire envelopes, same-key uncertain save recovery, actor/session disposal, decoder duplicate gating, receipt lookup without resubmission, malformed/retry429 behavior, monotonic row revisions and truthful older-save feedback,100-row pagination, explicit Manila inputs and track cleanup after late permissions/play failure.
+- Command settlement database4/4; classes9/9 and sessions10/10, including bounded class list summaries, derived first-attendance guidance and current-owner metadata independent of frozen original-teacher snapshots.
+- `pnpm test:classroom:attendance`:22 database tests plus production API pass after mobile integration. This rechecks locking races, QR/manual/enrollment/receipt contracts, rate limits and authorization boundaries.
+- `pnpm test:classroom:mobile`: disposable production PostgreSQL/app and375px browser;35/100/101/220 rosters, preserved search/filter/scroll, all outcomes, optional excuse notes, reasoned overrides, Start/mark lost-response reload recovery, actual USN/LRN/internal-ID QR frames/local WASM, duplicate/unknown/outside-roster choices, camera-denied manual fallback, finalization/cancellation/finalized corrections, keyboard names and200% zoom. Database assertions prove one meeting per Start, one first-mark audit despite lost acknowledgment, and session-only visitor enrollment.
+- `CLASSROOM_TEST_BROWSER=true node --import tsx scripts/test-classroom-onboarding-api.mjs`: newly approved teacher completes/resumes first-class setup, follows Ready to Start preview, generates no attendance before explicitly starting, saves first real manual attendance and finalizes. Repeated setup/help does not restart onboarding.
+- Existing Events `pnpm test:operator`:31/31; `MANUAL_BROWSER_TEST=1 pnpm test:operator-api` production HTTP/manual/operator browser passes. Updated fixture gives students explicit USNs and tests stale COLLEGE eligibility through a versioned individual correction, respecting the new administrator-only deletion policy.
+- Existing Events HTTPS/local-decoder full E2E20/20 plus harness6/6 passes. Report: `test-results/attendance-e2e/2026-11-02T11-20-31-422Z-626781/report.json`. Five operators,2,000 synthetic students, QR identities, rejected scans, network loss/replay, stale mode, reports, permissions and camera-denied recovery are included; physicalDevicesTested=false.
+
+The initial375px/200% no-overflow check was insufficient: visual inspection found overlapping bottom-tab labels. A separate bounds assertion now checks adjacent links and their label/indicator bounds; opt-in Class compact navigation passes it in the final production browser run. The default Events navigation stays unchanged.
+
+Physical deployed-HTTPS iOS/Android camera/background/rotation and actual teacher/screen-reader trials remain release gates. Local fsync-off timings are functional evidence, not hosted capacity or durability certification. No production database or deployment is involved.

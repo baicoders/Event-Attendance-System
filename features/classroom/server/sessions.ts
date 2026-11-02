@@ -56,7 +56,7 @@ export async function startClassroomSession(db:PrismaClient,actor:ActorContext,c
   },{httpStatus:201,timeout:10000,maxWait:2000,authorizeResource:async(tx,user)=>{await takeRosterSharedLock(tx);offering=await loadStartClass(tx,classId,user,'UPDATE');}});
 }
 export async function getClassroomSession(db:PrismaClient,actor:ActorContext,sessionId:string){
-  return classroomRead(db,actor,async(tx,user)=>{const {session}=await lockOwnedSession(tx,sessionId,user,'SHARE');return sessionDto(session,await sessionCounts(tx,sessionId));});
+  return classroomRead(db,actor,async(tx,user)=>{const {session,offering}=await lockOwnedSession(tx,sessionId,user,'SHARE');const completed=await tx.classroomSession.findFirst({where:{state:'FINALIZED',class:{primaryTeacherId:user.id}},select:{id:true}});return {...sessionDto(session,await sessionCounts(tx,sessionId)),currentPrimaryTeacherId:offering.primaryTeacherId,showFirstAttendanceGuidance:!completed&&session.state==='ACTIVE'&&session.classSnapshot!==null};});
 }
 export async function listClassroomSessions(db:PrismaClient,actor:ActorContext,classId:string,raw=new URLSearchParams()){
   const input=sessionListQuerySchema.parse(Object.fromEntries(raw));

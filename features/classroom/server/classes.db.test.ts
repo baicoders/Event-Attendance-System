@@ -32,7 +32,7 @@ test('non-owners cannot read, modify or replay classes; a teacher cannot forge o
  await assert.rejects(getClassOffering(client.db,other,classId),{code:'CLASS_NOT_FOUND'});
  await assert.rejects(updateClassOffering(client.db,other,classId,{commandId:randomUUID(),expectedConfigRevision:0,displayName:'Unauthorized'}),{code:'CLASS_NOT_FOUND'});
  await assert.rejects(createClassOffering(client.db,teacher,{...createInput(),primaryTeacherId:other.userId}),{status:403});
- const list=await listClassOfferings(client.db,other,new URLSearchParams());assert.ok(list.items.every(item=>item.primaryTeacherId===other.userId));
+ const list=await listClassOfferings(client.db,other,new URLSearchParams());assert.ok(list.items.every(item=>item.primaryTeacherId===other.userId));assert.ok(list.items.every(item=>!Object.hasOwn(item,'exceptions')&&Object.hasOwn(item,'activeSession')&&Object.hasOwn(item,'latestSession')),'class lists return bounded summaries with meeting actions');
 });
 test('invalid or employee section categories are rejected and cannot bypass SQL guards',async()=>{
  for(const sectionId of ['house','employees','missing'])await assert.rejects(createClassOffering(client.db,teacher,{...createInput(),sectionIds:[sectionId]}));

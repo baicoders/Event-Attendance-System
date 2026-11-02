@@ -43,7 +43,7 @@ await withClassroomTestApp(async({db,request,base})=>{
     const run=spawnSync('python3',['scripts/test-classroom-onboarding.py'],{env:{...process.env,CLASSROOM_TEST_BASE:base,CLASSROOM_TEACHER_COOKIE:browserTeacher.cookie},encoding:'utf8'});
     assert.equal(run.status,0,run.stdout+'\n'+run.stderr);console.log(run.stdout);
     assert.equal(await db.classOffering.count({where:{primaryTeacherId:browserTeacher.id}}),1);
-    const progress=await db.teacherOnboarding.findUniqueOrThrow({where:{userId:browserTeacher.id}});assert.ok(progress.completedAt);
+    const progress=await db.teacherOnboarding.findUniqueOrThrow({where:{userId:browserTeacher.id}});assert.ok(progress.completedAt);assert.equal(await db.classroomSession.count({where:{class:{primaryTeacherId:browserTeacher.id},state:'FINALIZED'}}),1,'new teacher completes a real first attendance after onboarding');
     assert.equal(await db.classroomAudit.count({where:{actorId:browserTeacher.id,entityType:'TeacherOnboarding',action:'TEACHER_ONBOARDING_COMPLETED'}}),1);
     assert.equal(await db.classroomAudit.count({where:{actorId:browserTeacher.id,entityType:'TeacherOnboarding',after:{path:['step'],equals:'WELCOME'}}}),1,'malformed ack retry does not duplicate welcome progress');
   }

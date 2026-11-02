@@ -28,12 +28,13 @@ test('preview creates no attendance; start atomically freezes three eligible unm
  const roster=await getSessionRoster(client.db,actor,firstSessionId);assert.equal(roster.total,3);assert.equal(roster.pageSize,100);assert.deepEqual(roster.items.map(row=>row.studentId).sort(),['a','b','irregular']);assert.ok(roster.items.every(row=>row.attendance.status==='UNMARKED'));
  const replay=await startClassroomSession(client.db,actor,classId,input);assert.deepEqual(replay.data,created.data);assert.equal(replay.replayed,true);
  await assert.rejects(startClassroomSession(client.db,actor,classId,{...input,commandId:randomUUID()}),{code:'ACTIVE_SESSION_EXISTS'});
+ assert.equal((await getClassroomSession(client.db,actor,firstSessionId)).showFirstAttendanceGuidance,true);
  await assert.rejects(getClassroomSession(client.db,other,firstSessionId),{code:'CLASS_NOT_FOUND'});
  await assert.rejects(updateClassOffering(client.db,actor,classId,{commandId:randomUUID(),expectedConfigRevision:0,archived:true}),{code:'ACTIVE_SESSION_EXISTS'});
 });
 test('finalization makes only remaining unmarked members absent, with one immutable change each',async()=>{
  const finalized=await finalizeClassroomSession(client.db,actor,firstSessionId,{commandId:randomUUID(),expectedLifecycleRevision:0,expectedSnapshotRevision:0});
- assert.equal(finalized.data.state,'FINALIZED');assert.equal(finalized.data.defaultedAbsent,3);
+ assert.equal((await getClassroomSession(client.db,actor,firstSessionId)).showFirstAttendanceGuidance,false);assert.equal(finalized.data.state,'FINALIZED');assert.equal(finalized.data.defaultedAbsent,3);
  assert.equal(await client.db.classroomAttendanceChange.count({where:{sessionId:firstSessionId,action:'FINALIZE_ABSENT'}}),3);
  assert.equal((await getSessionRoster(client.db,actor,firstSessionId)).counts.ABSENT,3);
  await assert.rejects(client.db.classroomAttendanceChange.updateMany({where:{sessionId:firstSessionId},data:{reason:'Rewrite audit'}}));
@@ -118,4 +119,10 @@ test('capacity limits reject 1,001 before writes; the full 1,000-member boundary
  const finalAt=performance.now();const finalized=await finalizeClassroomSession(client.db,actor,session.id,{commandId:randomUUID(),expectedLifecycleRevision:0,expectedSnapshotRevision:0});
  assert.equal(finalized.data.defaultedAbsent,1000);assert.equal(finalized.data.counts.ABSENT,1000);assert.equal(await client.db.classroomAttendanceChange.count({where:{sessionId:session.id}}),1000);
  console.log('1,000-member fixture start+page ms:',Math.round(finalAt-startAt),'finalize ms:',Math.round(performance.now()-finalAt));
+});
+test('session reads expose current ownership while preserving the original teacher snapshot after transfer',async()=>{
+ await client.db.user.create({data:{id:'session-admin',name:'Administrator',email:'session-admin@example.test',password:'test',role:'ADMIN',status:'ACTIVE'}});
+ const {transferClassOwner}=await import('./classes');const row=await client.db.classOffering.findUniqueOrThrow({where:{id:classId}});
+ await transferClassOwner(client.db,{userId:'session-admin',credentialVersion:0},classId,{commandId:randomUUID(),expectedConfigRevision:row.configRevision,teacherId:other.userId,reason:'Correct primary teacher assignment'});
+ const current=await getClassroomSession(client.db,other,firstSessionId);assert.equal(current.currentPrimaryTeacherId,other.userId);assert.equal((current.classSnapshot as {primaryTeacher:{id:string}}).primaryTeacher.id,actor.userId);await assert.rejects(getClassroomSession(client.db,actor,firstSessionId),{code:'CLASS_NOT_FOUND'});
 });

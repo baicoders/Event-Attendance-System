@@ -2,13 +2,15 @@ export class ApiError extends Error {
   status: number;
   code?: string;
   details?: Record<string, unknown>;
+  hasValidResponse: boolean;
 
-  constructor(message: string, status: number, code?: string, details?: Record<string, unknown>) {
+  constructor(message: string, status: number, code?: string, details?: Record<string, unknown>, hasValidResponse = true) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.hasValidResponse = hasValidResponse;
   }
 }
 
@@ -56,12 +58,12 @@ export async function fetchApi<T>(
     json = await res.json();
   } catch {
     // If server returned non-JSON response
-    throw new ApiError("Invalid server response", res.status);
+    throw new ApiError("Invalid server response", res.status, undefined, undefined, false);
   }
 
   // If JSON doesnt exist
-  if (!json) {
-    throw new ApiError("Invalid server response", res.status);
+  if (!json || typeof json !== "object" || typeof json.success !== "boolean" || (json.success ? !Object.hasOwn(json,"data") : typeof json.message !== "string")) {
+    throw new ApiError("Invalid server response", res.status, undefined, undefined, false);
   }
 
   // 3. Handle HTTP-level errors (404, 500, etc.)
@@ -71,7 +73,7 @@ export async function fetchApi<T>(
       throw new ApiError(json.message, res.status, json.code, json.details);
     }
 
-    throw new ApiError(res.statusText || "Request failed", res.status);
+    throw new ApiError("Invalid server response", res.status, undefined, undefined, false);
   }
 
   // 4. Handle application-level errors

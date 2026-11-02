@@ -1,0 +1,10 @@
+'use client';
+import Link from 'next/link';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/globals/contexts/AuthContext';
+import { fetchApi } from '@/globals/utils/api';
+import { Button } from '@/globals/components/shad-cn/button';
+import { formatManila } from '../utils/manualRosterState';
+import { classroomReadRetry } from '../hooks/useClassroomSession';
+export default function ClassSessionHistory({classId}:{classId:string}){const {user}=useAuth();const [page,setPage]=useState(1);const meetings=useQuery({queryKey:['classroom','meetings',user?.id,classId,page],queryFn:({signal})=>fetchApi<{items:Array<{id:string;state:string;scheduledStartAt:string}>;total:number}>('/api/classroom/classes/'+encodeURIComponent(classId)+'/sessions?pageSize=20&page='+page,{signal}),retry:classroomReadRetry});return <section className="space-y-3 rounded-2xl border bg-white p-4"><h2 className="font-semibold">Attendance meetings</h2>{meetings.isLoading?<p role="status">Loading meetings…</p>:meetings.isError?<div role="alert"><p>Unable to load meetings.</p><Button className="min-h-12" onClick={()=>void meetings.refetch()}>Retry meetings</Button></div>:meetings.data?.items.length?meetings.data.items.map(item=><Link key={item.id} className="flex min-h-12 flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-indigo-700" href={'/class/sessions/'+encodeURIComponent(item.id)}><span>{formatManila(item.scheduledStartAt)}</span><span>{item.state==='ACTIVE'?'Continue active session':item.state==='FINALIZED'?'Review finalized attendance':'Canceled'}</span></Link>):<p className="text-sm">No meetings yet. Start attendance when class begins.</p>}{meetings.data&&meetings.data.total>20?<nav className="flex gap-3" aria-label="Meeting pages"><Button className="min-h-12" disabled={page<=1} onClick={()=>setPage(value=>value-1)}>Previous</Button><Button className="min-h-12" disabled={page*20>=meetings.data.total} onClick={()=>setPage(value=>value+1)}>Next</Button></nav>:null}</section>;}

@@ -651,11 +651,11 @@ Commit: `feat(classroom): record reliable scans and audited attendance correctio
 
 **Consumes:** T8 acknowledged result/error DTOs and T7 session summaries. **Produces:** scanner/manual workflow, same-key retry/reconciliation, stable list interaction and completed T6 first-attendance flow.
 
-- [ ] Add coordinator tests for no premature success, stale context/user callbacks, decoder duplicate suppression versus explicit retry, lost-response UUID retention and camera/manual switch.
-- [ ] Add E2E with 35, 100, 101 and 220 synthetic students: search/filter/pagination/row marking, anchored scroll, preserved filter, Excused optional note, Late override/reason, failed-save retry, finalize/cancel and reopened finalized correction.
-- [ ] Implement per-row confirmed state and 48px actions; cache keys include user/session/filter/page; avoid full-directory fetches. Query refetch must not remount list or reset focus. No mutation auto-retry with a new key.
-- [ ] Finish onboarding tutorial/ready/start hints with real APIs; test page reload and camera failure → manual confirmed attendance. No prototype demo data reaches production routes.
-- [ ] Verify current Events `pnpm test:operator`, manual/operator API/browser checks plus Class unit/E2E, 375px overflow, keyboard and screen-reader labels. Acceptance: scenarios E/H and onboarding checklist are complete.
+- [x] Add coordinator tests for no premature success, stale context/user callbacks, decoder duplicate suppression versus explicit retry, lost-response UUID retention and camera/manual switch.
+- [x] Add E2E with 35, 100, 101 and 220 synthetic students: search/filter/pagination/row marking, anchored scroll, preserved filter, Excused optional note, Late override/reason, failed-save retry, finalize/cancel and reopened finalized correction.
+- [x] Implement per-row confirmed state and 48px actions; cache keys include user/session/filter/page; avoid full-directory fetches. Query refetch must not remount list or reset focus. No mutation auto-retry with a new key.
+- [x] Finish onboarding tutorial/ready/start hints with real APIs; test page reload and camera failure → manual confirmed attendance. No prototype demo data reaches production routes.
+- [x] Verify current Events `pnpm test:operator`, manual/operator API/browser checks plus Class unit/E2E, 375px overflow, keyboard and screen-reader labels. Acceptance: scenarios E/H and onboarding checklist are complete.
 
 Commit: `feat(classroom): add mobile scanning and manual attendance`.
 

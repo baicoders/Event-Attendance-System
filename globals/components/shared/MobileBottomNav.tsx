@@ -37,7 +37,7 @@ const navigationItems: MobileNavigationItem[] = [
 /** iOS-style fixed tab bar shown below the `lg` breakpoint. Same dark surface
  * and indigo active treatment as the desktop `Sidebar`; the Attendance tab —
  * the primary operator screen — is raised like a shutter button. */
-const MobileBottomNav = ({ items = navigationItems }: { items?: MobileNavigationItem[] }) => {
+const MobileBottomNav = ({ items = navigationItems, compact = false }: { items?: MobileNavigationItem[]; compact?: boolean }) => {
   const pathname = usePathname();
 
   const currentRoute = (route: string): "page" | "location" | undefined => {
@@ -46,6 +46,23 @@ const MobileBottomNav = ({ items = navigationItems }: { items?: MobileNavigation
     if (pathname.startsWith(`${route}/`)) return "location";
     return undefined;
   };
+
+  // Class uses flat, wrapping tabs so zoomed labels and the scanner control
+  // stay inside their own touch targets. Events retains its raised shutter tab.
+  if (compact) return (
+    <nav aria-label="Primary" className="print:hidden fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 pb-[env(safe-area-inset-bottom)] text-slate-300 shadow-[0_-8px_30px_rgba(2,6,23,0.35)] backdrop-blur-xl lg:hidden">
+      <div className="mx-auto grid min-h-16 max-w-md grid-cols-5 items-stretch px-1 py-1">
+        {items.map(item => {
+          const Icon = item.icon;
+          const current = currentRoute(item.route);
+          return <Link key={item.route} href={item.route} aria-label={item.text} aria-current={current} className={cn("flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1", current && "bg-indigo-600/30 text-white", darkFocusRing)}>
+            <Icon aria-hidden="true" className="size-5 shrink-0" />
+            <span className="w-full min-w-0 break-words text-center text-[10px] font-medium leading-tight">{item.text}</span>
+          </Link>;
+        })}
+      </div>
+    </nav>
+  );
 
   return (
     <nav
