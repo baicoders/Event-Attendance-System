@@ -1,3 +1,5 @@
+> M2 adds Student.profileRevision/archivedAt, StudentQrCode, StudentProfileChange and StudentVerification. StudentProfilePending is transaction staging, not a second student directory. Existing identities and Events attendance foreign keys stay unchanged. See [identity/history contract](implementation/classroom-student-identity.md).
+
 > Classroom implementation update (2026-11-02): `User.role`/`User.status` govern legacy Events approval. New base MEMBER accounts have no Events grant. `accountState` is the global disable switch; `ClassroomMembership` independently grants teacher access. Classroom audits/command receipts are immutable. See [approved plan](superpowers/plans/2026-11-02-classroom-attendance-teacher-module.md) and [route capability inventory](implementation/classroom-integration-audit.md). Later sections describing only the original domain are historical context, not the complete current schema.
 
 # Domain Model

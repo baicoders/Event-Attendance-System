@@ -20,6 +20,7 @@ import type { QRIdentifierType } from "../utils/qrIdentifier";
 import { StudentQrModal } from "./StudentQRModal";
 import { StudentAttendanceHistoryPanel } from "./StudentAttendanceHistoryPanel";
 import { useEditStudentDetail, useStudentDetail } from "../hooks/useStudentDetail";
+import type { IdentifierDisposition } from '../server/qrReservations';
 
 const dateFormat = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" });
 const groupLabels: Record<string, string> = {
@@ -76,13 +77,13 @@ export default function StudentDetailClient({ studentId }: { studentId: string }
     setEditorError(null);
     setCanReloadEditor(false);
   };
-  const save = async (values: StudentFormValues) => {
+  const save = async (values: StudentFormValues, identifierDisposition?: IdentifierDisposition) => {
     if (!snapshot || !principalId) return;
     const editingPrincipal = principalId;
     setEditorError(null);
     setCanReloadEditor(false);
     try {
-      const saved = await edit.mutateAsync({ principalId: editingPrincipal, expectedVersion: snapshot.editVersion, student: { ...values, id: snapshot.id } });
+      const saved = await edit.mutateAsync({ principalId: editingPrincipal, expectedVersion: snapshot.editVersion, identifierDisposition, student: { ...values, id: snapshot.id } });
       if (principalRef.current !== editingPrincipal) return;
       if (saved.changed) toastSuccess("Student changes saved");
       else toastWarning("No student changes to save");

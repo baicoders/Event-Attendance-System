@@ -518,10 +518,10 @@ Common new commands to add in their owning tasks: `pnpm test:classroom:unit`, `p
 
 **Interfaces:** accepts current commit/branch evidence; produces reviewed architecture, route-capability inventory and migration/rollout checklist used by all tasks.
 
-- [ ] Record approval and recheck local/remote main at execution start; assess any intervening changes rather than blindly applying this baseline.
-- [ ] Inventory EVERY `app/api/**/route.ts`, print/server page and background/maintenance central writer with required identity/workspace/capability. Include event record/history/report utilities, group/custom-group reads, stats, imports, bulk, exports and all credential/admin paths. Default unclassified legacy routes to Events access.
-- [ ] Verify deployment topology/runtime, database version/roles/pooler/HTTPS origin, backup storage and restore support without touching production data beyond authorized operational checks. Resolve launch-blocking choices in §14.
-- [ ] Update targeted stale docs alongside implementation, documenting preserved Events semantics and new domain boundaries. Acceptance: a reviewer can map each old route and source finding to a task/test; all A–H scenarios have owners.
+- [x] Record approval and recheck local/remote main at execution start; assess any intervening changes rather than blindly applying this baseline.
+- [x] Inventory EVERY `app/api/**/route.ts`, print/server page and background/maintenance central writer with required identity/workspace/capability. Include event record/history/report utilities, group/custom-group reads, stats, imports, bulk, exports and all credential/admin paths. Default unclassified legacy routes to Events access.
+- [x] Verify deployment topology/runtime, database version/roles/pooler/HTTPS origin, backup storage and restore support without touching production data beyond authorized operational checks. Resolve launch-blocking choices in §14.
+- [x] Update targeted stale docs alongside implementation, documenting preserved Events semantics and new domain boundaries. Acceptance: a reviewer can map each old route and source finding to a task/test; all A–H scenarios have owners.
 
 Commit: `docs: define classroom architecture and rollout contract`.
 
@@ -533,10 +533,10 @@ Commit: `docs: define classroom architecture and rollout contract`.
 
 **Consumes:** existing cookie/credentialVersion and admin user-lock primitives. **Produces:** `requireIdentity`, `requireEventsAccess`, `requireClassroomAccess`, `requireAdmin`; `guardClassroomActor(tx,actor)` and `reviewTeacherApplication(db,actor,input)` with §3/§6 semantics; membership revision/state DTO.
 
-- [ ] Add tests `teacherOnlyCannotEnterEvents`, `pendingCanReadOnlyOwnApplication`, `organizerCanApplyWithoutLosingEvents`, `approveOnceGrantsClassOnly`, `classSuspensionPreservesEvents`, `globalDisableBlocksBoth`, `rejectedOrganizerCanStillBecomeTeacher`, `forcedPasswordWorksForIdentityApplicant`, `reviewRaceHasOneDecision`.
-- [ ] Implement schema/M1, guards, identity session destinations and transactional application review. Reject client-supplied roles/grants. Password reset/recovery preserves memberships and increments credentialVersion as before.
-- [ ] Keep `requireAuth` fail-closed Events alias; update public DTO/schema MEMBER handling deliberately. Admin organizer queue excludes MEMBER users; never approve a teacher by setting User.status ACTIVE.
-- [ ] Verify M1 against baseline fixture, API tests for forged workspace/IDs/cookies, current `pnpm test:account-recovery`, and typecheck. Acceptance: scenario A entitlement behavior passes with current Events accounts/cookies handled explicitly; incompatible old sessions require sign-in, not silent elevation.
+- [x] Add tests `teacherOnlyCannotEnterEvents`, `pendingCanReadOnlyOwnApplication`, `organizerCanApplyWithoutLosingEvents`, `approveOnceGrantsClassOnly`, `classSuspensionPreservesEvents`, `globalDisableBlocksBoth`, `rejectedOrganizerCanStillBecomeTeacher`, `forcedPasswordWorksForIdentityApplicant`, `reviewRaceHasOneDecision`.
+- [x] Implement schema/M1, guards, identity session destinations and transactional application review. Reject client-supplied roles/grants. Password reset/recovery preserves memberships and increments credentialVersion as before.
+- [x] Keep `requireAuth` fail-closed Events alias; update public DTO/schema MEMBER handling deliberately. Admin organizer queue excludes MEMBER users; never approve a teacher by setting User.status ACTIVE.
+- [x] Verify M1 against baseline fixture, API tests for forged workspace/IDs/cookies, current `pnpm test:account-recovery`, and typecheck. Acceptance: scenario A entitlement behavior passes with current Events accounts/cookies handled explicitly; incompatible old sessions require sign-in, not silent elevation.
 
 Commit: `feat(auth): add independent classroom access and teacher applications`.
 
@@ -548,11 +548,11 @@ Commit: `feat(auth): add independent classroom access and teacher applications`.
 
 **Consumes:** T1 fresh identity/membership. **Produces:** `executeClassroomCommand`, actor-scoped locks, `appendClassroomAudit`, error codes/envelope and endpoint capability manifest.
 
-- [ ] Add table-driven denied/allowed endpoint tests for every permission-matrix identity; include direct print/export/server loader access and forged resource IDs. Test teacher denial of legacy POST-create, DELETE, imports/receipts, bulk membership changes, full-directory export, event history and event reports.
-- [ ] Gate bulk/destructive operations admin-only (including previously allowed organizer bulk/delete behavior); preserve ordinary Events organizer single-create/edit/attendance. Make this intentional privilege tightening visible in release notes/UI rather than breaking a hidden button later.
-- [ ] Strengthen in-transaction user/admin/Events checks in legacy central mutations and shared event services. Pre-request checks alone cannot authorize a delayed write. Ensure no row-lock upgrades/inverted orders. Add Same-Origin/CSRF and deployment-appropriate rate limits with tests for cross-site requests.
-- [ ] Add `sameKeySamePayloadReplays`, `changedPayloadRejects`, `differentActorKeyIndependent`, `uppercaseUuidNormalizes`, `auditFailureRollsBackDomainWrite`, `suspendedReplayDenied`, `applicantCanSubmitAndReplayWithoutApproval`, `organizerOnlyCanCorrectAndReplayAllowedProfileEdit`, `httpCannotSelectCommandPolicy`, `replayAfterFinalizationStillReturnsReceipt` (last fixture completed in T8).
-- [ ] Verify `pnpm test:classroom:api`, `pnpm test:classroom:db` command/lock subset, existing operator/progress/account recovery/report API checks. Acceptance: no teacher-only bypass through old routes and no routine teacher approval added.
+- [x] Add table-driven denied/allowed endpoint tests for every permission-matrix identity; include direct print/export/server loader access and forged resource IDs. Test teacher denial of legacy POST-create, DELETE, imports/receipts, bulk membership changes, full-directory export, event history and event reports.
+- [x] Gate bulk/destructive operations admin-only (including previously allowed organizer bulk/delete behavior); preserve ordinary Events organizer single-create/edit/attendance. Make this intentional privilege tightening visible in release notes/UI rather than breaking a hidden button later.
+- [x] Strengthen in-transaction user/admin/Events checks in legacy central mutations and shared event services. Pre-request checks alone cannot authorize a delayed write. Ensure no row-lock upgrades/inverted orders. Add Same-Origin/CSRF and deployment-appropriate rate limits with tests for cross-site requests.
+- [x] Add `sameKeySamePayloadReplays`, `changedPayloadRejects`, `differentActorKeyIndependent`, `uppercaseUuidNormalizes`, `auditFailureRollsBackDomainWrite`, `suspendedReplayDenied`, `applicantCanSubmitAndReplayWithoutApproval`, `organizerOnlyCanCorrectAndReplayAllowedProfileEdit`, `httpCannotSelectCommandPolicy`, `replayAfterFinalizationStillReturnsReceipt` (last fixture completed in T8).
+- [x] Verify `pnpm test:classroom:api`, `pnpm test:classroom:db` command/lock subset, existing operator/progress/account recovery/report API checks. Acceptance: no teacher-only bypass through old routes and no routine teacher approval added.
 
 Commit: `fix(auth): enforce workspace capabilities across legacy routes` plus separately reviewable `feat(classroom): add transactional command receipts` if needed.
 
@@ -564,10 +564,10 @@ Commit: `fix(auth): enforce workspace capabilities across legacy routes` plus se
 
 **Consumes:** T1 capability DTO, T2 route guards. **Produces:** stable `/class` navigation and restricted access-status flow.
 
-- [ ] Add destination tests for each status/workspace, rejected/missing access, dual switching and malicious returnTo. Add mobile E2E for Pending → approval → Class, direct unauthorized URL, and dual teacher suspension → Events remains usable.
-- [ ] Add server guards to Events and Class shells while preserving Events operator full-screen layout. Put identity-only settings/access outside approved shells; preserve forced-password recovery destination.
-- [ ] Implement selector, switcher, focused nav and admin landing scaffold with existing visual components; no central-directory queries from applicant screens. Clear actor/workspace query caches and stop cameras on switches.
-- [ ] Verify 375px selector/status/nav and current Events login/dashboard/operator smoke. Acceptance: scenario A UI passes and teacher never lands in organizer dashboard by default.
+- [x] Add destination tests for each status/workspace, rejected/missing access, dual switching and malicious returnTo. Add mobile E2E for Pending → approval → Class, direct unauthorized URL, and dual teacher suspension → Events remains usable.
+- [x] Add server guards to Events and Class shells while preserving Events operator full-screen layout. Put identity-only settings/access outside approved shells; preserve forced-password recovery destination.
+- [x] Implement selector, switcher, focused nav and admin landing scaffold with existing visual components; no central-directory queries from applicant screens. Clear actor/workspace query caches and stop cameras on switches.
+- [x] Verify 375px selector/status/nav and current Events login/dashboard/operator smoke. Acceptance: scenario A UI passes and teacher never lands in organizer dashboard by default.
 
 Commit: `feat(classroom): add dedicated workspace entry and navigation`.
 
@@ -579,11 +579,11 @@ Commit: `feat(classroom): add dedicated workspace entry and navigation`.
 
 **Consumes:** T2 actor/command/audit capability. **Produces:** stable shared `resolveStudentIdentity`; `correctStudentProfile(db,actor,{expectedVersion,patch,reason,identifierDisposition,commandId})`; `verifyStudentProfile(db,actor,{expectedVersion,state,note,commandId})`; immutable versioned profile DTO.
 
-- [ ] Add identity fixtures: legacy numeric id, cuid id, USN/LRN with leading zeroes, same-person overlapping fields, cross-person namespace collision, retired/tombstoned/unknown codes and alias history. Assert old code can never identify a different student after edit, import, create or deletion. Retire an old USN equal to legacy Student.id: raw scan fails, but exact-ID Events and Class manual attendance still succeeds without changing any Student FK.
-- [ ] Add `twoTeachersOneExpectedVersionOnlyOneWins`, `importInvalidatesVerification`, `bulkSectionChangeInvalidatesVerification`, `noOpEditKeepsRevision`, `auditFailureRollsBackEdit`, `teacherCannotPatchHouseIdOrPrivileges`, `unrelatedMembershipsPreserved`, and direct SQL registry/immutability constraint tests.
-- [ ] Implement registry/backfill controls and unify EVERY writer, including raw SQL import batching and central group reassignment. Increment profileRevision once per changed student per transaction and append complete before/after group/scalar history. Preserve import receipt durability and previews by including reservations/version impacts in reviewed command hashes.
-- [ ] Implement teacher directory/individual correction/verification UI. Conflict preserves draft; identifier change requires explicit safe alias or reprint decision; no per-edit approval. Administrative import/merge/delete boundaries remain intact.
-- [ ] Verify `pnpm test:student-import`, `pnpm test:student-import-durability`, student identifier/detail/bulk/group-deletion/custom-group scripts on disposables, and new Class tests. Acceptance: scenarios D identity and F pass before any Classroom scanner pilot; import replay does not duplicate profile/audit changes.
+- [x] Add identity fixtures: legacy numeric id, cuid id, USN/LRN with leading zeroes, same-person overlapping fields, cross-person namespace collision, retired/tombstoned/unknown codes and alias history. Assert old code can never identify a different student after edit, import, create or deletion. Retire an old USN equal to legacy Student.id: raw scan fails, but exact-ID Events and Class manual attendance still succeeds without changing any Student FK.
+- [x] Add `twoTeachersOneExpectedVersionOnlyOneWins`, `importInvalidatesVerification`, `bulkSectionChangeInvalidatesVerification`, `noOpEditKeepsRevision`, `auditFailureRollsBackEdit`, `teacherCannotPatchHouseIdOrPrivileges`, `unrelatedMembershipsPreserved`, and direct SQL registry/immutability constraint tests.
+- [x] Implement registry/backfill controls and unify EVERY writer, including raw SQL import batching and central group reassignment. Increment profileRevision once per changed student per transaction and append complete before/after group/scalar history. Preserve import receipt durability and previews by including reservations/version impacts in reviewed command hashes.
+- [x] Implement teacher directory/individual correction/verification UI. Conflict preserves draft; identifier change requires explicit safe alias or reprint decision; no per-edit approval. Administrative import/merge/delete boundaries remain intact.
+- [x] Verify `pnpm test:student-import`, `pnpm test:student-import-durability`, student identifier/detail/bulk/group-deletion/custom-group scripts on disposables, and new Class tests. Acceptance: scenarios D identity and F pass before any Classroom scanner pilot; import replay does not duplicate profile/audit changes.
 
 Commit: `feat(students): preserve QR identity and audit profile verification` (split registry and UI commits within this milestone for review).
 

@@ -58,7 +58,7 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
       <Field className="gap-1.5">
         <FieldLabel
           htmlFor={inputId}
-          className="text-[10px] uppercase font-bold text-slate-400 ml-1"
+          className="text-[10px] uppercase font-bold text-slate-400 px-1"
         >
           {label}
         </FieldLabel>
@@ -69,12 +69,12 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
           {...props}
         />
         {description && !error && (
-          <FieldDescription className="text-[11px] ml-1 mt-1 flex items-center text-slate-500">
+          <FieldDescription className="text-[11px] px-1 mt-1 flex items-center text-slate-500">
             {description}
           </FieldDescription>
         )}
         {error && (
-          <FieldError className="flex items-center-safe text-[11px] font-medium text-rose-500 ml-1">
+          <FieldError className="flex items-center-safe text-[11px] font-medium text-rose-500 px-1">
             <Info size={12} className="mr-1 inline-block" />
             {error}
           </FieldError>

@@ -107,7 +107,8 @@ try {
  const exported=await api('/api/students/export-selected',{studentIds:[person.id]});
  assert.equal(exported.schemaVersion,2);assert.equal(exported.rows[0].studentId,person.id);assert.equal(exported.rows[0].usn,person.usn);assert.equal(exported.rows[0].lrn,person.lrn);
  const event=await db.event.create({data:{title:'Synthetic Event',category:'ALL',status:'APPROVED',createdById:actor.id,start:new Date(Date.now()-60000),end:new Date(Date.now()+3600000)}});
- await api('/api/records',{eventId:event.id,studentId:person.lrn,method:'MANUAL',expectedMode:'TIME_IN'});
+ await api('/api/records',{eventId:event.id,studentId:person.lrn,method:'SCANNED',expectedMode:'TIME_IN'});
+ await api('/api/records',{eventId:event.id,studentId:person.id,method:'MANUAL',expectedMode:'TIME_IN'});
  for(const search of [person.usn,person.lrn,'123456']) {
   const audience=await api('/api/events/audience-preview',{category:'ALL',includedGroups:[],search,includeRoster:true});
   assert.equal(audience.searchMatches,1);assert.equal(audience.students[0].id,person.id);
@@ -206,8 +207,13 @@ try {
  console.log('Identifier surroundings API passed: generated-ID bulk preview/commit, separate USN/LRN export, audience/progress/review searches, missing-year bucket and canonical attendance.');
 } finally {
  ws?.close();
- if(chrome?.pid){try{process.kill(-chrome.pid,'SIGTERM');}catch{}}
+ if(chrome?.pid&&chrome.exitCode===null&&chrome.signalCode===null){
+  const stopped=new Promise(resolve=>chrome.once('exit',resolve));
+  try{process.kill(-chrome.pid,'SIGTERM');}catch{}
+  await Promise.race([stopped,delay(5000)]);
+  if(chrome.exitCode===null&&chrome.signalCode===null){try{process.kill(-chrome.pid,'SIGKILL');}catch{}await stopped;}
+ }
  if(server?.pid){try{process.kill(-server.pid,'SIGTERM');}catch{}}
  await db.$disconnect();await pool.end();await fixture.cleanup();
- rmSync(scratch,{recursive:true,force:true});
+ rmSync(scratch,{recursive:true,force:true,maxRetries:5,retryDelay:100});
 }

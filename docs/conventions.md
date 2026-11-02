@@ -1,3 +1,5 @@
+> Student writers must set transaction-local attribution, hold the roster write lock, preserve permanent QR reservations and finish immutable profile capture before producing versioned receipts. See [M2 protocol](implementation/classroom-student-identity.md). Class routes use requireClassroomActor plus fresh locked service authorization, including replay; requireAuth remains Events-only.
+
 > Classroom integration (2026-11-02): choose `requireIdentity`, `requireEventsAccess`, `requireClassroomAccess` or `requireAdmin` explicitly. `requireAuth` retains Events access. Use server-selected command policies and User → membership → command locks, with fresh in-transaction checks. `User.status` is not a global teacher approval field; only `ClassroomMembership` grants Class access. Apply migrations solely to authorized environments; teacher help describes deployed HTTPS use.
 
 # Conventions

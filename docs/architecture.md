@@ -1,3 +1,5 @@
+> Student identity/history update (M2): permanent raw-code reservations, canonical manual IDs, version-bound verification and immutable profile capture are described in [the current writer protocol](implementation/classroom-student-identity.md). SQL/raw join writers follow the same protocol; older implementation descriptions below do not supersede it.
+
 > Classroom implementation update (2026-11-02): the dedicated Class domain shares User credentials and Student identity with Events, but has independent membership and server authorization. `requireAuth` remains an Events-only compatibility boundary; `requireIdentity` supports applicants and own password changes. No teacher runs local servers. Existing LAN-only deployment descriptions below are historical; verify the actual hosted topology before production rollout. See [integration audit](implementation/classroom-integration-audit.md).
 
 # Architecture
@@ -704,12 +706,12 @@ assumptions, and they are the things that surprise you six months later.
    event time. This is the single most consequential assumption in the system.
 2. **Approval implies sharing.** Any active organizer can operate any approved event.
    There is no per-event staff assignment.
-3. **Students never authenticate.** A QR code is a bare student ID — anyone holding it
-   can be scanned in. There is no anti-passback beyond one-scan-per-phase.
-4. **`Group` rows are created only by the seed.** There is **no API and no UI to create
-   a Group.** Consequently a student import can only reference sections/houses/etc.
-   that already exist as `Group` rows, or the whole batch is rejected with
-   `Unknown group(s): …`. See §16 for why this matters before the beta.
+3. **Students never authenticate.** Existing raw ID/USN/LRN cards resolve through the
+   permanent QR registry; ambiguous and retired values fail closed. Events retain
+   per-phase checks. Classroom attendance has its own session engine in later milestones.
+4. **Administrators maintain official Groups.** Existing APIs/UI can create them;
+   imports reference reviewed existing groups. Classroom rosters build on SECTION
+   IDs and persistent individual exceptions, without changing official memberships.
 5. **The group vocabulary is stable within a school year.** Section names live only as
    `Group` rows; `globals/utils/eventValidation.ts` explicitly notes sections can't be
    validated against constants because they change annually.

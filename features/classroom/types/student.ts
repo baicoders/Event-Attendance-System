@@ -1,0 +1,3 @@
+export type DirectoryStudent={id:string;usn:string|null;lrn:string|null;firstName:string;lastName:string;middleName:string|null;schoolLevel:string|null;yearLevel:string|null;section:string|null;department:string|null;program:string|null;strand:string|null;profileRevision:number;editVersion:string;groups:Array<{id:string;name:string;slug:string;category:string}>;verification:{state:string;note?:string|null;actorName?:string;createdAt?:string}};
+export type DirectoryResponse={items:DirectoryStudent[];total:number;page:number;pageSize:number};
+export type StudentOptions={id:string;name:string;slug:string;category:'SECTION'|'DEPARTMENT'|'PROGRAM'|'STRAND'}[];

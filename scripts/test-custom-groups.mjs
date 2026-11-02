@@ -254,7 +254,8 @@ try {
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
   writeFileSync('/tmp/custom-group-qr-mobile.png', Buffer.from((await command('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
-  await db.student.deleteMany({ where: { id: { in: extraMembers.map(student => student.id) } } });
+  // Remove disposable audience membership while preserving immutable student identity/history.
+  await db.customGroupMembership.deleteMany({ where: { studentId: { in: extraMembers.map(student => student.id) } } });
   console.log('QR groups passed: scoped API/auth, detail link, switching clears selection/search, all 52 members print across preview pages, USN/LRN, empty groups, reload, mobile, and PDF.');
 
   const groupIds = [groupId, groupB.id];
@@ -269,8 +270,8 @@ try {
   await api('/api/events', { method: 'POST', body: { ...eventInput, id: event.id, includedGroups: groupIds, title: 'Edited Synthetic USWAG Event' } });
   await api(`/api/events/${event.id}`, { method: 'PATCH', body: { ...eventInput, includedGroups: groupIds, title: 'Edited Synthetic USWAG Event' } });
   for (const [i, method] of ['SCANNED', 'MANUAL'].entries()) {
-    await api('/api/records', { method: 'POST', body: { eventId: event.id, studentId: students[i].usn, method, expectedMode: 'TIME_IN' } });
-    await api('/api/records', { method: 'POST', body: { eventId: event.id, studentId: students[2].usn, method, expectedMode: 'TIME_IN' }, status: 404 });
+    await api('/api/records', { method: 'POST', body: { eventId: event.id, studentId: method === 'MANUAL' ? students[i].id : students[i].usn, method, expectedMode: 'TIME_IN' } });
+    await api('/api/records', { method: 'POST', body: { eventId: event.id, studentId: method === 'MANUAL' ? students[2].id : students[2].usn, method, expectedMode: 'TIME_IN' }, status: 404 });
   }
   assert.equal(await db.record.count(), 2);
   assert.equal(await db.record.count({ where: { studentId: students[2].id } }), 0);
