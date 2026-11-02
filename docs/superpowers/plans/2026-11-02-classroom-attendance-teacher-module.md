@@ -635,11 +635,11 @@ Commit: `feat(classroom): snapshot rosters and finalize attendance sessions`.
 
 **Consumes:** T7 frozen lifecycle/snapshot, T4 QR resolver, T2 replay/locks. **Produces:** `recordClassroomScan(db,actor,{sessionId,code,commandId})`, `setClassroomAttendance(db,actor,{sessionId,studentId,expectedRevision,status,excuseNote,reason,commandId})`, `adjustSessionRoster(db,actor,input)` with §6 contracts.
 
-- [ ] Assert repeat QR/different keys produces one marked row, same-key retry preserves original time/status, marked Present/Late never toggles, marked Absent/Excused requires explicit correction, unknown/retired/ambiguous identity never writes.
-- [ ] Assert ineligible scan writes nothing; explicit CLASS_ONLY, SESSION, CLASS_AND_SESSION each affect only intended future/current scope and preserve official section. Test inclusion against an existing EXCLUDE and finalized-session inclusion with explicit outcome/reason.
-- [ ] Race same/different-student scans, manual-versus-scan, two manual corrections, start/roster change, finalize/cancel, ownership transfer, suspension and password reset. Assert lock order, one result per member, receipt/audit atomicity and no writes after restrictive commit.
-- [ ] Simulate lost acknowledgement after DB commit and recover same receipt after finalization. Reject changed payload/key reuse even across paths. Finalized corrections have required reasons and version checks; canceled sessions reject new marks.
-- [ ] Verify `pnpm test:classroom:db` concurrency subset and API suite; assert independent-student scans overlap rather than serialize on a session UPDATE. Acceptance: scenarios D/E/F server behavior is complete.
+- [x] Assert repeat QR/different keys produces one marked row, same-key retry preserves original time/status, marked Present/Late never toggles, marked Absent/Excused requires explicit correction, unknown/retired/ambiguous identity never writes.
+- [x] Assert ineligible scan writes nothing; explicit CLASS_ONLY, SESSION, CLASS_AND_SESSION each affect only intended future/current scope and preserve official section. Test inclusion against an existing EXCLUDE and finalized-session inclusion with explicit outcome/reason.
+- [x] Race same/different-student scans, manual-versus-scan, two manual corrections, start/roster change, finalize/cancel, ownership transfer, suspension and password reset. Assert lock order, one result per member, receipt/audit atomicity and no writes after restrictive commit.
+- [x] Simulate lost acknowledgement after DB commit and recover same receipt after finalization. Reject changed payload/key reuse even across paths. Finalized corrections have required reasons and version checks; canceled sessions reject new marks.
+- [x] Verify `pnpm test:classroom:db` concurrency subset and API suite; assert independent-student scans overlap rather than serialize on a session UPDATE. Acceptance: scenarios D/E/F server behavior is complete.
 
 Commit: `feat(classroom): record reliable scans and audited attendance corrections`.
 

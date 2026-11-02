@@ -94,3 +94,15 @@ Contract: [sessions](../implementation/classroom-sessions.md). Timestamp prerequ
 - Final production build, TypeScript, scoped lint and whitespace checks pass. pg8.23 emits a queued-query deprecation during Prisma relation/transaction work; the locked supported driver passes. No adapter internals were changed.
 
 `pnpm test:classroom:sessions` runs the focused policy/database/API suite. Real QR/manual marking, phone session UI, reports, administrative monitoring and external release gates remain later milestones.
+
+## Reliable attendance commands (Task 8)
+
+Contract: [Classroom attendance](../implementation/classroom-attendance.md).
+
+- `pnpm test:classroom:unit`:32/32, including route/body identity mismatch and invalid-QR byte validation.
+- `node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/attendance.db.test.ts features/classroom/server/scanConcurrency.db.test.ts`:22/22. Existing ID/USN/LRN/alias cards, immutable duplicates/replays, manual correction/version/notes, explicit enrollment scopes, exclusion confirmation, finalized admission/re-inclusion, original snapshot retention, numeric retired-ID manual fallback and audit-failure rollback.
+- Real separate-client PostgreSQL barriers prove independent-student overlap, same-pair uniqueness, manual conflicts, both finalize orderings, cancel, admission/finalize, policy amendment and restrictive suspension/ownership/password-reset commits. No common session counter is updated by ordinary marks.
+- `node --import tsx scripts/test-classroom-attendance-api.mjs`: current production build passes QR/manual/enrollment/receipt behavior, role/ownership/bulk denials, real administrator attribution, independent Events access after dual-user Class suspension, shared scan limits and receipt recovery while limited.
+- Final build, TypeScript, scoped ESLint and whitespace checks pass. Existing pg queued-query deprecation remains captured; no adapter internals changed.
+
+`pnpm test:classroom:attendance` runs the focused database/API suite. Phone capture/manual interaction, reload recovery descriptors, reports and administrative monitoring remain required before release. No production data, migration or deployment occurred.
