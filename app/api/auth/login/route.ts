@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     const password = parsed.password;
 
     // 10 attempts per client+account per 5 minutes
-    if (!rateLimit(`login:${clientKey(req)}:${email}`, 10, 5 * 60_000)) {
+    if (!await rateLimit(`login:${clientKey(req)}:${email}`, 10, 5 * 60_000)) {
       return NextResponse.json(
         err("Too many login attempts. Try again in a few minutes."),
         { status: 429, headers: NO_STORE },

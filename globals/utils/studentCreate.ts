@@ -1,11 +1,13 @@
+import {guardEventsActor, type LegacyActor} from './guardedActor';
 import type {PrismaClient} from '@prisma/client';
 import {studentSchema} from '../schemas/studentSchema';
 import {takeRosterExclusiveLock} from './pgLocks';
 import {validateStudentGroupSlugs} from './studentGroups';
 import {assertStudentIdentifiersAvailable,StudentIdentityError} from './studentIdentity';
-export async function createStudentRecord(db:PrismaClient,raw:unknown) {
+export async function createStudentRecord(db:PrismaClient,raw:unknown,actor?:LegacyActor) {
  const input=studentSchema.parse(raw);
  return db.$transaction(async tx=>{
+  if(actor) await guardEventsActor(tx,actor);
   await takeRosterExclusiveLock(tx);
   await assertStudentIdentifiersAvailable(tx,input);
   const resolution=await validateStudentGroupSlugs([input],tx);

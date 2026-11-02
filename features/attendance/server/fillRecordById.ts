@@ -13,8 +13,8 @@ export async function fillRecordById(db: PrismaClient, recordId: string, actor: 
     try {
       return await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} FOR SHARE`;
-    const freshActor = await tx.user.findUnique({ where: { id: actor.id }, select: { id: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
-    if (!freshActor || freshActor.status !== "ACTIVE" || freshActor.mustChangePassword || freshActor.credentialVersion !== actor.credentialVersion) throw new RecordingError("Unauthorized", 401, "UNAUTHORIZED");
+    const freshActor = await tx.user.findUnique({ where: { id: actor.id }, select: { id: true, role: true, status: true, mustChangePassword: true, accountState: true, credentialVersion: true } });
+    if (!freshActor || freshActor.status !== "ACTIVE" || freshActor.accountState !== "ENABLED" || (freshActor.role !== "ADMIN" && freshActor.role !== "ORGANIZER") || freshActor.mustChangePassword || freshActor.credentialVersion !== actor.credentialVersion) throw new RecordingError("Unauthorized", 401, "UNAUTHORIZED");
     await takeRosterSharedLock(tx);
     await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${target.eventId} FOR SHARE`;
     const event = await tx.event.findUnique({ where: { id: target.eventId }, include: { includedGroups: true } });

@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     // distinguish devices on the LAN and this bucket is effectively shared
     // by everyone. Sized to comfortably cover onboarding a whole staff in
     // one sitting rather than one person's realistic signup rate.
-    if (!rateLimit(`signup:${clientKey(req)}`, 20, 10 * 60_000)) {
+    if (!await rateLimit(`signup:${clientKey(req)}`, 20, 10 * 60_000)) {
       return NextResponse.json(
         err("Too many signup attempts. Try again in a few minutes."),
         { status: 429 }

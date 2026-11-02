@@ -18,3 +18,19 @@ Use an explicit `TEST_DATABASE_URL` maintenance endpoint. All integration fixtur
 Local verification used PostgreSQL 14.24. Host I/O load caused a transient recovery HTTP failure; rerun with captured server logs passed. The dedicated throwaway cluster was later configured with fsync/synchronous_commit/full_page_writes off to reduce test fixture checkpoint stalls. These tests establish SQL transaction, uniqueness and locking behavior, not crash durability or hosted performance. Production database version, durable backup/restore and real HTTPS phone-camera verification remain release gates.
 
 No production migration, deployment, push or merge has occurred. Tasks 2–11 remain required before a teacher release.
+
+## Capability boundary and transaction safety (Task 2)
+
+Final evidence:
+
+- Access/origin/streamed-body units: 13/13.
+- Classroom PostgreSQL tests: 11/11 (applications, command hashing/replay, scope, revocation, shared rate limits).
+- Existing Events attendance/corrections/student workflow database checks: 32/32.
+- Existing report/export projection tests: 7/7. Run with `node --import dotenv/config --conditions=react-server --import tsx --test globals/utils/eventReport.test.ts features/reports/utils/eventExport.test.ts` so the server-only loader has an explicit local test environment.
+- HTTP sweep: 60 legacy endpoint methods deny teacher-only access and unauthenticated access; organizer bulk/delete denial, direct print and cross-origin checks pass.
+- Existing operator, progress, bulk-student and account-recovery HTTP suites pass. Bulk operation fixtures now use administrators; unrelated administrators still cannot consume another administrator's preview token.
+- Production build, `tsc --noEmit`, touched ESLint and whitespace checks pass (existing groups `_req` warning remains in the full build).
+
+The Origin regression was reproduced with a real NextRequest: loopback URL normalization differs from the browser Host. Fallback validation uses the validated Host plus protocol; configured `APP_ORIGINS` always takes precedence. No forwarded host is trusted. Node API test clients explicitly supply normal browser Origin; clients that cannot do so obtain `/api/auth/csrf` and send the double-submit cookie/header token.
+
+New `RequestRateLimit` rows are shared across app instances and keyed by SHA-256, not raw email/IP labels. Expired rows are pruned in bounded batches. The test artifact directories are excluded from TypeScript discovery and production output tracing.

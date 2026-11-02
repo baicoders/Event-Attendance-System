@@ -54,9 +54,9 @@ export async function readImportState(tx: Prisma.TransactionClient, rows: Parsed
 
 export async function guardImportActor(tx: Prisma.TransactionClient, actor: AuthSession) {
   await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} FOR SHARE`;
-  const fresh = await tx.user.findUnique({where:{id:actor.id},select:{id:true,name:true,role:true,status:true,mustChangePassword:true,credentialVersion:true}});
+  const fresh = await tx.user.findUnique({where:{id:actor.id},select:{id:true,name:true,role:true,status:true,mustChangePassword:true,accountState:true,credentialVersion:true}});
   if (!fresh || fresh.credentialVersion!==actor.credentialVersion) throw new AuthError('Unauthorized',401,'UNAUTHORIZED');
-  if (fresh.role!=='ADMIN' || fresh.status!=='ACTIVE' || fresh.mustChangePassword) throw new AuthError('Import requires an active administrator.',403,'FORBIDDEN');
+  if (fresh.accountState!=='ENABLED' || fresh.role!=='ADMIN' || fresh.status!=='ACTIVE' || fresh.mustChangePassword) throw new AuthError('Import requires an active administrator.',403,'FORBIDDEN');
   return fresh;
 }
 

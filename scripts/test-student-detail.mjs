@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Disposable production API/browser fixture. Run after build. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";

@@ -1,11 +1,13 @@
 import "server-only";
+import { guardEventsActor, type LegacyActor } from "./guardedActor";
 import { prisma } from "../libs/prisma";
 import { HISTORY_EVENT_LIMIT, HistoryQueryError, parseHistoryQuery } from "../schemas/studentHistory";
 import { projectStudentHistory } from "./studentHistoryProjection";
 import type { StudentHistoryResponse } from "../types/studentHistory";
 
-export async function loadStudentHistory(studentId: string, query: ReturnType<typeof parseHistoryQuery>, evaluatedAt: Date): Promise<StudentHistoryResponse | null> {
+export async function loadStudentHistory(studentId: string, query: ReturnType<typeof parseHistoryQuery>, evaluatedAt: Date, actor: LegacyActor): Promise<StudentHistoryResponse | null> {
   const snapshot = await prisma.$transaction(async tx => {
+    await guardEventsActor(tx, actor);
     const student = await tx.student.findUnique({ where: { id: studentId }, select: {
       id: true, firstName: true, lastName: true, middleName: true, schoolLevel: true,
       groups: { select: { slug: true, name: true, category: true } },

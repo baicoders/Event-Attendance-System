@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Reviewed-import PostgreSQL/HTTP fixture. Run after pnpm build:
  * node --import tsx scripts/test-student-import.mjs [--large] [--browser]
  * All writes use a migrated disposable database; no production fallback.

@@ -12,12 +12,12 @@ const MAX_BYTES = 10 * 1024 * 1024;
 
 export async function GET(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   try {
+    const user = await requireAuth();
     const query = new URL(req.url).searchParams;
     const input = exportRequestSchema.parse(Object.fromEntries(query));
     if ([...query.keys()].length !== new Set(query.keys()).size) {
       return NextResponse.json(err("Duplicate export parameters."), { status: 400 });
     }
-    const user = await requireAuth();
     const { eventId } = await params;
     const snapshot = await loadAuthorizedEventReportSnapshot(eventId, user, MAX_STUDENTS);
     if (!snapshot) return NextResponse.json(err("Event not found."), { status: 404 });

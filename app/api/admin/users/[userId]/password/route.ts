@@ -56,7 +56,7 @@ export async function PATCH(
     }
 
     // Bounded by actor/target, not one school-wide bucket.
-    if (!rateLimit(`adminReset:${admin.id}:${userId}`, 10, 5 * 60_000)) {
+    if (!await rateLimit(`adminReset:${admin.id}:${userId}`, 10, 5 * 60_000)) {
       return NextResponse.json(
         err("Too many reset attempts. Try again in a few minutes."),
         { status: 429, headers: { "Cache-Control": "no-store" } },
@@ -72,6 +72,7 @@ export async function PATCH(
           credentialVersion: true,
           role: true,
           status: true,
+      accountState: true,
           mustChangePassword: true,
         },
       }),
@@ -83,6 +84,7 @@ export async function PATCH(
           email: true,
           role: true,
           status: true,
+      accountState: true,
           credentialVersion: true,
         },
       }),
@@ -141,6 +143,7 @@ export async function PATCH(
         select: {
           role: true,
           status: true,
+      accountState: true,
           mustChangePassword: true,
           credentialVersion: true,
         },
@@ -149,7 +152,7 @@ export async function PATCH(
       if (
         !freshAdmin ||
         freshAdmin.role !== "ADMIN" ||
-        freshAdmin.status !== "ACTIVE" ||
+        freshAdmin.status !== "ACTIVE" || freshAdmin.accountState !== "ENABLED" ||
         freshAdmin.mustChangePassword ||
         freshAdmin.credentialVersion !== admin.credentialVersion
       ) {

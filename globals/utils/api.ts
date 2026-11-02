@@ -1,25 +1,27 @@
 export class ApiError extends Error {
   status: number;
   code?: string;
+  details?: Record<string, unknown>;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
 export type ApiResponse<T> =
   | { success: true; data: T }
-  | { success: false; message: string; code?: string };
+  | { success: false; message: string; code?: string; details?: Record<string, unknown> };
 
 export function ok<T>(data: T): ApiResponse<T> {
   return { success: true, data };
 }
 
-export function err(message: string, code?: string): ApiResponse<never> {
-  return { success: false, message, code };
+export function err(message: string, code?: string, details?: Record<string, unknown>): ApiResponse<never> {
+  return { success: false, message, code, ...(details ? { details } : {}) };
 }
 
 /**
@@ -66,7 +68,7 @@ export async function fetchApi<T>(
   if (!res.ok) {
     if (json && !json.success) {
       notifySessionInvalid(res.status, json.code);
-      throw new ApiError(json.message, res.status, json.code);
+      throw new ApiError(json.message, res.status, json.code, json.details);
     }
 
     throw new ApiError(res.statusText || "Request failed", res.status);
@@ -75,7 +77,7 @@ export async function fetchApi<T>(
   // 4. Handle application-level errors
   if (!json.success) {
     notifySessionInvalid(res.status, json.code);
-    throw new ApiError(json.message, res.status, json.code);
+    throw new ApiError(json.message, res.status, json.code, json.details);
   }
 
   // 5. Success: return the typed data

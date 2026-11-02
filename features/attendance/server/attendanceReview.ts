@@ -16,8 +16,8 @@ type Viewer = { id: string; credentialVersion: number };
 
 async function loadManagerEvent(db: Prisma.TransactionClient, eventId: string, viewer: Viewer) {
   await db.$queryRaw`SELECT id FROM "User" WHERE id = ${viewer.id} FOR SHARE`;
-  const actor = await db.user.findUnique({ where: { id: viewer.id }, select: { id: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
-  if (!actor || actor.status !== "ACTIVE" || actor.mustChangePassword || actor.credentialVersion !== viewer.credentialVersion) throw new CorrectionError("Unauthorized", 401, "UNAUTHORIZED");
+  const actor = await db.user.findUnique({ where: { id: viewer.id }, select: { id: true, role: true, status: true, mustChangePassword: true, accountState: true, credentialVersion: true } });
+  if (!actor || actor.status !== "ACTIVE" || actor.accountState !== "ENABLED" || (actor.role !== "ADMIN" && actor.role !== "ORGANIZER") || actor.mustChangePassword || actor.credentialVersion !== viewer.credentialVersion) throw new CorrectionError("Unauthorized", 401, "UNAUTHORIZED");
   const event = await db.event.findUnique({ where: { id: eventId }, include: { includedGroups: true } });
   if (!event) throw new CorrectionError("Event not found", 404, "EVENT_NOT_FOUND");
   if (actor.role !== "ADMIN" && event.createdById !== actor.id) throw new CorrectionError("Forbidden", 403, "FORBIDDEN");

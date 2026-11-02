@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** HTTP fixture for #74. Run with a disposable PostgreSQL test database and a local server. */
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";

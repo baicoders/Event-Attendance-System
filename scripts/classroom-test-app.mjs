@@ -14,7 +14,7 @@ export async function withClassroomTestApp(run) {
   const base = `http://127.0.0.1:${port}`;
   mkdirSync('.superpowers/classroom-tests', { recursive: true });
   const testConfig = `.superpowers/classroom-tests/tsconfig-${port}.json`;
-  writeFileSync(testConfig, JSON.stringify({ extends: '../../tsconfig.json', compilerOptions: { baseUrl: '../..' }, include: ['../../next-env.d.ts', '../../**/*.ts', '../../**/*.tsx'], exclude: ['../../node_modules'] }));
+  writeFileSync(testConfig, JSON.stringify({ extends: '../../tsconfig.json', compilerOptions: { baseUrl: '../..' }, include: ['../../next-env.d.ts', '../../**/*.ts', '../../**/*.tsx'], exclude: ['../../node_modules', '../../.superpowers'] }));
   const fd = openSync(`.superpowers/classroom-tests/api-${port}.log`, 'w');
   let server;
   const development = process.env.CLASSROOM_TEST_DEV === 'true';
@@ -25,7 +25,7 @@ export async function withClassroomTestApp(run) {
     return { response, json, text, cookie: response.headers.get('set-cookie')?.split(';')[0] };
   };
   try {
-    server = spawn('pnpm', development ? ['exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', String(port)] : ['start', '--hostname', '127.0.0.1', '--port', String(port)], { detached: true, env: { ...process.env, DATABASE_URL: disposable.url, DIRECT_URL: disposable.url, AUTH_SECRET: 'classroom-api-test-only-private-secret', CLASSROOM_ENABLED: 'true', ...(development ? { USWAG_TEST_DIST_DIR: `.superpowers/classroom-tests/next-${port}`, USWAG_TEST_TSCONFIG: testConfig } : {}) }, stdio: ['ignore', fd, fd] });
+    server = spawn('pnpm', development ? ['exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', String(port)] : ['start', '--hostname', '127.0.0.1', '--port', String(port)], { detached: true, env: { ...process.env, DATABASE_URL: disposable.url, DIRECT_URL: disposable.url, AUTH_SECRET: 'classroom-api-test-only-private-secret', CLASSROOM_ENABLED: 'true', APP_ORIGINS: base, ...(development ? { USWAG_TEST_DIST_DIR: `.superpowers/classroom-tests/next-${port}`, USWAG_TEST_TSCONFIG: testConfig } : {}) }, stdio: ['ignore', fd, fd] });
     let ready = false;
     for (let i = 0; i < 180; i++) {
       try { const r = await request('/api/auth/session'); if (r.response.status === 200) { ready = true; break; } } catch {}

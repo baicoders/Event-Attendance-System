@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
     // Keyed by user, not by client address - the LAN deployment collapses
     // every device onto one X-Forwarded-For hop.
-    if (!rateLimit(`changePassword:${session.id}`, 10, 5 * 60_000)) {
+    if (!await rateLimit(`changePassword:${session.id}`, 10, 5 * 60_000)) {
       return NextResponse.json(
         err("Too many attempts. Try again in a few minutes."),
         { status: 429, headers: { "Cache-Control": "no-store" } },

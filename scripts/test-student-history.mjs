@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Disposable end-to-end API fixture. Run after `npm run build` with `node scripts/test-student-history.mjs`. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";

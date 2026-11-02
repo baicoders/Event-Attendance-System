@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Local Chrome smoke check for #74 after scripts/test-event-export.ts. */
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";

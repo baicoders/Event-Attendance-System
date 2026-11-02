@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
-import { requireAuth } from "@/globals/utils/auth";
+import { requireAuth, requireRole } from "@/globals/utils/auth";
 import { respondWithError } from "@/globals/utils/httpError";
 import {
   BULK_MUTATION_JSON_LIMIT_BYTES,
@@ -24,6 +24,7 @@ function actionToCategory(action: BulkAction): "SECTION" | "HOUSE" {
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
+    requireRole(user, "ADMIN");
 
     const raw = await req.text();
     if (Buffer.byteLength(raw, "utf8") > BULK_MUTATION_JSON_LIMIT_BYTES) {

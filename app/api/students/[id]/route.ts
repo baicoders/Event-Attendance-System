@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
-import { requireAuth } from "@/globals/utils/auth";
+import { requireAuth, requireRole } from "@/globals/utils/auth";
 import { flattenStudentGroups } from "@/globals/utils/students";
 import { respondWithError } from "@/globals/utils/httpError";
 import { studentPatchSchema } from "@/globals/schemas/studentSchema";
 import { studentEditVersion } from "@/globals/utils/studentDetail";
 import { updateStudentDetail } from "@/globals/utils/studentEdit";
+import { guardEventsActor } from "@/globals/utils/guardedActor";
 import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 
 const privateHeaders = { "Cache-Control": "private, no-store" };
@@ -63,7 +64,7 @@ export async function PATCH(
     if (student.id !== undefined && student.id !== id) {
       return NextResponse.json(err("Student ID cannot be changed.", "STUDENT_ID_MISMATCH"), { status: 400, headers: privateHeaders });
     }
-    const result = await updateStudentDetail(prisma, id, { expectedVersion: input.expectedVersion, student, principalId: principal.id });
+    const result = await updateStudentDetail(prisma, id, { expectedVersion: input.expectedVersion, student, principal });
     if (result.kind === "identity-conflict") return NextResponse.json(err("USN or LRN already belongs to another person.", "IDENTITY_CONFLICT"), { status: 409, headers: privateHeaders });
     if (result.kind === "forbidden") return NextResponse.json(err("Account not active.", "INACTIVE_USER"), { status: 403, headers: privateHeaders });
     if (result.kind === "not-found") return NextResponse.json(err("Student not found.", "STUDENT_NOT_FOUND"), { status: 404, headers: privateHeaders });
@@ -84,10 +85,12 @@ export async function DELETE(
 ) {
   try {
     // Deleting a student is a roster mutation; gate it behind auth.
-    await requireAuth();
+    const principal = await requireAuth();
+    requireRole(principal, "ADMIN");
     const { id } = await params;
 
     const blocked = await prisma.$transaction(async (tx) => {
+      await guardEventsActor(tx, principal, true);
       await takeRosterExclusiveLock(tx);
       const attendanceCount = await tx.record.count({ where: { studentId: id } });
       if (attendanceCount > 0 || await tx.attendanceChange.count({ where: { studentId: id } })) return true;

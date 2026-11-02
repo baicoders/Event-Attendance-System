@@ -345,3 +345,11 @@ model ClassroomCommandReceipt {
   @@id([actorId, commandId])
   @@index([resourceId, createdAt])
 }
+
+// Shared fixed-window request limits. Retention cleanup may delete expired rows.
+model RequestRateLimit {
+  key String @id @db.VarChar(64)
+  hits Int
+  resetAt DateTime @db.Timestamptz(3)
+  @@index([resetAt])
+}

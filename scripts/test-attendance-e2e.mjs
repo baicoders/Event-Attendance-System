@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Production-build browser tests against disposable PostgreSQL and isolated Caddy. */
 import "dotenv/config";
 import assert from "node:assert/strict";

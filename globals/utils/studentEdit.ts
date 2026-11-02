@@ -1,3 +1,4 @@
+import { guardEventsActor, type LegacyActor } from "./guardedActor";
 import type { PrismaClient } from "@prisma/client";
 import { studentSchema, type StudentPatchValues } from "@/globals/schemas/studentSchema";
 import { takeRosterExclusiveLock } from "./pgLocks";
@@ -7,15 +8,16 @@ import { hasAmbiguousStudentGroups } from "./studentGroupReview";
 import { assertStudentIdentifiersAvailable, StudentIdentityError } from "./studentIdentity";
 import { validateStudentGroupSlugs } from "./studentGroups";
 
-export type StudentEditRequest = { expectedVersion: string; student: StudentPatchValues; principalId?: string };
+export type StudentEditRequest = { expectedVersion: string; student: StudentPatchValues; principalId?: string; principal?: LegacyActor };
 
 export async function updateStudentDetail(db: PrismaClient, id: string, request: StudentEditRequest) {
   return db.$transaction(async tx => {
+    if (request.principal) await guardEventsActor(tx, request.principal);
     // Single-student roster edit freezes eligibility (exclusive form).
     await takeRosterExclusiveLock(tx);
     if (request.principalId) {
-      const principal = await tx.user.findUnique({ where: { id: request.principalId }, select: { status: true } });
-      if (principal?.status !== "ACTIVE") return { kind: "forbidden" as const };
+      const principal = await tx.user.findUnique({ where: { id: request.principalId }, select: { status: true, role: true, accountState: true, mustChangePassword: true } });
+      if (!principal || principal.status !== "ACTIVE" || principal.accountState !== "ENABLED" || principal.mustChangePassword || !["ADMIN", "ORGANIZER"].includes(principal.role)) return { kind: "forbidden" as const };
     }
     const current = await tx.student.findUnique({ where: { id }, include: { groups: true } });
     if (!current) return { kind: "not-found" as const };

@@ -82,3 +82,10 @@ Central writers requiring the roster/identity/history protocol: `studentCreate.t
 Deployment evidence: source contains PrismaPg, DIRECT_URL migration selection, verified remote TLS, backup spool tooling and deployed-web assets. Actual hosted PostgreSQL version, number of app instances, proxy trust, persistent backup job/storage and staging device access cannot be inferred from source. These remain production-release gates, not prerequisites for isolated implementation. Local verification uses an isolated PostgreSQL 14.24 cluster on loopback port 55491; no school data is loaded.
 
 Documentation reconciliation: current schema/migrations supersede old SQLite/LAN assumptions; event audit and shared report loading already exist. Classroom preserves Events' existing current-audience reporting semantics while using historical session eligibility for Class. Update architecture/domain/conventions alongside each implemented milestone; teacher instructions exclusively describe the deployed HTTPS website.
+
+## Task 2 compatibility changes
+
+- Central student DELETE and bulk section/house replacement require administrator access. Events organizers retain individual create/edit and exports; the Events list hides destructive/bulk controls from organizers.
+- Cookie-authenticated mutations require a matching configured Origin, same-origin Fetch Metadata, or a CSRF double-submit token. `GET /api/auth/csrf` issues the fallback token. Node test clients explicitly model browser Origin; browser camera/form users need no extra step.
+- Login/signup/password/admin-reset limits share PostgreSQL buckets across instances. Proxy client headers are ignored unless `TRUST_PROXY_HEADERS=true` is explicitly configured behind a sanitizing trusted proxy. Set `APP_ORIGINS` to the public HTTPS origin(s).
+- User accountState and Events role are rechecked in existing guarded attendance, imports, shared directory and administrative mutations. New commands always reauthorize before replay.

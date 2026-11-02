@@ -17,11 +17,11 @@ export async function POST(request: NextRequest) {
     // (create/edit/delete) - intentionally broader than event-deletion and
     // organizer-approval, which require ownership/admin. requireAuth already
     // enforces active status.
-    await requireAuth();
+    const principal = await requireAuth();
     const payload = await request.json();
     // Legacy callers supplied USN as id. New records always get a generated internal ID.
     const input = { ...payload, usn: payload.usn ?? (payload.id?.length === 11 ? payload.id : undefined) };
-    const student = await createStudentRecord(prisma, input);
+    const student = await createStudentRecord(prisma, input, principal);
 
     return NextResponse.json(ok(student), { status: 200 });
   } catch (error) {

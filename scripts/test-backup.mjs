@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /**
  * Verified PostgreSQL backup tests (#84) — real pg_dump/pg_restore, real
  * disposable databases, no file-copy mocks.

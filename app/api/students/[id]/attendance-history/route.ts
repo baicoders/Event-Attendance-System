@@ -8,11 +8,11 @@ import { loadStudentHistory } from "@/globals/utils/studentHistory";
 const noStore = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth();
+    const actor = await requireAuth();
     const { id } = await params;
     const evaluatedAt = new Date();
     const query = parseHistoryQuery(new URL(request.url).searchParams, evaluatedAt);
-    const history = await loadStudentHistory(id, query, evaluatedAt);
+    const history = await loadStudentHistory(id, query, evaluatedAt, actor);
     if (!history) return NextResponse.json(err("Student not found."), { status: 404, headers: noStore });
     return NextResponse.json(ok(history), { headers: noStore });
   } catch (error) {

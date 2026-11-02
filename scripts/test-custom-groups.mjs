@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** API and real-browser regression. Requires a production build and TEST_DATABASE_URL.
  * All mutations use a migrated disposable database; never DATABASE_URL from .env.
  * Run: node scripts/test-custom-groups.mjs

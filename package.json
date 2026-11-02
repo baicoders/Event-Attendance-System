@@ -45,9 +45,9 @@
     "test:student-import-durability": "node --import tsx scripts/test-student-import-durability.mjs",
     "benchmark:import-scale": "node --conditions=react-server --import tsx scripts/benchmark/student-import-scale.ts",
     "test:e2e:attendance": "node --test scripts/prepare-qr-decoder.test.mjs scripts/attendance-e2e/*.test.mjs && node scripts/test-attendance-e2e.mjs",
-    "test:classroom:unit": "node --import tsx --test features/auth/utils/accessPolicy.test.ts",
+    "test:classroom:unit": "node --import tsx --test features/auth/utils/accessPolicy.test.ts globals/utils/requestOrigin.test.ts globals/utils/requestBody.test.ts",
     "test:classroom:db": "node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/*.db.test.ts",
-    "test:classroom:api": "node --import tsx scripts/test-classroom-access-api.mjs"
+    "test:classroom:api": "node --import tsx scripts/test-classroom-access-api.mjs && node --import tsx scripts/test-classroom-boundaries.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",

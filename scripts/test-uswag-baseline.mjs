@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,readFileSync,mkdirSync} from 'node:fs';

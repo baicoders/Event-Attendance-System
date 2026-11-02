@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Regression for generated canonical IDs across roster maintenance and event searches.
  * Optional BROWSER=1 verifies header placement and decodes switched/printed QR codes.
  * All records live in a migrated disposable test database. Run after build. */

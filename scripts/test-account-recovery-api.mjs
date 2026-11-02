@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { mkdirSync, openSync } from "node:fs";

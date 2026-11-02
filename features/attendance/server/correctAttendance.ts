@@ -53,8 +53,8 @@ export async function correctAttendance(db: PrismaClient, eventId: string, rawCo
     try {
       return await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actorId} FOR SHARE`;
-    const freshActor = await tx.user.findUnique({ where: { id: actorId }, select: { id: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
-    if (!freshActor || freshActor.status !== "ACTIVE" || freshActor.mustChangePassword || freshActor.credentialVersion !== actor.credentialVersion) throw new CorrectionError("Unauthorized", 401, "UNAUTHORIZED");
+    const freshActor = await tx.user.findUnique({ where: { id: actorId }, select: { id: true, role: true, status: true, mustChangePassword: true, accountState: true, credentialVersion: true } });
+    if (!freshActor || freshActor.status !== "ACTIVE" || freshActor.accountState !== "ENABLED" || (freshActor.role !== "ADMIN" && freshActor.role !== "ORGANIZER") || freshActor.mustChangePassword || freshActor.credentialVersion !== actor.credentialVersion) throw new CorrectionError("Unauthorized", 401, "UNAUTHORIZED");
     await takeCommandLock(tx, command.commandId);
     await takeRosterSharedLock(tx);
     await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR SHARE`;

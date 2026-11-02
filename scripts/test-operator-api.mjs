@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { performance } from "node:perf_hooks";
