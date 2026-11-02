@@ -1,3 +1,4 @@
+import { readLimitedJson } from "@/globals/utils/requestBody";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/globals/libs/prisma";
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
   try {
     const session = await requireIdentity({ allowForcedPasswordChange: true });
     const { currentPassword, newPassword } = changePasswordSchema.parse(
-      await req.json(),
+      await readLimitedJson(req),
     );
 
     // Keyed by user, not by client address - the LAN deployment collapses

@@ -1,160 +1,83 @@
-"use client";
-
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-
-type UserStatus = "PENDING" | "ACTIVE" | "REJECTED";
-
+'use client';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { ClassroomAccessStatus } from '@/features/auth/utils/accessPolicy';
+import { resolveWorkspaceDestination, type Workspace } from '@/features/auth/utils/workspaceDestination';
 export type AuthUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: "ADMIN" | "ORGANIZER" | "MEMBER";
-  accountState?: "ENABLED" | "DISABLED";
-  classroomStatus?: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED" | "REVOKED" | null;
+  id: string; name: string; email: string; role: 'ADMIN' | 'ORGANIZER' | 'MEMBER';
+  status: 'PENDING' | 'ACTIVE' | 'REJECTED'; accountState?: 'ENABLED' | 'DISABLED';
+  classroomStatus?: ClassroomAccessStatus | null;
   capabilities?: { events: boolean; classroom: boolean; admin: boolean };
-  status: UserStatus;
-  rejectionReason?: string | null;
-  /** True while an admin-issued temporary password is still in place. */
-  mustChangePassword?: boolean;
-  /** Mirrors the server's credential generation; never sent anywhere. */
-  credentialVersion?: number;
+  rejectionReason?: string | null; mustChangePassword?: boolean; credentialVersion?: number;
 };
-
-type LoginResult =
-  | { success: true }
-  | { success: false; message?: string };
-
+type LoginResult = { success: true; destination: string } | { success: false; message?: string };
 type AuthContextValue = {
-  user: AuthUser | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<LoginResult>;
-  logout: () => Promise<boolean>;
-  /**
-   * Re-reads the session from the server. The session is otherwise fetched
-   * exactly once on mount, so anything that changes the stored user mid-session
-   * (a password change clearing `mustChangePassword`) must call this.
-   */
-  refresh: () => Promise<void>;
+  user: AuthUser | null; isLoading: boolean; isUnavailable: boolean;
+  login: (email: string, password: string, workspace?: Workspace) => Promise<LoginResult>;
+  logout: () => Promise<boolean>; refresh: () => Promise<void>;
 };
-
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-async function fetchSession(): Promise<AuthUser | null> {
-  // Never throw - an unreachable server must resolve to "not logged in",
-  // otherwise the app hangs forever on "Checking access".
-  try {
-    const res = await fetch("/api/auth/session", { cache: "no-store" });
-    const json = await res.json();
-    if (!res.ok || !json.success) {
-      return null;
-    }
-    return json.data;
-  } catch {
-    return null;
-  }
+function signature(user: AuthUser | null) {
+  return user ? [user.id, user.credentialVersion, user.role, user.status, user.classroomStatus, user.accountState, user.mustChangePassword].join(':') : '';
 }
-
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const load = async () => {
-      const session = await fetchSession();
-      if (mounted) {
-        setUser(session);
-        setIsLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      mounted = false;
-    };
+  const [isLoading, setLoading] = useState(true);
+  const [isUnavailable, setUnavailable] = useState(false);
+  const current = useRef<AuthUser | null>(null);
+  const generation = useRef(0);
+  const refreshSequence = useRef(0);
+  const commit = useCallback((next: AuthUser | null) => {
+    if (signature(current.current) !== signature(next)) window.dispatchEvent(new Event('auth:identity-change'));
+    current.current = next;
+    setUser(next);
+    setUnavailable(false);
   }, []);
-
-  const login = async (email: string, password: string) => {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.success) {
-      return {
-        success: false,
-        message: json.message || "Unable to sign in.",
-      };
-    }
-
-    setUser(json.data);
-    return { success: true };
-  };
-
-  const logout = async (): Promise<boolean> => {
-    // Only clear local state if the server actually deleted the cookie -
-    // otherwise the browser still holds a valid session while the UI shows
-    // "logged out", which is worse than surfacing a failed logout.
+  const refresh = useCallback(async () => {
+    const captured = generation.current;
+    const sequence = ++refreshSequence.current;
     try {
-      const res = await fetch("/api/auth/logout", { method: "POST" });
-      if (!res.ok) {
-        return false;
-      }
+      const res = await fetch('/api/auth/session', { cache: 'no-store' });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error('Session check unavailable');
+      if (captured === generation.current && sequence === refreshSequence.current) commit(json.data);
     } catch {
-      return false;
+      // An unreachable server is not evidence that a session was signed out.
+      if (captured === generation.current && sequence === refreshSequence.current) setUnavailable(true);
+    } finally {
+      if (captured === generation.current && sequence === refreshSequence.current) setLoading(false);
     }
-
-    setUser(null);
-    return true;
-  };
-
-  const refresh = async () => {
-    setUser(await fetchSession());
-  };
-
-  // A version-revoked cookie (401 UNAUTHORIZED) or a newly restricted session
-  // (403 PASSWORD_CHANGE_REQUIRED) must hide protected views and re-read the
-  // session — without navigating away from a pending operation as though it
-  // failed before commit. fetchApi broadcasts these; login-form 401s never do.
+  }, [commit]);
+  useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    const onInvalid = () => {
-      void refresh();
-    };
-    window.addEventListener("auth:session-invalid", onInvalid);
-    return () => window.removeEventListener("auth:session-invalid", onInvalid);
-  }, []);
-
-  const value = useMemo(
-    () => ({
-      user,
-      isLoading,
-      login,
-      logout,
-      refresh,
-    }),
-    [user, isLoading]
-  );
-
+    const update = () => { void refresh(); };
+    window.addEventListener('auth:session-invalid', update);
+    window.addEventListener('focus', update);
+    return () => { window.removeEventListener('auth:session-invalid', update); window.removeEventListener('focus', update); };
+  }, [refresh]);
+  const login = useCallback(async (email: string, password: string, workspace: Workspace = 'EVENTS'): Promise<LoginResult> => {
+    const captured = ++generation.current;
+    const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, workspace }) });
+    const json = await res.json();
+    if (!res.ok || !json.success) return { success: false, message: json.message || 'Unable to sign in.' };
+    if (captured !== generation.current) return { success: false, message: 'Sign-in changed. Try again.' };
+    commit(json.data);
+    return { success: true, destination: resolveWorkspaceDestination(json.data, workspace) };
+  }, [commit]);
+  const logout = useCallback(async (): Promise<boolean> => {
+    ++generation.current;
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      if (!res.ok) return false;
+    } catch { return false; }
+    window.dispatchEvent(new Event('auth:signed-out'));
+    commit(null);
+    return true;
+  }, [commit]);
+  const value = useMemo(() => ({ user, isLoading, isUnavailable, login, logout, refresh }), [user, isLoading, isUnavailable, login, logout, refresh]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-export const useAuth = () => {
+}
+export function useAuth() {
   const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
-};
+}

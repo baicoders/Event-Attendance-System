@@ -1,9 +1,11 @@
+import { readLimitedJson } from "@/globals/utils/requestBody";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
 import { respondWithError } from "@/globals/utils/httpError";
 import { databaseErrorLog } from "@/globals/utils/databaseErrorLog";
+import { resolveWorkspaceDestination } from "@/features/auth/utils/workspaceDestination";
 import { workspaceCapabilities } from "@/features/auth/utils/accessPolicy";
 import { setAuthSession } from "@/globals/utils/auth";
 import {
@@ -19,7 +21,7 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 
 export async function POST(req: Request) {
   try {
-    const parsed = loginSchema.parse(await req.json());
+    const parsed = loginSchema.parse(await readLimitedJson(req));
     const email = parsed.email.trim().toLowerCase();
     const password = parsed.password;
 
@@ -133,7 +135,7 @@ export async function POST(req: Request) {
 
     await setAuthSession(session);
 
-    return NextResponse.json(ok({ ...session, destination: current.mustChangePassword ? "/account/settings" : parsed.workspace === "CLASS" ? (capabilities.classroom ? "/class" : "/class/access") : "/dashboard" }), {
+    return NextResponse.json(ok({ ...session, destination: resolveWorkspaceDestination(session, parsed.workspace ?? "EVENTS") }), {
       status: 200,
       headers: NO_STORE,
     });

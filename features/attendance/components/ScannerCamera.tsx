@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { createScanGate } from "@/features/attendance/utils/scanGate";
 import { BiSolidCameraOff } from "react-icons/bi";
 import {
@@ -40,6 +40,7 @@ const ScannerCamera = ({
   onError,
 }: ScannerCameraProps) => {
   const scanGate = useRef(createScanGate());
+  useEffect(() => { window.addEventListener("workspace:changed", onClose); return () => window.removeEventListener("workspace:changed", onClose); }, [onClose]);
 
   const handleScan = useCallback(
     (detectedCodes: IDetectedBarcode[]) => {

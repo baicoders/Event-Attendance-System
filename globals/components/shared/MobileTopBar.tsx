@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Settings, Network } from "lucide-react";
+import { LogOut, Settings, Network, BookOpen } from "lucide-react";
 
+import WorkspaceSwitcher from "@/features/auth/components/WorkspaceSwitcher";
 import { useAuth } from "@/globals/contexts/AuthContext";
 import { useLogout } from "@/globals/hooks/useLogout";
 import { focusRing } from "@/globals/constants/designTokens";
@@ -23,7 +24,7 @@ import {
  * itself lives in `MobileBottomNav`; this bar just carries branding plus the
  * account affordances the desktop `Sidebar` would otherwise host.
  */
-const MobileTopBar = () => {
+const MobileTopBar = ({ workspace = "EVENTS" }: { workspace?: "EVENTS" | "CLASS" }) => {
   const { user } = useAuth();
   const handleLogout = useLogout();
   const pathname = usePathname();
@@ -46,7 +47,7 @@ const MobileTopBar = () => {
           className="size-7 shrink-0 object-contain"
         />
         <p className="truncate text-sm font-semibold tracking-tight text-slate-900">
-          ACLC Attendance
+          {workspace === "CLASS" ? "ACLC Class Attendance" : "ACLC Attendance"}
         </p>
       </div>
 
@@ -57,7 +58,7 @@ const MobileTopBar = () => {
           <button
             type="button"
             className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0b4dff_0%,#6d28d9_100%)] text-xs font-semibold text-white transition-opacity hover:opacity-90",
+              "flex min-h-12 min-w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0b4dff_0%,#6d28d9_100%)] text-xs font-semibold text-white transition-opacity hover:opacity-90",
               focusRing
             )}
             aria-label={`Account menu for ${user?.name ?? "Organizer"}`}
@@ -66,14 +67,15 @@ const MobileTopBar = () => {
             {initials || "O"}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="max-w-[calc(100vw-2rem)]">
           <DropdownMenuLabel className="truncate">
             {user?.name ?? "Organizer"}
           </DropdownMenuLabel>
+          <WorkspaceSwitcher menu />
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
             <Link
-              href="/custom-groups"
+              href={workspace === "CLASS" ? "/class/classes" : "/custom-groups"}
               aria-current={
                 pathname === "/custom-groups"
                   ? "page"
@@ -82,13 +84,13 @@ const MobileTopBar = () => {
                     : undefined
               }
             >
-              <Network aria-hidden="true" />
-              Custom Groups
+              {workspace === "CLASS" ? <BookOpen aria-hidden="true" /> : <Network aria-hidden="true" />}
+              {workspace === "CLASS" ? "My Classes" : "Custom Groups"}
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link
-              href="/settings"
+              href={workspace === "CLASS" ? "/class/settings" : "/settings"}
               aria-current={
                 pathname === "/settings"
                   ? "page"

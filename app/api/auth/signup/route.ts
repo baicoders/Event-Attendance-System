@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { setAuthSession } from "@/globals/utils/auth";
 import { PUBLIC_IDENTITY_SELECT } from "@/features/classroom/server/access";
+import { readLimitedJson } from "@/globals/utils/requestBody";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/globals/libs/prisma";
@@ -12,7 +13,7 @@ import { signupSchema } from "@/features/auth/schema/signupSchema";
 
 export async function POST(req: Request) {
   try {
-    const parsed = signupSchema.parse(await req.json());
+    const parsed = signupSchema.parse(await readLimitedJson(req));
     const name = parsed.name;
     // Normalized so case-variant duplicate accounts are impossible
     const email = parsed.email.trim().toLowerCase();

@@ -1,4 +1,5 @@
 import 'server-only';
+import { classroomAvailableFor } from './featureFlags';
 import { NextResponse } from 'next/server';
 import { ok } from '@/globals/utils/api';
 import { respondWithError } from '@/globals/utils/httpError';
@@ -16,7 +17,6 @@ export function classroomError(error: unknown) {
 export { readLimitedJson as readClassroomBody } from "@/globals/utils/requestBody";
 export async function requireClassroomActor() {
   const user = await requireClassroomAccess();
-  const pilot = process.env.CLASSROOM_PILOT_USER_IDS?.split(',').map(v => v.trim()).filter(Boolean) ?? [];
-  if (process.env.CLASSROOM_ENABLED !== 'true' || (pilot.length && !pilot.includes(user.id) && user.role !== 'ADMIN')) throw new AuthError('Classroom is not enabled for this account.', 403, 'CLASSROOM_NOT_ENABLED');
+  if (!classroomAvailableFor(user.id, user.role === 'ADMIN')) throw new AuthError('Classroom is not enabled for this account.', 403, 'CLASSROOM_NOT_ENABLED');
   return { userId: user.id, credentialVersion: user.credentialVersion };
 }

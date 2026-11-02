@@ -1,5 +1,8 @@
 "use client";
 
+import WorkspaceSelector from "@/features/auth/components/WorkspaceSelector";
+import { useWorkspacePreference } from "@/features/auth/hooks/useWorkspacePreference";
+import { resolveWorkspaceDestination } from "@/features/auth/utils/workspaceDestination";
 import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -19,8 +22,9 @@ import {
 import { useAuth } from "@/globals/contexts/AuthContext";
 
 const LoginPage = () => {
-  const { login, isLoading, user } = useAuth();
+  const { login, isLoading, isUnavailable, refresh, user } = useAuth();
   const router = useRouter();
+  const { workspace, setWorkspace, ready } = useWorkspacePreference();
 
   const {
     register,
@@ -31,27 +35,30 @@ const LoginPage = () => {
   });
 
   useEffect(() => {
-    if (!isLoading && user) {
-      router.replace("/dashboard");
+    if (!isLoading && !isUnavailable && ready && user) {
+      router.replace(resolveWorkspaceDestination(user, workspace, new URLSearchParams(window.location.search).get("returnTo")));
     }
-  }, [isLoading, user, router]);
+  }, [isLoading, isUnavailable, ready, user, workspace, router]);
 
   const onSubmit = handleSubmit(async ({ email, password }) => {
     try {
-      const result = await login(email, password);
+      setWorkspace(workspace);
+      const result = await login(email, password, workspace);
 
       if (!result.success) {
         toastDanger(result.message ?? "Unable to sign in.");
         return;
       }
 
-      router.replace("/dashboard");
+      // The authenticated-user effect chooses the authorized workspace destination.
     } catch {
       toastDanger("Unexpected error. Please try again.");
     }
   });
 
-  if (isLoading) {
+  if (isUnavailable) return <main className="p-6" role="alert">Unable to check sign-in. <Button className="min-h-12" onClick={() => void refresh()}>Retry connection</Button></main>;
+
+  if (isLoading || !ready) {
     return <AuthStatusScreen message="Preparing sign in…" />;
   }
 
@@ -60,13 +67,14 @@ const LoginPage = () => {
   return (
     <AuthSplitLayout
       mode="login"
+      workspace={workspace}
       title="Sign In"
-      subtitle="Enter your organizer credentials to continue."
+      subtitle={workspace === "CLASS" ? "Sign in to your teacher account or check your application." : "Enter your organizer credentials to continue."}
       footer={
         <p>
-          New organizer?{" "}
+          {workspace === "CLASS" ? "New teacher?" : "New organizer?"}{" "}
           <Link
-            href="/signup"
+            href={`/signup?workspace=${workspace}`}
             className="font-semibold text-slate-900 underline-offset-2 hover:text-indigo-600 hover:underline"
           >
             Request access
@@ -75,6 +83,7 @@ const LoginPage = () => {
       }
     >
       <form className="space-y-4" onSubmit={onSubmit} noValidate>
+        <WorkspaceSelector value={workspace} onChange={setWorkspace} disabled={isSubmitting} />
         <FormInput
           label="Email"
           type="email"
@@ -93,7 +102,7 @@ const LoginPage = () => {
 
         <Button
           type="submit"
-          className="w-full"
+          className="min-h-12 w-full"
           size="lg"
           disabled={isSubmitting}
         >

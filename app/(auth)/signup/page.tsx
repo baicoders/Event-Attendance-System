@@ -1,5 +1,8 @@
 "use client";
 
+import WorkspaceSelector from "@/features/auth/components/WorkspaceSelector";
+import { useWorkspacePreference } from "@/features/auth/hooks/useWorkspacePreference";
+import { resolveWorkspaceDestination } from "@/features/auth/utils/workspaceDestination";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -20,12 +23,14 @@ import { useAuth } from "@/globals/contexts/AuthContext";
 import { ApiError, fetchApi } from "@/globals/utils/api";
 
 const SignupPage = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isUnavailable, refresh } = useAuth();
   const router = useRouter();
+  const { workspace, setWorkspace, ready } = useWorkspacePreference();
   const [submittedName, setSubmittedName] = useState<string | null>(null);
 
   const {
     register,
+    setValue,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<SignupFormValues>({
@@ -33,20 +38,24 @@ const SignupPage = () => {
   });
 
   useEffect(() => {
-    if (!isLoading && user) {
-      router.replace("/dashboard");
+    if (!isLoading && !isUnavailable && ready && user) {
+      router.replace(resolveWorkspaceDestination(user, workspace));
     }
-  }, [isLoading, user, router]);
+  }, [isLoading, isUnavailable, ready, user, workspace, router]);
 
-  const onSubmit = handleSubmit(async ({ name, email, password }) => {
+  useEffect(() => { setValue("workspace", workspace); }, [workspace, setValue]);
+
+  const onSubmit = handleSubmit(async (values) => {
     try {
       await fetchApi("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ ...values, workspace }),
       });
 
-      setSubmittedName(name);
+      setWorkspace(workspace);
+      if (workspace === "CLASS") await refresh();
+      else setSubmittedName(values.name);
     } catch (error) {
       const message =
         error instanceof ApiError
@@ -56,7 +65,9 @@ const SignupPage = () => {
     }
   });
 
-  if (isLoading) {
+  if (isUnavailable) return <main className="p-6" role="alert">Unable to check sign-in. <Button className="min-h-12" onClick={() => void refresh()}>Retry connection</Button></main>;
+
+  if (isLoading || !ready) {
     return <AuthStatusScreen message="Preparing signup…" />;
   }
 
@@ -65,13 +76,14 @@ const SignupPage = () => {
   return (
     <AuthSplitLayout
       mode="signup"
-      title="Request Access"
-      subtitle="Submit your details and wait for administrator approval."
+      workspace={workspace}
+      title={workspace === "CLASS" ? "Apply for Teacher Access" : "Request Access"}
+      subtitle={workspace === "CLASS" ? "One school administrator approval gives you independent access to manage your classes." : "Submit your details and wait for administrator approval."}
       footer={
         <p>
-          Already approved?{" "}
+          Already registered?{" "}
           <Link
-            href="/login"
+            href={`/login?workspace=${workspace}`}
             className="font-semibold text-slate-900 underline-offset-2 hover:text-indigo-600 hover:underline"
           >
             Return to login
@@ -94,6 +106,7 @@ const SignupPage = () => {
         </div>
       ) : (
         <form className="space-y-4" onSubmit={onSubmit} noValidate>
+          <WorkspaceSelector value={workspace} onChange={setWorkspace} disabled={isSubmitting} />
           <FormInput
             label="Full name"
             type="text"
@@ -121,9 +134,13 @@ const SignupPage = () => {
             }
           />
 
+          {workspace === "CLASS" ? <>
+            <FormInput label="Department or teaching designation" {...register("departmentOrDesignation")} error={errors.departmentOrDesignation?.message} />
+            <FormInput label="Staff reference (optional)" {...register("staffReference")} error={errors.staffReference?.message} />
+          </> : null}
           <Button
             type="submit"
-            className="w-full"
+            className="min-h-12 w-full"
             size="lg"
             disabled={isSubmitting}
           >

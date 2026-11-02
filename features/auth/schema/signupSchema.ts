@@ -6,8 +6,8 @@ export const signupSchema = z.object({
   departmentOrDesignation: z.string().trim().max(160).optional(),
   staffReference: z.string().trim().max(100).optional(),
   applicationText: z.string().trim().max(1000).optional(),
-  email: z.string().email("Valid email required"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  email: z.string().email("Valid email required").max(254),
+  password: z.string().min(8, "Password must be at least 8 characters").max(1024),
 }).strict().superRefine((value, ctx) => {
   if (value.workspace === "CLASS" && !value.departmentOrDesignation) ctx.addIssue({ code: "custom", path: ["departmentOrDesignation"], message: "Teacher designation is required." });
 });

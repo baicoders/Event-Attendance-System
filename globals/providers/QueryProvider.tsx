@@ -37,8 +37,9 @@ function AuthCacheSync() {
       void queryClient.cancelQueries();
       queryClient.clear();
     };
-    window.addEventListener("auth:session-invalid", onInvalid);
-    return () => window.removeEventListener("auth:session-invalid", onInvalid);
+    const events = ["auth:session-invalid", "auth:identity-change", "workspace:changed"];
+    for (const event of events) window.addEventListener(event, onInvalid);
+    return () => { for (const event of events) window.removeEventListener(event, onInvalid); };
   }, [queryClient]);
 
   return null;

@@ -33,7 +33,7 @@ export function err(message: string, code?: string, details?: Record<string, unk
  */
 function notifySessionInvalid(status: number, code?: string) {
   if (typeof window === "undefined") return;
-  if (code !== "UNAUTHORIZED" && code !== "PASSWORD_CHANGE_REQUIRED") return;
+  if (!["UNAUTHORIZED", "PASSWORD_CHANGE_REQUIRED", "ACCOUNT_DISABLED", "CLASSROOM_ACCESS_REQUIRED", "CLASSROOM_SUSPENDED"].includes(code ?? "")) return;
   window.dispatchEvent(
     new CustomEvent("auth:session-invalid", { detail: { status, code } }),
   );

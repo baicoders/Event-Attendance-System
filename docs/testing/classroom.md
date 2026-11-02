@@ -34,3 +34,13 @@ Final evidence:
 The Origin regression was reproduced with a real NextRequest: loopback URL normalization differs from the browser Host. Fallback validation uses the validated Host plus protocol; configured `APP_ORIGINS` always takes precedence. No forwarded host is trusted. Node API test clients explicitly supply normal browser Origin; clients that cannot do so obtain `/api/auth/csrf` and send the double-submit cookie/header token.
 
 New `RequestRateLimit` rows are shared across app instances and keyed by SHA-256, not raw email/IP labels. Expired rows are pruned in bounded batches. The test artifact directories are excluded from TypeScript discovery and production output tracing.
+
+## Dedicated workspace experience (Task 3)
+
+- Workspace destination/preference and existing access units: 19/19.
+- Existing-user Events application database checks: 2/2; a teacher requests Events via the existing organizer queue without changing Class access.
+- Classroom access/boundary HTTP, existing account recovery HTTP and existing operator31/31 pass.
+- `node --import tsx scripts/test-classroom-workspaces.mjs` verifies actual browser flows at375px: selector/network recovery, server Events-shell rejection, applicant isolation, saved application details, approval, explicit Class entry, dual workspace switching, independent suspension, and no horizontal overflow.
+- Final full browser run used `CLASSROOM_TEST_DEV=true` after an accessibility-label-only correction; the production build before that correction passed. Development assertions allow30s for first-route compilation on the shared host. Production-build rerun remains in integration verification.
+- The browser test caught missing explicit submit types (the shared Button defaults to button); both new application forms now submit. The administrator status filter has an explicit accessible name.
+- Final touched ESLint and whitespace checks passed. No hosted deployment or real-phone camera claim is made by this desktop browser test.

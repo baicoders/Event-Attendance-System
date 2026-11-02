@@ -4,7 +4,7 @@ export const teacherApplicationSchema = z.object({
   commandId: commandIdSchema,
   expectedRevision: z.number().int().nonnegative().optional(),
   action: z.enum(['SAVE', 'SUBMIT']),
-  departmentOrDesignation: z.string().trim().min(1).max(160),
+  departmentOrDesignation: z.string().trim().min(1, 'Enter your teaching designation.').max(160),
   staffReference: z.string().trim().max(100).nullable().optional(),
   applicationText: z.string().trim().max(1000).default(''),
 }).strict();

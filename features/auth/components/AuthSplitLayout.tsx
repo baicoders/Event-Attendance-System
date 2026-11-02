@@ -5,6 +5,7 @@ import AuthBackdrop from "./AuthBackdrop";
 
 type AuthSplitLayoutProps = {
   mode: "login" | "signup";
+  workspace?: "EVENTS" | "CLASS";
   title: string;
   subtitle: string;
   children: ReactNode;
@@ -13,12 +14,13 @@ type AuthSplitLayoutProps = {
 
 const AuthSplitLayout = ({
   mode,
+  workspace = "EVENTS",
   title,
   subtitle,
   children,
   footer,
 }: AuthSplitLayoutProps) => {
-  const brandingSubtitle =
+  const brandingSubtitle = workspace === "CLASS" ? "Your classes, student QR codes, and daily attendance." :
     mode === "login"
       ? "Sign in to manage events and attendance records."
       : "Request access to manage events and attendance records.";
@@ -40,7 +42,7 @@ const AuthSplitLayout = ({
 
           <div className="mb-7 space-y-2">
             <h2 className="text-center text-3xl font-semibold tracking-tight text-slate-900">
-              ACLC Event Attendance
+              {workspace === "CLASS" ? "ACLC Classroom Attendance" : "ACLC Event Attendance"}
             </h2>
             <p className="text-center text-[12px] text-slate-500">
               {brandingSubtitle}
