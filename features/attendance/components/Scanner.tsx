@@ -5,8 +5,9 @@ import dynamic from "next/dynamic";
 import { IoCameraOutline } from "react-icons/io5";
 import { surface } from "@/globals/constants/designTokens";
 import { cn } from "@/globals/libs/shad-cn";
+import { eventCameraFailureMessage } from "../utils/cameraFailure";
 
-// The camera surface (and its ~170KB QR-scanner dependency) is only loaded
+// The camera surface and local QR decoder are only loaded
 // once the user opens the camera, not on the attendance page's first paint.
 const ScannerCamera = dynamic(
   () => import("@/features/attendance/components/ScannerCamera"),
@@ -69,12 +70,7 @@ const Scanner = ({ onRead, isPending = false, eventId, mode, isOpen, onOpenChang
   };
 
   const handleCameraError = (error: unknown) => {
-    const name = error instanceof Error ? error.name : "";
-    setCameraError(name === "NotAllowedError" || name === "PermissionDeniedError"
-      ? "Camera permission denied. Allow camera access in your browser, then retry."
-      : name === "NotFoundError" || name === "DevicesNotFoundError"
-      ? "No camera was found on this device."
-      : "Camera unavailable. Close it and try again, or use manual entry.");
+    setCameraError(eventCameraFailureMessage(error));
     setCameraOpen(false);
   };
 

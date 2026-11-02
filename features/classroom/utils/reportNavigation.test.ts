@@ -1,0 +1,3 @@
+import assert from 'node:assert/strict';import { test } from 'node:test';import { reportReturnPath } from './reportNavigation';
+test('a changed print returns to the same safe selection without its obsolete version or other parameters',()=>{assert.equal(reportReturnPath({termId:'term',classId:'class',sessionId:'meeting',expectedReportVersion:'old',redirect:'https://bad.test',note:'private'}),'/class/reports?termId=term&classId=class&sessionId=meeting');});
+test('malformed or incomplete print selections return to the report picker',()=>{assert.equal(reportReturnPath({termId:['invalid']}),'/class/reports');assert.equal(reportReturnPath({sessionId:'',from:'not-a-date'}),'/class/reports');});
