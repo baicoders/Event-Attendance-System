@@ -1,3 +1,4 @@
+import { setStudentWriteContext } from '@/globals/utils/studentProfileAudit';
 import { guardEventsActor } from "@/globals/utils/guardedActor";
 import { NextResponse } from "next/server";
 import { prisma } from "@/globals/libs/prisma";
@@ -49,7 +50,8 @@ export async function POST(req: Request) {
       const result = await prisma.$transaction(
         async (tx) => {
           // Bulk membership replacement freezes eligibility (exclusive form).
-          await guardEventsActor(tx, user, true);
+          const fresh=await guardEventsActor(tx, user, true);
+          await setStudentWriteContext(tx,{actorId:fresh.id,actorName:fresh.name,source:'BULK',reason:'Administrator-reviewed '+category.toLowerCase()+' reassignment'});
       await takeRosterExclusiveLock(tx);
           const target = await tx.group.findUnique({
             where: { id: token.targetId },

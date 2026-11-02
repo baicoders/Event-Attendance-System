@@ -25,11 +25,12 @@ function reserveReport(path?:string){
 async function readState(client:Client,options:EventOptions,bootstrap=false):Promise<SetupState>{
  const groups=(await client.query('SELECT * FROM "Group" ORDER BY id')).rows;
  const students=(await client.query(`SELECT s.*, COALESCE((SELECT json_agg(g ORDER BY g.id) FROM "_GroupToStudent" j JOIN "Group" g ON g.id=j."A" WHERE j."B"=s.id),'[]'::json) AS groups FROM "Student" s ORDER BY s.id`)).rows;
+ const reservations=(await client.query('SELECT code,"reservedOwnerId","studentId",state FROM "StudentQrCode" ORDER BY code')).rows;
  const memberships=(await client.query('SELECT * FROM "CustomGroupMembership" ORDER BY "studentId","groupId"')).rows;
  const events=(await client.query(`SELECT e.*, ARRAY(SELECT "B" FROM "_EventGroups" WHERE "A"=e.id ORDER BY "B") AS "groupIds",(SELECT count(*)::int FROM "Record" r WHERE r."eventId"=e.id) AS "recordCount" FROM "Event" e ORDER BY e.id`)).rows;
  const owners=options.create?(await client.query('SELECT id,role,status,"mustChangePassword","credentialVersion" FROM "User" WHERE id=$1 ORDER BY id',[options.create.ownerId])).rows:[];
  const users=bootstrap?(await client.query('SELECT id,name,email,role,status,"mustChangePassword","credentialVersion","createdAt","updatedAt" FROM "User" ORDER BY id')).rows:undefined;
- return {groups,students,memberships,events,owners,...(users?{users}:{})};
+ return {groups,students,reservations,memberships,events,owners,...(users?{users}:{})};
 }
 async function applyPlan(client:Client,plan:SetupPlan){
  const ids=new Map<string,string>();
@@ -109,6 +110,7 @@ export async function executeSetup(options:SetupOptions){
   await client.query(options.apply?'BEGIN':'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');transaction=true;
   await client.query("SET LOCAL lock_timeout='15s'");await client.query("SET LOCAL statement_timeout='60s'");
   if(options.apply){
+   await client.query("SELECT set_config('school.student_write',$1,true)",[JSON.stringify({actorName:'Reviewed USWAG setup CLI',source:'MAINTENANCE',reason:'Explicitly reviewed setup batch'})]);
    // Authorization row before roster, matching application lock ordering.
    if(options.bootstrap)await client.query('LOCK TABLE "User" IN SHARE ROW EXCLUSIVE MODE');
    if(eventOptions.create)await client.query('SELECT id FROM "User" WHERE id=$1 FOR SHARE',[eventOptions.create.ownerId]);
@@ -128,6 +130,7 @@ export async function executeSetup(options:SetupOptions){
    if(approved.mode!=='dry-run'||approved.fingerprint!==fingerprint)throw new SetupError('STALE_REVIEW');
    if(plan.blockers.length||approved.outcome!=='planned')throw new SetupError('BLOCKED_PLAN');
    completionPlan=await applyPlan(client,plan);
+   await client.query('SELECT school_flush_student_profiles()');
    report={...report,...completionPlan,outcome:'commit-pending'};save(reportPath,report);committing=true;
   }
   const completion=await client.query('COMMIT');

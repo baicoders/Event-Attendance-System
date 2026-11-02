@@ -50,6 +50,12 @@ model Student {
   yearLevel   YearLevel?
   schoolLevel SchoolLevel?
 
+  profileRevision Int @default(0)
+  archivedAt DateTime? @db.Timestamptz(3)
+  qrCodes StudentQrCode[]
+  profileChanges StudentProfileChange[]
+  verifications StudentVerification[]
+
   // Relations: Students can belong to multiple groups (House, Strand, etc.)
   groups  Group[]
   customMemberships CustomGroupMembership[]
@@ -62,6 +68,7 @@ model Student {
   // Roster sort modes, so the common orderings don't need a temp B-tree.
   // Group-membership filtering goes through the Group relation, so it is not
   // indexed here; that belongs on the join table if it ever needs tuning.
+  @@index([archivedAt, id])
   @@index([updatedAt, id])
   @@index([lastName, firstName, id])
   @@index([schoolLevel, yearLevel, lastName, firstName, id])
@@ -352,4 +359,65 @@ model RequestRateLimit {
   hits Int
   resetAt DateTime @db.Timestamptz(3)
   @@index([resetAt])
+}
+
+// Raw QR codes remain permanently reserved across every identifier namespace.
+enum StudentQrState {
+  RESOLVABLE
+  RETIRED
+  QUARANTINED
+}
+model StudentQrCode {
+  code String @id @db.VarChar(128)
+  reservedOwnerId String?
+  studentId String?
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  state StudentQrState @default(RESOLVABLE)
+  originalKind String
+  candidateEvidence Json? @db.JsonB
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  retiredAt DateTime? @db.Timestamptz(3)
+  @@index([studentId, state])
+}
+model StudentProfileChange {
+  id BigInt @id @default(autoincrement())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  fromRevision Int?
+  toRevision Int
+  before Json? @db.JsonB
+  after Json @db.JsonB
+  actorId String?
+  actorName String
+  source String
+  reason String?
+  commandId String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([studentId, toRevision])
+  @@index([studentId, id])
+  @@index([actorId, createdAt, id])
+}
+model StudentVerification {
+  id BigInt @id @default(autoincrement())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  profileRevision Int
+  verifiedContentHash String @db.VarChar(64)
+  state String
+  note String?
+  actorId String
+  actorName String
+  commandId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([studentId, profileRevision, id])
+}
+// Transaction-local staging, emptied by a deferred trigger before COMMIT.
+// Captures one original snapshot for raw SQL + implicit membership writes.
+model StudentProfilePending {
+  transactionId BigInt
+  studentId String
+  before Json? @db.JsonB
+  metadata Json @db.JsonB
+  flushed Boolean @default(false)
+  @@id([transactionId, studentId])
 }

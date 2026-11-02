@@ -1,3 +1,4 @@
+import { setStudentWriteContext,flushStudentProfileChanges } from '@/globals/utils/studentProfileAudit';
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -46,10 +47,14 @@ export async function readImportState(tx: Prisma.TransactionClient, rows: Parsed
   const slugs = [...new Set(rows.flatMap(r=>fields.map(f=>r.student[f]).filter(Boolean)))].sort();
   const ids = [...new Set(rows.flatMap(r=>[r.student.usn,r.student.lrn,r.student.id]).filter((value):value is string=>!!value))].sort();
   const groups: Prisma.GroupGetPayload<{select:typeof groupSelect}>[]=[];
+  const reservations: Awaited<ReturnType<typeof tx.studentQrCode.findMany>>=[];
+  for(const batch of chunks(ids))reservations.push(...await tx.studentQrCode.findMany({where:{code:{in:batch}}}));
+  const ownerIds=[...new Set(reservations.flatMap(r=>r.studentId?[r.studentId]:[]))];
   const students: Prisma.StudentGetPayload<{select:typeof studentSelect}>[]=[];
   for (const batch of chunks(slugs)) groups.push(...await tx.group.findMany({where:{slug:{in:batch}},select:groupSelect}));
   for (const batch of chunks(ids)) students.push(...await tx.student.findMany({where:{OR:[{id:{in:batch}},{usn:{in:batch}},{lrn:{in:batch}}]},select:studentSelect}));
-  return {groups,students:[...new Map(students.map(student=>[student.id,student])).values()]};
+  for(const batch of chunks(ownerIds)) students.push(...await tx.student.findMany({where:{id:{in:batch}},select:studentSelect}));
+  return {groups,reservations,students:[...new Map(students.map(student=>[student.id,student])).values()]};
 }
 
 export async function guardImportActor(tx: Prisma.TransactionClient, actor: AuthSession) {
@@ -72,7 +77,7 @@ export async function previewStudentImport(db:PrismaClient, raw:unknown, actor:A
   const preparedAt=Date.now();
   const expiresAt=preparedAt+IMPORT_TOKEN_TTL_MS;
   const token:ImportToken={v:1,purpose:IMPORT_TOKEN_PURPOSE,actorId:actor.id,fileName:input.fileName,sourceHash:prepared.sourceHash,
-    normalizedInputHash:prepared.normalizedInputHash,reviewHash:hashImportReview(prepared.rows,state.students,state.groups),preparedAt,expiresAt};
+    normalizedInputHash:prepared.normalizedInputHash,reviewHash:hashImportReview(prepared.rows,state.students,state.groups,state.reservations),preparedAt,expiresAt};
   return {...review,v:2 as const,...(input.sheetName?{sheetName:input.sheetName}:{}),previewToken:review.counts.blocked===0 ? signImportToken(token) : null,preparedAt:new Date(preparedAt).toISOString(),expiresAt:new Date(expiresAt).toISOString()};
 }
 
@@ -90,7 +95,7 @@ export async function revalidateImport(tx:Prisma.TransactionClient, prepared:Ret
   const groupIds=[...new Set([...state.groups.map(g=>g.id),...state.students.flatMap(s=>s.groups.map(g=>g.id))])].sort();
   for(const batch of chunks(groupIds)) await tx.$queryRaw(Prisma.sql`SELECT id FROM "Group" WHERE id IN (${Prisma.join(batch)}) ORDER BY id FOR SHARE`);
   state=await readImportState(tx,prepared.rows);
-  if (hashImportReview(prepared.rows,state.students,state.groups)!==token.reviewHash) throw new ImportError('Roster or Groups changed since review. Review the file again; no students were changed.','STALE_PREVIEW',409);
+  if (hashImportReview(prepared.rows,state.students,state.groups,state.reservations)!==token.reviewHash) throw new ImportError('Roster or Groups changed since review. Review the file again; no students were changed.','STALE_PREVIEW',409);
   const review=classifyStudentImport({...state,rows:prepared.rows});
   if (review.counts.blocked>0) throw new ImportError('This import is now blocked. Review again; no students were changed.','STALE_PREVIEW',409);
   return review;
@@ -144,7 +149,9 @@ export async function commitStudentImport(db:PrismaClient, raw:unknown, actor:Au
     await takeRosterExclusiveLock(tx);
     assertImportTokenFresh(token);
     const review=await revalidateImport(tx,prepared,token);
+    await setStudentWriteContext(tx,{actorId:fresh.id,actorName:fresh.name,source:'IMPORT',reason:'Administrator-reviewed student import',commandId:input.commandId});
     await applyImport(tx,review,onProgress);
+    await flushStudentProfileChanges(tx);
     // Construction, insert and validation of the persisted response are inside
     // this transaction: any failure rolls back every tentative Student write.
     const receiptResult=buildImportReceiptResult(review);

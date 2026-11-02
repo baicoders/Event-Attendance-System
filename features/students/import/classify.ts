@@ -25,7 +25,9 @@ function domainReasons(student:CanonicalRow):ImportReason[] {
 const comparableName=(value:string)=>value.normalize('NFC').trim().replace(/\s+/gu,' ').toLowerCase();
 const excludedEnrollmentStatuses=new Set(['withdrawn','not enrolled','transferred out','retained transfer out']);
 const comparableStatus=(value:string)=>value.normalize('NFKC').trim().toLowerCase().replace(/[\s/_\p{Dash_Punctuation}]+/gu,' ');
-export function classifyStudentImport(input:{rows:ParsedImportRow[];groups:ImportGroup[];students:ExistingImportStudent[]}):ImportReview {
+export type ImportReservation={code:string;reservedOwnerId:string|null;studentId:string|null;state:string};
+export function classifyStudentImport(input:{rows:ParsedImportRow[];groups:ImportGroup[];students:ExistingImportStudent[];reservations?:ImportReservation[]}):ImportReview {
+ const reservations=new Map(input.reservations?.map(row=>[row.code,row]));
  const groups=new Map(input.groups.map(group=>[group.slug,group]));
  const byCode=new Map<string,Map<string,ExistingImportStudent>>();
  for(const student of input.students)for(const code of [student.id,student.usn,student.lrn])if(code) {
@@ -43,6 +45,12 @@ export function classifyStudentImport(input:{rows:ParsedImportRow[];groups:Impor
   const reasons:ImportReason[]=[];
   for(const field of ['usn','lrn'] as const)if(incoming[field]&&/^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(incoming[field]!))reasons.push({code:'INVALID_STUDENT',field,message:'Scientific-notation identifiers are unsafe. Restore the exact original identifier as text before importing.'});
   const matches=matching(incoming);
+  for(const code of [incoming.usn,incoming.lrn].filter(Boolean)){
+   const reservation=reservations.get(code!);
+   if(!reservation)continue;
+   const owner=input.students.find(item=>item.id===reservation.reservedOwnerId);
+   if(reservation.state!=='RESOLVABLE'||!owner||![owner.usn,owner.lrn].includes(code))reasons.push({code:'IDENTITY_CONFLICT',message:'This identifier is historical, reserved or blocked. Review the individual student and use a current identifier before importing.'});
+  }
   if(incoming.enrollmentStatus&&excludedEnrollmentStatuses.has(comparableStatus(incoming.enrollmentStatus)))reasons.push({code:'EXCLUDED_ENROLLMENT_STATUS',field:'enrollmentStatus',message:'This enrollment status is excluded. Remove this row from the import; no students are changed until every blocked row is resolved.'});
   if(incoming.id&&incoming.usn!==incoming.id)reasons.push({code:'INVALID_STUDENT',field:'id',message:'Legacy id is a USN alias and must equal the USN column when both are supplied.'});
   if(matches.length>1)reasons.push({code:'IDENTITY_CONFLICT',message:'USN and LRN resolve to different students. Resolve the identities before import.'});

@@ -76,6 +76,7 @@ async function main() {
     );
   }
 
+  if(await prisma.studentProfileChange.count()||await prisma.studentQrCode.count())throw new Error('Refusing destructive reseed after permanent student identity/history activation. Recreate an explicitly disposable database instead.');
   console.log("Seeding database...");
 
   await prisma.attendanceChange.deleteMany();

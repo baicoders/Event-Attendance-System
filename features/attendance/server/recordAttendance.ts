@@ -5,7 +5,7 @@ import {
   takeRosterSharedLock,
 } from "@/globals/utils/pgLocks";
 import { isRetryableTransactionError } from "@/globals/utils/prismaError";
-import { resolveStudentIdentity, StudentIdentityError } from "@/globals/utils/studentIdentity";
+import { resolveStudentIdentity, findStudentByCanonicalId, StudentIdentityError } from "@/globals/utils/studentIdentity";
 import { appendAttendanceChange } from "./attendanceChange";
 
 export type AttendanceMode = "TIME_IN" | "TIME_OUT";
@@ -85,7 +85,7 @@ export async function recordAttendance(
         }
 
         let studentId: string | null;
-        try { studentId = await resolveStudentIdentity(tx, input.studentId); }
+        try { studentId = input.method === "MANUAL" ? (await findStudentByCanonicalId(tx, input.studentId))?.id ?? null : await resolveStudentIdentity(tx, input.studentId); }
         catch (error) { if (error instanceof StudentIdentityError) throw new RecordingError(error.message, error.status, error.code); throw error; }
         if (!studentId) throw new RecordingError("Student is not included in the event.", 404, "STUDENT_UNAVAILABLE");
         const student = await tx.student.findFirst({

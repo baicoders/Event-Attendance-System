@@ -1,3 +1,5 @@
+import { changeQrDisposition,type IdentifierDisposition } from '@/features/students/server/qrReservations';
+import { flushStudentProfileChanges,setStudentIdentifierDisposition } from './studentProfileAudit';
 import { guardEventsActor, type LegacyActor } from "./guardedActor";
 import type { PrismaClient } from "@prisma/client";
 import { studentSchema, type StudentPatchValues } from "@/globals/schemas/studentSchema";
@@ -8,7 +10,7 @@ import { hasAmbiguousStudentGroups } from "./studentGroupReview";
 import { assertStudentIdentifiersAvailable, StudentIdentityError } from "./studentIdentity";
 import { validateStudentGroupSlugs } from "./studentGroups";
 
-export type StudentEditRequest = { expectedVersion: string; student: StudentPatchValues; principalId?: string; principal?: LegacyActor };
+export type StudentEditRequest = { expectedVersion: string; student: StudentPatchValues; principalId?: string; principal?: LegacyActor; identifierDisposition?:IdentifierDisposition };
 
 export async function updateStudentDetail(db: PrismaClient, id: string, request: StudentEditRequest) {
   return db.$transaction(async tx => {
@@ -32,6 +34,8 @@ export async function updateStudentDetail(db: PrismaClient, id: string, request:
       usn: current.usn ?? (!current.lrn && /^\d{11}$/.test(current.id) ? current.id : null), ...patch});
     try { await assertStudentIdentifiersAvailable(tx,form,id); }
     catch(error) { if(error instanceof StudentIdentityError)return {kind:"identity-conflict" as const}; throw error; }
+    const removed=[current.usn,current.lrn].filter((code):code is string=>!!code&&![form.usn,form.lrn].includes(code));
+    if(removed.length&&!request.identifierDisposition)return {kind:'qr-disposition-required' as const};
     const resolution = await validateStudentGroupSlugs([form], tx);
     if (!resolution.ok) return { kind: "invalid-groups" as const, message: resolution.error };
     const ids = [form.section, form.house, form.department, form.program, form.strand]
@@ -46,12 +50,16 @@ export async function updateStudentDetail(db: PrismaClient, id: string, request:
     if (sameGroups && sameScalars) {
       return { kind: "ok" as const, changed: false, student: { ...flattenStudentGroups(current), editVersion: studentEditVersion(current) } };
     }
-    const updated = await tx.student.update({ where: { id }, data: {
+    if(removed.length)await setStudentIdentifierDisposition(tx,request.identifierDisposition!);
+    await tx.student.update({ where: { id }, data: {
       firstName: form.firstName, lastName: form.lastName, middleName: form.middleName || null,
       schoolLevel: form.schoolLevel ?? null, yearLevel: form.yearLevel ?? null,
       usn: form.usn || null, lrn: form.lrn || null,
       groups: { set: ids.map(groupId => ({ id: groupId })) },
     }, include: { groups: true } });
+    if(removed.length)await changeQrDisposition(tx,id,removed,request.identifierDisposition!);
+    await flushStudentProfileChanges(tx);
+    const updated=await tx.student.findUniqueOrThrow({where:{id},include:{groups:true}});
     return { kind: "ok" as const, changed: true, student: { ...flattenStudentGroups(updated), editVersion: studentEditVersion(updated) } };
   }, { timeout: 5_000, maxWait: 5_000 });
 }

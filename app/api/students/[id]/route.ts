@@ -1,3 +1,5 @@
+import { identifierDispositionSchema } from '@/features/classroom/schemas/studentCorrectionSchema';
+import { readLimitedJson } from '@/globals/utils/requestBody';
 import { NextResponse } from "next/server";
 import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
@@ -49,9 +51,9 @@ export async function PATCH(
   try {
     const principal = await requireAuth();
     const { id } = await params;
-    const body: unknown = await request.json();
+    const body: unknown = await readLimitedJson(request);
     if (!body || typeof body !== "object" || Array.isArray(body) ||
-        Object.keys(body).some(key => key !== "expectedVersion" && key !== "student")) {
+        Object.keys(body).some(key => key !== "expectedVersion" && key !== "student" && key !== "identifierDisposition")) {
       return NextResponse.json(err("Invalid edit request.", "INVALID_STUDENT_EDIT"), { status: 400, headers: privateHeaders });
     }
     const input = body as Record<string, unknown>;
@@ -64,7 +66,8 @@ export async function PATCH(
     if (student.id !== undefined && student.id !== id) {
       return NextResponse.json(err("Student ID cannot be changed.", "STUDENT_ID_MISMATCH"), { status: 400, headers: privateHeaders });
     }
-    const result = await updateStudentDetail(prisma, id, { expectedVersion: input.expectedVersion, student, principal });
+    const result = await updateStudentDetail(prisma, id, { expectedVersion: input.expectedVersion, student, principal, identifierDisposition: input.identifierDisposition===undefined?undefined:identifierDispositionSchema.parse(input.identifierDisposition) });
+    if(result.kind==='qr-disposition-required')return NextResponse.json(err('Confirm existing card ownership or choose reprinting before changing identifiers.','QR_DISPOSITION_REQUIRED'),{status:400,headers:privateHeaders});
     if (result.kind === "identity-conflict") return NextResponse.json(err("USN or LRN already belongs to another person.", "IDENTITY_CONFLICT"), { status: 409, headers: privateHeaders });
     if (result.kind === "forbidden") return NextResponse.json(err("Account not active.", "INACTIVE_USER"), { status: 403, headers: privateHeaders });
     if (result.kind === "not-found") return NextResponse.json(err("Student not found.", "STUDENT_NOT_FOUND"), { status: 404, headers: privateHeaders });
@@ -93,14 +96,14 @@ export async function DELETE(
       await guardEventsActor(tx, principal, true);
       await takeRosterExclusiveLock(tx);
       const attendanceCount = await tx.record.count({ where: { studentId: id } });
-      if (attendanceCount > 0 || await tx.attendanceChange.count({ where: { studentId: id } })) return true;
+      if (attendanceCount > 0 || await tx.attendanceChange.count({ where: { studentId: id } }) || await tx.studentProfileChange.count({where:{studentId:id}}) || await tx.studentVerification.count({where:{studentId:id}})) return true;
       await tx.student.delete({ where: { id } });
       return false;
     });
     if (blocked) {
       return NextResponse.json(
         err(
-          "Cannot delete this student because attendance has already been recorded for them.",
+          "Cannot delete this student because attendance or immutable profile history exists. Preserve the record for historical accuracy.",
           "STUDENT_HAS_RECORDS"
         ),
         { status: 409 }

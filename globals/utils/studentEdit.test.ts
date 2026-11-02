@@ -47,9 +47,9 @@ test("edit-only transaction detects stale and deleted records and preserves grou
     assert.equal(ambiguous.updatedAt.toISOString(), current.updatedAt.toISOString());
     assert.notEqual(studentEditVersion(ambiguous), studentEditVersion(current));
     assert.equal((await updateStudentDetail(typed, form.id, { expectedVersion: studentEditVersion(ambiguous), student: form })).kind, "group-review");
-    await typed.student.delete({ where: { id: form.id } });
-    assert.equal((await updateStudentDetail(typed, form.id, { expectedVersion: version, student: form })).kind, "not-found");
-    assert.equal(await typed.student.count(), 0);
+    await assert.rejects(typed.student.delete({ where: { id: form.id } }), /Foreign key constraint/);
+    assert.equal((await updateStudentDetail(typed, "missing-student", { expectedVersion: version, student: form })).kind, "not-found");
+    assert.equal(await typed.student.count(), 1);
   } finally {
     await disconnect();
     await disposable.cleanup();
