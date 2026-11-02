@@ -160,7 +160,7 @@ test("remote TLS cannot be disabled through URL options", () => {
 test("local development keeps its connection string and effective remote hosts use TLS", () => {
   for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
     const url = `postgresql://${host}/postgres`;
-    assert.deepEqual(getPgPoolConfig(url), { connectionString: url });
+    assert.deepEqual(getPgPoolConfig(url), { connectionString: url, options: "-c timezone=UTC" });
   }
   const config = getPgPoolConfig("postgresql://localhost/postgres?host=db.example.com&ssl=true");
   assert.equal((config.ssl as { rejectUnauthorized: boolean }).rejectUnauthorized, true);
@@ -183,4 +183,12 @@ test("remote migrations require strict TLS even without a configured CA", (t) =>
   assert.equal(url.searchParams.get("sslcert"), "/trusted-root.pem");
   process.env.DIRECT_URL = "postgresql://127.0.0.1/postgres";
   assert.equal(getMigrationDatabaseUrl(), process.env.DIRECT_URL);
+});
+
+test('Prisma PostgreSQL pools pin UTC session serialization even when URL options name another timezone',()=>{
+ const config=getPgPoolConfig('postgresql://127.0.0.1/postgres?options='+encodeURIComponent('-c statement_timeout=5000 -c timezone=Asia/Manila'));
+ const client=new Client(config);
+ const options=(client as unknown as {connectionParameters:{options:string}}).connectionParameters.options;
+ assert.equal(options,'-c statement_timeout=5000 -c timezone=Asia/Manila -c timezone=UTC');
+ assert.equal(new URL(config.connectionString!).searchParams.has('options'),false);
 });

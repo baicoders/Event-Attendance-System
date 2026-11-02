@@ -129,12 +129,17 @@ export const RUNTIME_POOL_TUNING: PgPoolTuning = {
 /**
  * Build the pg URL and TLS options together so URL parsing cannot replace the
  * verified SSL object. Keep client certificates and direct TLS negotiation.
- * Remote connections always verify the server; local development is unchanged.
+ * Remote connections always verify the server. Wire sessions use UTC.
  */
 export function getPgPoolConfig(url: string): PoolConfig {
-  if (isLocalPostgresUrl(url)) return { connectionString: url };
-
+  // PrismaPg 7 serializes UTC wall time without an offset and expects UTC
+  // results. Pin the wire session timezone; school display stays Asia/Manila.
   const poolUrl = new URL(url);
+  const startupOptions = [poolUrl.searchParams.get("options"), "-c timezone=UTC"].filter(Boolean).join(" ");
+  const hadStartupOptions = poolUrl.searchParams.has("options");
+  poolUrl.searchParams.delete("options");
+  if (isLocalPostgresUrl(url)) return { connectionString: hadStartupOptions ? poolUrl.toString() : url, options: startupOptions };
+
   const options = Object.fromEntries(poolUrl.searchParams);
   if (
     (options.sslmode && !["require", "verify-ca", "verify-full"].includes(options.sslmode)) ||
@@ -161,6 +166,7 @@ export function getPgPoolConfig(url: string): PoolConfig {
   }
   const config: PoolConfig = {
     connectionString: poolUrl.toString(),
+    options: startupOptions,
     ssl: {
       rejectUnauthorized: true,
       // pg omits SNI for IP addresses; Node otherwise checks "localhost".

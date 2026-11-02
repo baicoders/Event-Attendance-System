@@ -32,6 +32,7 @@ export async function createDisposableDatabase(prefix = "test") {
   const pool = new Pool({ connectionString: base });
   try {
     await pool.query(`CREATE DATABASE "${dbName}"`);
+    await pool.query(`ALTER DATABASE "${dbName}" SET timezone TO 'UTC'`);
   } finally {
     await pool.end();
   }
