@@ -386,7 +386,41 @@
     "At least three unfamiliar-teacher usability trials",
     "Actual hosted timezone/history audit, pooler/topology, latency/concurrency and backup/restore verification",
     "School field/privacy/retention policy and pilot operator signoff",
-    "Final whole-branch review, then separate production migration/deployment authorization"
+    "Separate production migration/deployment authorization after all external gates"
   ],
-  "implementationCommit": "0d1dea1c4307047194b3d99ffe34d2131094fee0"
+  "preReviewImplementationCommit": "0d1dea1c4307047194b3d99ffe34d2131094fee0",
+  "finalReview": {
+    "reviewedHead": "dfed5d23f254450bf25e0c3d726a4bfdc0111eda",
+    "critical": 0,
+    "important": 2,
+    "minor": 0,
+    "acceptedAndFixed": 2,
+    "fixPasses": 1,
+    "reReviewPerformed": false,
+    "record": "classroom-review.md",
+    "before": {
+      "survivingRowShiftPx": 27,
+      "confirmationVisibleDuringDelayedRead": false,
+      "confirmationVisibleAfterRemoval": false
+    },
+    "after": {
+      "survivingRowShiftPx": 0,
+      "confirmationVisibleDuringDelayedRead": true,
+      "confirmationVisibleAfterRemoval": true,
+      "teacherScrollPreserved": true
+    },
+    "postFixPassing": [
+      "pnpm build including type check",
+      "pnpm test:classroom:unit (64/64)",
+      "focused delayed-filter production mobile test",
+      "pnpm test:classroom:mobile (full suite)",
+      "Class onboarding API +375px first-attendance browser",
+      "Class reports API +375px/CSV/print/PDF/admin browser",
+      "scoped lint and git diff --check"
+    ],
+    "productionSourceChanges": [
+      "features/classroom/components/ManualRoster.tsx",
+      "features/classroom/components/SessionAttendancePage.tsx"
+    ]
+  }
 }

@@ -20,11 +20,44 @@ def begin(page,size,lost=False):
  if lost:
   expect(page.get_by_role('heading',name='Saves awaiting confirmation')).to_be_visible();expect(page.get_by_role('alert')).to_contain_text('fetch');page.unroute(path,lose);page.reload();expect(page.get_by_role('heading',name='Saves awaiting confirmation')).to_be_visible();button(page,'Check or retry same save').click()
  expect(page).to_have_url(__import__('re').compile('/class/sessions/'));expect(page.get_by_role('region',name='Manual attendance')).to_be_visible();return page.url
+def filtered_refresh_review(page):
+ # Disable browser scroll anchoring so the application must preserve its own
+ # viewport, including on browsers which do not provide native anchoring.
+ with page.expect_response(lambda response:'/roster?' in response.url and 'q=N100_' in response.url and 'status=UNMARKED' in response.url):
+  page.get_by_label('Search this session').fill('N100_');page.get_by_label('Attendance filter').select_option('UNMARKED')
+ expect(page.locator('[data-roster-student]')).to_have_count(100);page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+ page.evaluate("document.documentElement.style.overflowAnchor='none'");target=card(page,100,60);survivor=card(page,100,61)
+ target.evaluate("el=>window.scrollTo(0,scrollY+el.getBoundingClientRect().top-120)");before=survivor.bounding_box()['y'];assert page.evaluate('scrollY')>1000
+ session_id=page.url.split('?')[0].rsplit('/',1)[1];held=[];pattern=re.compile(re.escape(base+'/api/classroom/sessions/'+session_id+'/roster')+r'\?.*')
+ def hold_roster(route):held.append((route,route.fetch()))
+ page.route(pattern,hold_roster)
+ target.get_by_role('button',name='Present — N100_060, Student',exact=True).click();confirmation=page.get_by_role('status').filter(has_text='Confirmed: Present — Student N100_060.');expect(confirmation).to_have_count(1)
+ expect(target.locator('span').filter(has_text=re.compile('^Present$'))).to_have_count(1)
+ for _ in range(250):
+  if held:break
+  page.wait_for_timeout(20)
+ assert held,'The filtered roster was never refetched'
+ page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');box=confirmation.bounding_box();account=page.get_by_role('button',name='Account menu for Mobile teacher').bounding_box();nav=page.get_by_role('navigation',name='Primary').last.bounding_box();visible=box['y']>=account['y']+account['height'] and box['y']+box['height']<=nav['y'] and box['x']>=0 and box['x']+box['width']<=375
+ for route,response in held:route.fulfill(response=response)
+ page.unroute(pattern,hold_roster)
+ expect(target).to_have_count(0);expect(page.locator('[data-roster-student]')).to_have_count(99);page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');delta=abs(survivor.bounding_box()['y']-before)
+ expect(page.get_by_label('Search this session')).to_have_value('N100_');expect(page.get_by_label('Attendance filter')).to_have_value('UNMARKED');box_after=confirmation.bounding_box();visible_after=box_after['y']>=account['y']+account['height'] and box_after['y']+box_after['height']<=nav['y'];observed={'survivingRowShiftPx':round(delta,2),'confirmationVisibleDuringDelayedRead':visible,'confirmationVisibleAfterRemoval':visible_after};print('Filtered refresh review: '+json.dumps(observed),flush=True);assert delta<=3 and visible and visible_after,observed
+ # A deliberate scroll during the delayed read must not be undone by restoration.
+ held.clear();page.route(pattern,hold_roster);next_target=card(page,100,62);next_target.evaluate("el=>window.scrollTo(0,scrollY+el.getBoundingClientRect().top-120)");next_target.get_by_role('button',name='Present — N100_062, Student',exact=True).click();expect(page.get_by_role('status').filter(has_text='Confirmed: Present — Student N100_062.')).to_have_count(1)
+ for _ in range(250):
+  if held:break
+  page.wait_for_timeout(20)
+ assert held;start_scroll=page.evaluate('scrollY');page.mouse.wheel(0,400);page.wait_for_function('scrollY>='+str(start_scroll+390));page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');manual_scroll=page.evaluate('scrollY')
+ for route,response in held:route.fulfill(response=response)
+ page.unroute(pattern,hold_roster);expect(next_target).to_have_count(0);expect(page.locator('[data-roster-student]')).to_have_count(98);page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');assert abs(page.evaluate('scrollY')-manual_scroll)<=3,'The delayed refresh undid the teacher’s own scroll';print('PASS teacher-controlled scroll during delayed refresh',flush=True)
+ no_overflow(page);page.get_by_label('Attendance filter').select_option('');page.get_by_label('Search this session').fill('');expect(page.locator('[data-roster-student]')).to_have_count(100)
 with sync_playwright() as p:
  args=['--no-sandbox','--disable-dev-shm-usage','--renderer-process-limit=2'];chrome=shutil.which('google-chrome') or '/opt/google/chrome/chrome';browser=p.chromium.launch(executable_path=chrome,headless=True,args=args);context=context_for(browser);page=context.new_page()
  try:
   if os.environ.get('CLASSROOM_MOBILE_NAV_ONLY')=='true':
    page.goto(base+'/class');expect(page.get_by_role('heading',name='My Classes',exact=True)).to_be_visible();page.evaluate("document.documentElement.style.zoom='2'");navigation_fits(page);print('PASS zoom navigation');sys.exit(0)
+  if os.environ.get('CLASSROOM_MOBILE_FILTER_REVIEW_ONLY')=='true':
+   begin(page,100);filtered_refresh_review(page);print('PASS delayed filtered refresh and visible confirmation');sys.exit(0)
   meeting=begin(page,35,True);session_id=meeting.rsplit('/',1)[1]
   path=base+'/api/classroom/sessions/'+session_id+'/attendance/'+classes['35']['students'][0]['id']
   def lose_manual(route):route.fetch();route.fulfill(status=409,content_type='text/html',body='Unreadable acknowledgment')
@@ -56,6 +89,7 @@ with sync_playwright() as p:
   page.reload();button(page,'Review and finalize attendance').click();button(page,'Finalize and mark remaining Absent').click();expect(page.get_by_role('region',name='Session summary')).to_contain_text('Finalized');card(page,35,5).get_by_role('button',name='Excused — N35_005, Student',exact=True).click();page.get_by_label('Reason for correction',exact=True).fill('Accepted excuse after class');button(page,'Save Excused').click();expect(card(page,35,5).locator('span').filter(has_text=re.compile('^Excused$'))).to_be_visible();page.reload();expect(card(page,35,5).locator('span').filter(has_text=re.compile('^Excused$'))).to_be_visible();no_overflow(page)
   for size in [100,101,220]:
    begin(page,size);expect(page.locator('[data-roster-student]')).to_have_count(100)
+   if size==100:filtered_refresh_review(page)
    if size>100:
     button(page,'Next').click();expect(page.get_by_text('Page 2 of '+str((size+99)//100)+' · '+str(size)+' students',exact=True)).to_be_visible();expect(page.locator('[data-roster-student]')).to_have_count(min(size-100,100))
     if size==220:

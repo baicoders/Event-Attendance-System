@@ -1,6 +1,6 @@
 # Classroom implementation decisions
 
-Ordered execution rulings retained for review. The approved specification controls product behavior; these record implementation choices and their practical costs. Final review dispositions will be appended after the fresh whole-branch review.
+Ordered execution rulings retained for review, including final review dispositions and their practical costs. The approved specification controls product behavior.
 
 - Ruling: Execute inline, with the skill-required whole-branch review at the end — user approved proceed without selecting delegation; no implementer agents — cost if wrong: slower throughput, reviewed with tests.
 
@@ -59,3 +59,11 @@ Ordered execution rulings retained for review. The approved specification contro
 - Task 11: Ruling: keep existing focused disposable DB fixtures instead of replacing them with one shared database/app orchestrator; add serial aggregate regression runner with per-suite logs/results — preserves independent ownership/cleanup and avoids cross-suite leakage while executing every required legacy check — cost if wrong: migrations/startup repeat and increase verification time. Runtime fixture sentinel/loopback guards prevent production fallback; no production operation performed.
 
 - Task 11: Ruling: treat actual school HTTPS iOS/Android, unfamiliar-teacher trials, hosted latency/topology/timezone/history/backup and explicit production release approval as enforced external release gates — local implementation can provide executable checks and an honest Not run acceptance record, but cannot fabricate school/device/operator evidence or deploy without authorization — cost if wrong: the branch must not be described as production-certified or generally enabled until those gates are completed.
+
+- Final: Ruling: reviewer set aside actual school-device trials, hosted performance/topology/timezone audit/backup acceptance and production approval — agree these remain explicit external release gates rather than completed implementation evidence; no production enable or certification is claimed — cost if wrong: the school must complete the acceptance record and staging/operator checks before release.
+
+- Final: Ruling: verify this UI-only review pass with the full Class unit/mobile suite, first-meeting onboarding and canonical report browser/API paths plus build/types/lint; retain the just-passed84 DB and29 broader regression groups as prior evidence — only ManualRoster and its SessionAttendancePage caller changed, no server/schema/shared Events implementation changed — cost if wrong: an unexpected cross-feature UI dependency would need a new targeted regression; do not rerun unchanged backups/migrations/TLS merely for bookkeeping.
+
+- Final: Ruling: preserve branch/worktree locally without an integration menu or side effects — existing approved goal requires separate authorization for push/merge/production release, so keeping the prepared branch is the authorized finish — cost if wrong: integration remains a deliberate later request rather than an automatic action.
+
+- Final: Ruling: retain ignored private rehearsal evidence and stopped test-database files rather than irreversibly deleting the plan workspace — raw failures/restore logs remain useful for release investigation, and the source decisions/results are also committed — cost if wrong: local disk usage persists until the owner elects to remove the evidence. No sibling workspace or unrelated process is touched.

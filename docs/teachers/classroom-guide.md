@@ -20,7 +20,7 @@ A valid student outside the roster prompts a choice: include this meeting only, 
 
 ## Manual attendance and connection problems
 
-Switch to Manual at any time. Search by name/identifier, filter outcomes and use Present, Absent, Late or Excuse. Excuse notes are optional; use only appropriate school information. The default page holds 100 students. Search/filter/page remain while marking and on reload.
+Switch to Manual at any time. Search by name/identifier, filter outcomes and use Present, Absent, Late or Excuse. Excuse notes are optional; use only appropriate school information. The default page holds 100 students. Search/filter/page remain while marking and on reload. Save status stays visible when you are working lower down a long roster.
 
 Saving means the request is in progress; Saved means the server acknowledged it. If a save is unconfirmed, use **Check same save / Retry**. It checks the original operation so a retry cannot duplicate a mark or start. Keep the tab open until resolved. Closing the tab or signing out removes local retry details and pending notes, but does not remove records already saved on the server. Ask an administrator to inspect history if the result remains unclear.
 
