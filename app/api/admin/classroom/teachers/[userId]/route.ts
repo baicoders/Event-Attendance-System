@@ -9,3 +9,5 @@ export async function PATCH(req: Request, context: { params: Promise<{ userId: s
     return classroomJson(await reviewTeacherApplication(prisma, { userId: user.id, credentialVersion: user.credentialVersion }, userId, await readClassroomBody(req)));
   } catch (error) { return classroomError(error); }
 }
+
+export async function GET(_req:Request,context:{params:Promise<{userId:string}>}){try{const user=await requireAdmin();const {getClassroomTeacherDetail}=await import('@/features/classroom/server/adminActivity');return classroomJson(await getClassroomTeacherDetail(prisma,{userId:user.id,credentialVersion:user.credentialVersion},(await context.params).userId));}catch(error){return classroomError(error);}}

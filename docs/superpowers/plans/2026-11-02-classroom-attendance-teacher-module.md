@@ -665,10 +665,10 @@ Commit: `feat(classroom): add mobile scanning and manual attendance`.
 
 **Consumes:** T4 immutable profile activity, T7/T8 historical members/results/audit. **Produces:** `loadAuthorizedClassroomReport(actor,filters): Promise<ClassroomReportSnapshot>`; `buildClassroomReport(snapshot): ClassroomReport`; `buildClassroomCsv(report): string`; admin timeline DTOs.
 
-- [ ] Fixture assertions: Present2 + Late1 + Absent1 + Excused2 → numerator3/denominator4/rate75.0%; all Excused → N/A; canceled/active excluded by default; midway enrollment excludes prior meetings; transferred/excluded students preserve previous session results. Multiple meetings/day remain separate.
-- [ ] Assert teacher student-term report sees only owned-class attendance even if the directory record is global; admin sees all authorized data. Match JSON/print/CSV totals and per-student rows exactly for the same reportVersion. Test REPORT_CHANGED after correction, zero denominators, CSV injection and leading-zero identifiers.
-- [ ] Implement one snapshot loader/projection and print/CSV consumers, bounded exports, audit of exports/administrative actions, and teacher/class/activity console with before/after/reason timelines. Exclude excuse notes from general directory/audit summaries.
-- [ ] Verify unit/DB/API/print/browser suites and existing Events report/CSV/print tests. Acceptance: scenarios F/G, admin assistance and independent Class suspension are fully inspectable.
+- [x] Fixture assertions: Present2 + Late1 + Absent1 + Excused2 → numerator3/denominator4/rate75.0%; all Excused → N/A; canceled/active excluded by default; midway enrollment excludes prior meetings; transferred/excluded students preserve previous session results. Multiple meetings/day remain separate.
+- [x] Assert teacher student-term report sees only owned-class attendance even if the directory record is global; admin sees all authorized data. Match JSON/print/CSV totals and per-student rows exactly for the same reportVersion. Test REPORT_CHANGED after correction, zero denominators, CSV injection and leading-zero identifiers.
+- [x] Implement one snapshot loader/projection and print/CSV consumers, bounded exports, audit of exports/administrative actions, and teacher/class/activity console with before/after/reason timelines. Exclude excuse notes from general directory/audit summaries.
+- [x] Verify unit/DB/API/print/browser suites and existing Events report/CSV/print tests. Acceptance: scenarios F/G, admin assistance and independent Class suspension are fully inspectable.
 
 Commit: `feat(classroom): add historical reports and administrative monitoring`.
 

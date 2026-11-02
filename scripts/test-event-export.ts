@@ -42,7 +42,7 @@ async function main() {
   const secondSection = await prisma.group.create({ data: { name: "Ungrouped", slug: `${prefix}-section-2`, category: "SECTION" } });
   for (let index = 1; index <= 5; index++) {
     await prisma.student.create({ data: {
-      id: `0000000000${index}`, firstName: `Student ${index}`, lastName: "Test", schoolLevel: index === 5 ? "SHS" : "COLLEGE", yearLevel: index === 5 ? "GRADE_11" : "YEAR_1",
+      id: `0000000000${index}`, usn: `0000000000${index}`, firstName: `Student ${index}`, lastName: "Test", schoolLevel: index === 5 ? "SHS" : "COLLEGE", yearLevel: index === 5 ? "GRADE_11" : "YEAR_1",
       groups: index === 1 ? { connect: [{ id: section.id }] } : index === 2 ? { connect: [{ id: secondSection.id }] } : index === 3 ? { connect: [{ id: section.id }, { id: secondSection.id }] } : undefined,
     } });
   }

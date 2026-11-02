@@ -33,7 +33,7 @@ export async function withClassroomTestApp(run) {
       await delay(500);
     }
     if (!ready) throw new Error('Test app did not become ready.');
-    await run({ db, base, request });
+    await run({ db, base, request, databaseUrl: disposable.url });
   } finally {
     if (server?.pid) { try { process.kill(-server.pid, 'SIGTERM'); } catch {} }
     closeSync(fd);

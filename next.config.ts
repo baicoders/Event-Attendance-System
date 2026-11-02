@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   typescript: {tsconfigPath: process.env.USWAG_TEST_TSCONFIG || "tsconfig.json"},
   async headers() {
     return [
+      { source: "/class/reports/print", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
       {
         source: "/(.*)",
         headers: [

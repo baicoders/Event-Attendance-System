@@ -53,7 +53,9 @@
     "test:classroom:onboarding": "node --import tsx --test features/classroom/utils/onboarding.test.ts features/classroom/utils/commandFailure.test.ts && node --conditions=react-server --import tsx --test features/classroom/server/onboarding.db.test.ts && node --import tsx scripts/test-classroom-onboarding-api.mjs",
     "test:classroom:sessions": "node --import tsx --test features/classroom/utils/attendancePolicy.test.ts && node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/sessionConstraints.db.test.ts features/classroom/server/sessions.db.test.ts features/classroom/server/sessionConcurrency.db.test.ts && node --import tsx scripts/test-classroom-sessions-api.mjs",
     "test:classroom:attendance": "node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/attendance.db.test.ts features/classroom/server/scanConcurrency.db.test.ts && node --import tsx scripts/test-classroom-attendance-api.mjs",
-    "test:classroom:mobile": "node --import tsx scripts/test-classroom-attendance-browser.mjs"
+    "test:classroom:mobile": "node --import tsx scripts/test-classroom-attendance-browser.mjs",
+    "test:classroom:reports": "node --import tsx --test features/classroom/utils/reportProjection.test.ts features/classroom/utils/reportExport.test.ts && node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/reports.db.test.ts features/classroom/server/adminActivity.db.test.ts && node --import tsx scripts/test-classroom-reports-api.mjs",
+    "test:events:reports": "node --conditions=react-server --import dotenv/config --import tsx --test globals/utils/attendance.test.ts globals/utils/eventReport.test.ts globals/utils/csvExport.test.ts features/reports/utils/eventExport.test.ts features/reports/utils/print*.test.ts && node --import tsx scripts/test-event-export-regression.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",

@@ -122,3 +122,16 @@ Contract: [Mobile attendance](../implementation/classroom-mobile-attendance.md).
 The initial375px/200% no-overflow check was insufficient: visual inspection found overlapping bottom-tab labels. A separate bounds assertion now checks adjacent links and their label/indicator bounds; opt-in Class compact navigation passes it in the final production browser run. The default Events navigation stays unchanged.
 
 Physical deployed-HTTPS iOS/Android camera/background/rotation and actual teacher/screen-reader trials remain release gates. Local fsync-off timings are functional evidence, not hosted capacity or durability certification. No production database or deployment is involved.
+
+## Canonical reports and monitoring (Task10)
+
+Contract: [Historical reports and monitoring](../implementation/classroom-reporting.md).
+
+- Pure projection6/6 and CSV2/2; full Class unit suite58/58.75.0%, N/A, sum-before-rounding, multiple same-day meetings, exclusions/not-enrolled, immutable per-meeting labels, leading-zero/formula/UTF8 handling and incomplete finalized data errors.
+- Report database8/8: current profile/section edits preserve snapshots/version; student-term privacy; paginated rows keep whole-selection totals; version mismatch after correction; audited matching print; midway eligibility; active/canceled exclusion; fresh credentials; real PostgreSQL ownership-transfer and membership-revocation barriers.
+- Monitoring database6/6: administrator-only/fresh credentials, mixed-source/timestamp cursor ties, real before/after actor/QR disposition, version-bound verification, nested excuse redaction, repeat-correction prompts without automatic access changes, and actual UTF8 response limits. The old code-unit guard was observed RED before byte-limit GREEN.
+- Concurrent monitoring index migrations M5a–f apply on fresh disposable databases using real Prisma deploy. They contain one concurrent-index statement per migration, not a transaction-wrapped batch.
+- `CLASSROOM_TEST_BROWSER=true node --import tsx scripts/test-classroom-reports-api.mjs`: production JSON/page/CSV/print/PDF and375px report/session/student/day/admin flows; exact versions,75% arithmetic, ownership and suspension/organizer/pending denials, default note omission and private student-term intersections. Separately authorized corrections reject stale downloads with REPORT_CHANGED. A separately authorized correction rejects the old CSV without downloading; explicit refresh clears the error and prepares the new version/rate.
+- Existing Events report/CSV/print unit suite15/15; `node --import tsx scripts/test-event-export-regression.mjs` owns a unique disposable database, app and Chrome CDP instance to run the original export HTTP/browser fixtures and80-group print stress. Existing presets/cohorts/groups/permissions/summary/sheet/CSV/picker checks pass. Legacy synthetic students now carry explicit USNs instead of relying on an internal ID as a display number.
+
+`pnpm test:classroom:reports` runs the focused unit/DB/API suite; add CLASSROOM_TEST_BROWSER=true for its phone/PDF checks. `pnpm test:events:reports` runs the safe Events regression wrapper and unit suite. No production migration, deployment or real-device assertion is made.

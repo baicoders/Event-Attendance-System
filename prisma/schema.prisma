@@ -344,6 +344,8 @@ model ClassroomAudit {
   @@index([studentId, id])
   @@index([actorId, createdAt, id])
   @@index([action, createdAt, id])
+  @@index([createdAt, id])
+  @@index([entityId, createdAt, id])
 }
 
 model ClassroomCommandReceipt {
@@ -402,6 +404,7 @@ model StudentProfileChange {
   @@unique([studentId, toRevision])
   @@index([studentId, id])
   @@index([actorId, createdAt, id])
+  @@index([createdAt, id])
 }
 model StudentVerification {
   id BigInt @id @default(autoincrement())
@@ -416,6 +419,8 @@ model StudentVerification {
   commandId String @db.Uuid
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   @@index([studentId, profileRevision, id])
+  @@index([createdAt, id])
+  @@index([actorId, createdAt, id])
 }
 // Transaction-local staging, emptied by a deferred trigger before COMMIT.
 // Captures one original snapshot for raw SQL + implicit membership writes.
@@ -609,4 +614,5 @@ model ClassroomAttendanceChange {
  @@index([sessionId,id])
  @@index([studentId,sessionId,id])
  @@index([actorId,createdAt,id])
+  @@index([createdAt, id])
 }
