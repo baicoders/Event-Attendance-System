@@ -298,3 +298,11 @@ If you are asked to *"create a new screen for X"*, these are binding.
 - [`audit/operability.md`](./audit/operability.md) — why operator clarity is
   weighted so heavily on the attendance screen
 - Component JSDoc — API detail, constraints, and worked examples
+
+## Dedicated Class workspace (November2026)
+
+Class reuses the indigo/Poppins tokens, shared headers, forms, dialogs, toasts and status indicators. Its focused sidebar and compact mobile tabs expose Dashboard, My Classes, Attendance, Students, Reports and Settings according to capability. The Events mobile shutter layout remains the default Events pattern.
+
+Attendance uses stacked student cards and bottom sheets rather than a dense phone table. Actions have48px targets, text plus status indicators, visible saved/unconfirmed/error states and row-local same-save recovery. Default pagination is100, with server search/filter and stable scroll. Preserve accessible names, search/filter/page/mode across updates/reload. Scan success requires acknowledgment, never color or sound alone.
+
+Verify375px and200% zoom with both page-overflow and adjacent-tab/label bounds; a page fitting the viewport can still contain overlapping tabs. Sheets need bounded scrolling, focused accessible labels and a usable manual camera fallback. Physical one-handed teacher and screen-reader trials remain release gates, not claims from automated bounds checks.

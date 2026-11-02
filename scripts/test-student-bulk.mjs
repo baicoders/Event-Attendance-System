@@ -171,8 +171,8 @@ try {
       { id: "prog-bsit", name: "BSIT", slug: "bsit", category: "PROGRAM" },
     ],
   });
-  const studentData = (id, lastName, sec, house) => ({
-    id, firstName: "Test", lastName, middleName: null, schoolLevel: "COLLEGE", yearLevel: "YEAR_2",
+  const studentData = (id, lastName) => ({
+    id, usn: id, firstName: "Test", lastName, middleName: null, schoolLevel: "COLLEGE", yearLevel: "YEAR_2",
   });
   await prisma.student.create({ data: { ...studentData("00000123456", "Dela Cruz"), groups: { connect: [{ id: "sec-a" }, { id: "house-azul" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
   await prisma.student.create({ data: { ...studentData("00000123457", "Santos"), groups: { connect: [{ id: "sec-a" }, { id: "house-verde" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
@@ -180,7 +180,7 @@ try {
   // Ambiguous: two sections
   await prisma.student.create({ data: { ...studentData("00000123480", "Ambiguous"), groups: { connect: [{ id: "sec-a" }, { id: "sec-b" }, { id: "house-azul" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
   // Formula payload + unicode
-  await prisma.student.create({ data: { id: "00000123459", firstName: "=2+2", lastName: "Oñate, Jr.", middleName: null, schoolLevel: "COLLEGE", yearLevel: "YEAR_2", groups: { connect: [{ id: "sec-a" }, { id: "house-azul" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
+  await prisma.student.create({ data: { id: "00000123459", usn: "00000123459", firstName: "=2+2", lastName: "Oñate, Jr.", middleName: null, schoolLevel: "COLLEGE", yearLevel: "YEAR_2", groups: { connect: [{ id: "sec-a" }, { id: "house-azul" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
 
   await prisma.event.create({
     data: {

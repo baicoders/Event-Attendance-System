@@ -6,13 +6,19 @@ houses, strands, programs, sections, or year levels), submit them for admin
 approval, and record attendance by QR scan or manual entry with time-in /
 time-out tracking.
 
+## Classroom attendance
+
+The dedicated **Class** workspace shares the central student directory and existing QR codes while keeping teacher access independent of Events organizer access. Approved teachers manage combined-section classes, saved irregular-student exceptions, attendance sessions and historical reports from the deployed HTTPS site.
+
+Teachers: follow the [Classroom guide](docs/teachers/classroom-guide.md); the developer setup below is not required. Operators: Class stays disabled until the [release checklist](docs/deployment/classroom.md) and [device/teacher acceptance record](docs/testing/classroom-release-acceptance.md) are complete. See [architecture](docs/architecture.md), [domain model](docs/domain-model.md) and [test evidence](docs/testing/classroom.md).
+
 ## Stack
 
 - Next.js (App Router) + TypeScript
 - Prisma ORM over PostgreSQL 17 (`@prisma/adapter-pg` + `pg`, one bounded pool per process)
 - TanStack Query + Table, shadcn/ui, FullCalendar
 
-## Setup
+## Developer setup
 
 ```bash
 # 1. Install dependencies (pnpm via corepack)
@@ -29,9 +35,9 @@ docker compose up -d db
 #    Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 # 4. Create the database
-corepack pnpm db:migrate    # or: pnpm db:push for a quick sync
+corepack pnpm db:migrate    # reviewed migrations include required SQL triggers/checks
 
-# 5. (Optional) Seed sample data - WIPES all tables
+# 5. (Optional) Legacy sample seed: use an EMPTY disposable development database
 corepack pnpm db:seed
 
 # 6. Run
@@ -43,8 +49,10 @@ production without a real `AUTH_SECRET`. SQLite/file: URLs are refused everywher
 
 ## Seeded test accounts
 
-`db:seed` clears every table and creates (dev only - it refuses to run with
-`NODE_ENV=production` unless `SEED_FORCE=1`):
+`db:seed` is a legacy destructive developer fixture, not a Classroom rollout or
+reset procedure. Use only an empty disposable development database; existing
+Class snapshots and immutable history must not be removed to make a seed run.
+It refuses production mode unless explicitly forced. Its sample accounts are:
 
 | Email | Password | Role |
 |---|---|---|

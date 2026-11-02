@@ -48,8 +48,8 @@ export type DisposableDb = {
   cleanup: () => Promise<void>;
 };
 
-/** Create `test_...`, apply real migrations, verify identity. */
-export async function createDisposableDb(prefix = "test"): Promise<DisposableDb> {
+/** Create `test_...`, apply real migrations unless a historical fixture opts out, verify identity. */
+export async function createDisposableDb(prefix = "test", { migrate = true }: { migrate?: boolean } = {}): Promise<DisposableDb> {
   const suffix = `${Date.now().toString(36)}_${randomBytes(4).toString("hex")}_${process.pid.toString(36)}`;
   const dbName = `${prefix}_${suffix}`.toLowerCase().replace(/[^a-z0-9_]/g, "_");
   if (!DISPOSABLE_PATTERN.test(dbName)) {
@@ -78,7 +78,7 @@ export async function createDisposableDb(prefix = "test"): Promise<DisposableDb>
 
   const url = databaseUrlWithDb(adminUrl, dbName);
   try {
-    execFileSync("pnpm", ["exec", "prisma", "migrate", "deploy"], {
+    if (migrate) execFileSync("pnpm", ["exec", "prisma", "migrate", "deploy"], {
       env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url },
       stdio: "pipe",
     });

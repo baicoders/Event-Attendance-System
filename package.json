@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:duplicate-event": "node --import tsx --test features/calendar/utils/duplicateEvent.test.ts && node scripts/test-event-duplicate-api.mjs",
-    "test:operator": "node --import tsx --test features/attendance/server/recordAttendance.test.ts features/attendance/server/recordAttendance.performance.test.ts features/attendance/utils/operationCoordinator.test.ts features/attendance/utils/scanGate.test.ts features/attendance/utils/captureGate.test.ts",
+    "test:operator": "node --import tsx --test features/attendance/server/recordAttendance.test.ts features/attendance/server/recordAttendance.performance.test.ts features/attendance/utils/operationCoordinator.test.ts features/attendance/utils/scanGate.test.ts features/attendance/utils/captureGate.test.ts features/attendance/utils/cameraFailure.test.ts",
     "test:operator-api": "node scripts/test-operator-api.mjs",
     "test:progress": "node --import tsx --test globals/utils/attendance.test.ts globals/utils/attendanceProgress.test.ts globals/utils/attendanceProgressRead.test.ts features/attendance/utils/progressRequest.test.ts features/attendance/utils/validateProgressResponse.test.ts",
     "test:progress-api": "node --import tsx scripts/test-attendance-progress-api.mjs",
@@ -45,7 +45,7 @@
     "test:student-import-durability": "node --import tsx scripts/test-student-import-durability.mjs",
     "benchmark:import-scale": "node --conditions=react-server --import tsx scripts/benchmark/student-import-scale.ts",
     "test:e2e:attendance": "node --test scripts/prepare-qr-decoder.test.mjs scripts/attendance-e2e/*.test.mjs && node scripts/test-attendance-e2e.mjs",
-    "test:classroom:unit": "node --import tsx --test features/auth/utils/*.test.ts globals/utils/api.test.ts globals/components/shared/qr/cameraCapture.test.ts globals/utils/requestOrigin.test.ts globals/utils/requestBody.test.ts features/classroom/utils/*.test.ts",
+    "test:classroom:unit": "node --import tsx --test features/auth/utils/*.test.ts globals/utils/api.test.ts globals/components/shared/qr/*.test.ts globals/utils/requestOrigin.test.ts globals/utils/requestBody.test.ts features/classroom/utils/*.test.ts features/classroom/components/StudentAttendanceCard.test.tsx",
     "test:classroom:db": "node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/*.db.test.ts features/auth/server/*.db.test.ts",
     "test:classroom:api": "node --import tsx scripts/test-classroom-access-api.mjs && node --import tsx scripts/test-classroom-boundaries.mjs",
     "test:classroom:students": "node --conditions=react-server --import tsx --test --test-concurrency=1 features/students/server/*.db.test.ts features/students/server/verification.test.ts && node scripts/test-classroom-identity-migration.mjs && node --import tsx scripts/test-classroom-students-api.mjs",
@@ -55,7 +55,10 @@
     "test:classroom:attendance": "node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/attendance.db.test.ts features/classroom/server/scanConcurrency.db.test.ts && node --import tsx scripts/test-classroom-attendance-api.mjs",
     "test:classroom:mobile": "node --import tsx scripts/test-classroom-attendance-browser.mjs",
     "test:classroom:reports": "node --import tsx --test features/classroom/utils/reportProjection.test.ts features/classroom/utils/reportExport.test.ts && node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/reports.db.test.ts features/classroom/server/adminActivity.db.test.ts && node --import tsx scripts/test-classroom-reports-api.mjs",
-    "test:events:reports": "node --conditions=react-server --import dotenv/config --import tsx --test globals/utils/attendance.test.ts globals/utils/eventReport.test.ts globals/utils/csvExport.test.ts features/reports/utils/eventExport.test.ts features/reports/utils/print*.test.ts && node --import tsx scripts/test-event-export-regression.mjs"
+    "test:events:reports": "node --conditions=react-server --import dotenv/config --import tsx --test globals/utils/attendance.test.ts globals/utils/eventReport.test.ts globals/utils/csvExport.test.ts features/reports/utils/eventExport.test.ts features/reports/utils/print*.test.ts && node --import tsx scripts/test-event-export-regression.mjs",
+    "test:classroom:release": "node --conditions=react-server --import tsx scripts/test-classroom-release.mjs",
+    "test:classroom:regression": "node scripts/test-classroom-regression.mjs",
+    "test:classroom:flagoff": "node --import tsx scripts/test-classroom-flagoff.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",

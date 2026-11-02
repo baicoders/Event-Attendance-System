@@ -10,7 +10,7 @@
 
 **Spec:** The user's “Implementation Planning Goal: Dedicated Classroom Attendance & Teacher Module,” including scenarios A–H, is the controlling specification. This document captures its implementation decisions and acceptance mapping.
 
-**Status:** Proposed for review. Repository inspection and this document are the only work performed. No application implementation, dependency installation, migrations, deployment, or production-data access is authorized by this document.
+**Status:** Implementation approved by the user on 2026-11-02 and carried out in the isolated `feat/classroom-teacher-module` branch. Development/test migrations use disposable databases. Production migration, deployment, push and merge still require separate release authorization. See `docs/testing/classroom.md` and the external release acceptance record for current evidence and outstanding gates.
 
 ## Global Constraints
 
