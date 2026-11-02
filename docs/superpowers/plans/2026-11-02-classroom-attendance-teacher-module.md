@@ -608,10 +608,10 @@ Commit: `feat(classroom): add classes and persistent combined-section rosters`.
 
 **Consumes:** T3 workspace destinations, T5 real class/roster forms and services. **Produces:** `saveTeacherOnboarding(db,actor,{commandId,expectedRevision,step,classId,draft,complete})`; persisted first-run flow, setup recap and repeatable help.
 
-- [ ] Add interruption/reload/two-device tests after each step, duplicate class-create replay, obsolete class reference recovery, and completed user returning directly to class dashboard.
-- [ ] Implement §8 copy/steps using T5 forms rather than duplicate endpoints; camera/manual tutorial remains isolated simulation. Verify first class readiness with server-owned prerequisites; a saved class without eligible students cannot start attendance.
-- [ ] Validate progress saving is server-confirmed, skip/help paths work and users are never forced to repeat completed setup. Finish first-real-attendance guidance when T9 is available; milestone is not launch-accepted until that flow passes.
-- [ ] Verify onboarding unit/DB tests and mobile E2E up to Ready. Acceptance: persistence and class/roster setup work without a support person.
+- [x] Add interruption/reload/two-device tests after each step, duplicate class-create replay, obsolete class reference recovery, and completed user returning directly to class dashboard.
+- [x] Implement §8 copy/steps using T5 forms rather than duplicate endpoints; camera/manual tutorial remains isolated simulation. Verify first class readiness with server-owned prerequisites; a saved class without eligible students cannot start attendance.
+- [x] Validate progress saving is server-confirmed, skip/help paths work and users are never forced to repeat completed setup. Finish first-real-attendance guidance when T9 is available; milestone is not launch-accepted until that flow passes.
+- [x] Verify onboarding unit/DB tests and mobile E2E up to Ready. Acceptance: persistence and class/roster setup work without a support person.
 
 Commit: `feat(classroom): guide and resume teacher onboarding`.
 

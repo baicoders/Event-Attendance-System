@@ -70,3 +70,14 @@ The375px check exposed a full-width field label plus4px outer margin; shared For
 - Production build, TypeScript, touched ESLint and whitespace checks pass. An earlier build received SIGTERM after compilation; the complete retry passed. Existing groups `_req` lint warning remains.
 
 `pnpm test:classroom:rosters` runs the roster unit/database/API subsets; add `CLASSROOM_TEST_BROWSER=true` for mobile browser verification. No teacher-facing session/start claims are made at this intermediate milestone; lifecycle, onboarding and reports are still required before release.
+
+## Resumable teacher onboarding (Task 6)
+
+Implementation contract: [classes, rosters and setup](../implementation/classroom-classes.md).
+
+- `pnpm test:classroom:unit`:26/26, including next-step recovery, completed-user behavior,16KiB UTF-8 draft bounds and unreadable-success acknowledgment handling.
+- `node --conditions=react-server --import tsx --test --test-concurrency=1 features/classroom/server/onboarding.db.test.ts features/classroom/server/classes.db.test.ts`:15/15. Competing devices, revision conflicts, atomic class/progress association, duplicate creation replay, current roster/settings acknowledgments, empty roster, archived/transferred setup recovery and private receipt denial.
+- `CLASSROOM_TEST_BROWSER=true node --import tsx scripts/test-classroom-onboarding-api.mjs`: final production build API and375px browser pass. Welcome malformed200 retry produces one audit; draft survives reload; a committed first-class POST with a lost response resumes to its existing roster after reload; roster/settings/tutorial/Ready resume; camera denial has manual practice; completion returns to My Classes and help is repeatable. Tutorial/setup makes zero real attendance API calls.
+- Initial development browser run also passed. Final production build includes the later UTF-8 bound; API rejects oversized drafts without saving them. Build/types/lint/whitespace pass; existing groups `_req` warning remains.
+
+`pnpm test:classroom:onboarding` runs the focused suite; add `CLASSROOM_TEST_BROWSER=true` for browser coverage. The Ready action currently completes setup and opens My Classes. Real Start/first-mark/finalize guidance is explicitly completed in Task9 with actual session APIs. This milestone does not satisfy the real-teacher/HTTPS-phone launch gates by itself.

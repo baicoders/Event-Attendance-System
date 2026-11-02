@@ -7,6 +7,7 @@ import { executeClassroomCommand,commandHash } from './commands';
 import { classroomRead,classroomAdministrator,type ActorContext } from './access';
 import { classInclude,classDto,lockOwnedClass,lockSectionRows,validateRosterSelections,requireAssistanceReason,type ClassRow } from './classAccess';
 import { replaceRosterConfiguration } from './rosters';
+import { lockTeacherOnboarding,validateFirstClassCreation,linkCreatedFirstClass } from './onboarding';
 async function approvedOwner(tx:Prisma.TransactionClient,userId:string){
  const user=await tx.user.findUnique({where:{id:userId},select:{id:true,accountState:true,classroomMembership:{select:{status:true}}}});
  if(!user||user.accountState!=='ENABLED'||user.classroomMembership?.status!=='APPROVED')throw new AuthError('Choose an approved teacher with enabled access.',409,'TEACHER_NOT_APPROVED');
@@ -18,7 +19,10 @@ export async function createClassOffering(db:PrismaClient,actor:ActorContext,raw
   if(input.primaryTeacherId&&!classroomAdministrator(user))throw new AuthError('Only an administrator can assign another owner.',403,'FORBIDDEN');
   requireAssistanceReason(user,{primaryTeacherId:teacherId},input.reason);
   await approvedOwner(tx,teacherId);
+  if(input.onboardingExpectedRevision!==undefined&&teacherId!==user.id)throw new AuthError('First-run setup belongs to your own classes.',403,'FORBIDDEN');
+  const onboarding=input.onboardingExpectedRevision===undefined?null:await lockTeacherOnboarding(tx,user.id);
   await takeRosterSharedLock(tx);
+  if(input.onboardingExpectedRevision!==undefined)await validateFirstClassCreation(tx,user.id,onboarding,input.onboardingExpectedRevision);
   await tx.$queryRaw`SELECT id FROM "AcademicTerm" WHERE id=${input.termId} FOR SHARE`;
   await tx.$queryRaw`SELECT id FROM "Subject" WHERE id=${input.subjectId} FOR SHARE`;
   const term=await tx.academicTerm.findUnique({where:{id:input.termId}});const subject=await tx.subject.findUnique({where:{id:input.subjectId}});
@@ -27,6 +31,7 @@ export async function createClassOffering(db:PrismaClient,actor:ActorContext,raw
   await lockSectionRows(tx,input.sectionIds);await validateRosterSelections(tx,input.sectionIds,input.exceptions);
   const created=await tx.classOffering.create({data:{termId:term.id,subjectId:subject.id,primaryTeacherId:teacherId,displayName:input.displayName,graceMinutes:input.graceMinutes,schedule:input.schedule??Prisma.DbNull}});
   await replaceRosterConfiguration(tx,created.id,input.sectionIds,input.exceptions,user.id);
+  if(input.onboardingExpectedRevision!==undefined)await linkCreatedFirstClass(tx,user.id,onboarding,created.id);
   const result=classDto(await lockOwnedClass(tx,created.id,user,'UPDATE'));
   await tx.classroomAudit.create({data:{action:'CLASS_CREATED',entityType:'ClassOffering',entityId:created.id,classId:created.id,actorId:user.id,actorName:user.name,reason:input.reason,commandId:input.commandId,after:result}});return result;
  },{httpStatus:201,userIds:[teacherId],membershipUserIds:[teacherId],authorizeReplay:async(tx,user,result)=>{

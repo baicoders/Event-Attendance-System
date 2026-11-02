@@ -1,6 +1,7 @@
 'use client';
 import { useEffect,useRef,useState } from 'react';
 import { ApiError,fetchApi } from '@/globals/utils/api';
+import { definitiveCommandFailure } from '../utils/commandFailure';
 /** Honest confirmation/retry behavior, with no offline queue or background writes. */
 export function useClassroomCommand(){
  const [busy,setBusy]=useState(false);const [unconfirmed,setUnconfirmed]=useState(false);const [error,setError]=useState('');const [problem,setProblem]=useState<ApiError|null>(null);
@@ -17,7 +18,7 @@ export function useClassroomCommand(){
    if(!mounted.current)return;pending.current=null;setUnconfirmed(false);return result.data;
   }catch(cause){
    if(!mounted.current)return;
-   const known=cause instanceof ApiError&&cause.status<500;
+   const known=definitiveCommandFailure(cause);
    setProblem(cause instanceof ApiError?cause:null);setError(known&&cause instanceof ApiError?cause.message:'Save not confirmed. Retry to check the same save.');
    if(known){pending.current=null;setUnconfirmed(false);}else setUnconfirmed(true);
   }finally{inFlight.current=false;if(mounted.current)setBusy(false);}
