@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { withClassroomTestApp } from './classroom-test-app.mjs';
+await withClassroomTestApp(async({db,request,base})=>{
+ const password='class-roster-test-password';
+ const createUser=async(name,role='MEMBER',status='PENDING',membership='APPROVED')=>{const user=await db.user.create({data:{name,email:name.replaceAll(' ','-').toLowerCase()+'@example.test',password,role,status}});if(role==='MEMBER')await db.classroomMembership.create({data:{userId:user.id,status:membership,departmentOrDesignation:'Faculty'}});const login=await request('/api/auth/login',{method:'POST',body:{email:user.email,password,workspace:'CLASS'}});assert.equal(login.response.status,200,login.text);return {...user,cookie:login.cookie};};
+ const teacher=await createUser('Roster Teacher');const other=await createUser('Other Teacher');const applicant=await createUser('Applicant','MEMBER','PENDING','PENDING');const organizer=await createUser('Organizer','ORGANIZER','ACTIVE');const admin=await createUser('Administrator','ADMIN','ACTIVE');
+ for(const [id,category,name] of [['3a','SECTION','BSIT 3A'],['3b','SECTION','BSIT 3B'],['other','SECTION','BSIT 2C'],['house','HOUSE','House'],['employees','HOUSE','Employees']])await db.group.create({data:{id,slug:id,category,name}});
+ for(const [index,[id,section]] of [['a','3a'],['b','3b'],['excluded','3a'],['irregular-1','other'],['irregular-2','other']].entries())await db.student.create({data:{id,usn:String(index+1000).padStart(11,'0'),firstName:'Student',lastName:id,groups:{connect:{id:section}}}});
+ const term=await request('/api/classroom/terms',{cookie:teacher.cookie,method:'POST',body:{commandId:randomUUID(),name:'Term One',startDate:'2026-08-01',endDate:'2027-05-31'}});assert.equal(term.response.status,201,term.text);
+ const subject=await request('/api/classroom/subjects',{cookie:teacher.cookie,method:'POST',body:{commandId:randomUUID(),code:'CS202',title:'Programming 2'}});assert.equal(subject.response.status,201,subject.text);
+ const termId=term.json.data.data.id;const subjectId=subject.json.data.data.id;
+ const input={commandId:randomUUID(),termId,subjectId,displayName:'Programming 2 — Class A',sectionIds:['3a','3b'],exceptions:[{studentId:'irregular-1',kind:'INCLUDE',reason:'Irregular enrollment'},{studentId:'irregular-2',kind:'INCLUDE',reason:'Irregular enrollment'},{studentId:'excluded',kind:'EXCLUDE',reason:'Not enrolled in this subject'}],graceMinutes:15};
+ const created=await request('/api/classroom/classes',{cookie:teacher.cookie,method:'POST',body:input});assert.equal(created.response.status,201,created.text);const classId=created.json.data.data.id;const path='/api/classroom/classes/'+classId;
+ const replay=await request('/api/classroom/classes',{cookie:teacher.cookie,method:'POST',body:input});assert.equal(replay.json.data.replayed,true);assert.equal(await db.classOffering.count({where:{primaryTeacherId:teacher.id}}),1);
+ for(const cookie of [undefined,applicant.cookie,organizer.cookie])assert.equal((await request(path,{cookie})).response.status,cookie?403:401);
+ assert.equal((await request(path,{cookie:other.cookie})).response.status,404);
+ assert.equal((await request('/api/classroom/classes?teacherId='+other.id,{cookie:teacher.cookie})).response.status,403);
+ for(const route of ['/api/classroom/terms/'+termId,'/api/classroom/subjects/'+subjectId])assert.equal((await request(route,{cookie:teacher.cookie,method:'PATCH',body:{}})).response.status,403);
+ assert.equal((await request('/api/admin/classroom/classes/'+classId+'/owner',{cookie:teacher.cookie,method:'POST',body:{}})).response.status,403);
+ const before=await request(path+'/roster',{cookie:teacher.cookie});assert.equal(before.response.status,200,before.text);assert.equal(before.json.data.total,4);assert.equal(before.json.data.pageSize,100);assert.deepEqual(before.json.data.items.map(row=>row.studentId).sort(),['a','b','irregular-1','irregular-2']);
+ const filtered=await request(path+'/roster?q=irregular&pageSize=1',{cookie:teacher.cookie});assert.equal(filtered.json.data.rosterFingerprint,before.json.data.rosterFingerprint);assert.equal(filtered.json.data.items.length,1);assert.equal(filtered.json.data.total,4);
+ for(let meeting=0;meeting<40;meeting++)assert.equal((await request(path+'/roster',{cookie:teacher.cookie})).json.data.rosterFingerprint,before.json.data.rosterFingerprint);
+ const another=await request('/api/classroom/classes',{cookie:other.cookie,method:'POST',body:{...input,commandId:randomUUID(),sectionIds:['3a'],exceptions:[]}});assert.equal(another.response.status,201);assert.equal((await request('/api/classroom/classes/'+another.json.data.data.id+'/roster',{cookie:other.cookie})).json.data.total,2);
+ assert.equal((await request('/api/groups/3a',{cookie:admin.cookie,method:'DELETE',body:{}})).json.code,'GROUP_HAS_CLASSES');
+ if(process.env.CLASSROOM_TEST_BROWSER==='true'){
+  const run=spawnSync('python3',['scripts/test-classroom-rosters.py'],{env:{...process.env,CLASSROOM_TEST_BASE:base,CLASSROOM_TEACHER_COOKIE:teacher.cookie},encoding:'utf8'});assert.equal(run.status,0,run.stdout+'\n'+run.stderr);console.log(run.stdout);
+  assert.equal(await db.classOffering.count({where:{displayName:'Mobile combined class',primaryTeacherId:teacher.id}}),1,'lost creation acknowledgment produces one class');
+ }
+ const commands=['3a','3b'].map(sectionId=>({commandId:randomUUID(),expectedRosterRevision:0,sectionIds:[sectionId],exceptions:input.exceptions}));
+ const concurrent=await Promise.all(commands.map(body=>request(path+'/roster',{cookie:teacher.cookie,method:'PUT',body})));assert.deepEqual(concurrent.map(result=>result.response.status).sort(),[200,409]);
+ const fresh=(await request(path,{cookie:teacher.cookie})).json.data;assert.equal(fresh.configRevision,0);assert.equal(fresh.rosterRevision,1);
+ const fingerprint=(await request(path+'/roster',{cookie:teacher.cookie})).json.data.rosterFingerprint;const transferredStudent=fresh.sections[0].sectionId==='3a'?'a':'b';await db.student.update({where:{id:transferredStudent},data:{groups:{set:[{id:'other'}]}}});assert.notEqual((await request(path+'/roster',{cookie:teacher.cookie})).json.data.rosterFingerprint,fingerprint);
+ assert.equal((await db.student.findUniqueOrThrow({where:{id:'irregular-1'},include:{groups:true}})).groups[0].id,'other');
+ const moved=await request('/api/admin/classroom/classes/'+classId+'/owner',{cookie:admin.cookie,method:'POST',body:{commandId:randomUUID(),expectedConfigRevision:0,teacherId:other.id,reason:'Correct teaching assignment'}});assert.equal(moved.response.status,200,moved.text);assert.equal((await request(path,{cookie:teacher.cookie})).response.status,404);assert.equal((await request('/api/classroom/classes',{cookie:teacher.cookie,method:'POST',body:input})).response.status,404);
+ const archived=await request(path,{cookie:other.cookie,method:'PATCH',body:{commandId:randomUUID(),expectedConfigRevision:1,archived:true}});assert.equal(archived.response.status,200);assert.ok(archived.json.data.data.archivedAt);
+ assert.equal((await db.user.findUniqueOrThrow({where:{id:teacher.id}})).role,'MEMBER');assert.equal((await request('/api/events',{cookie:teacher.cookie})).response.status,403);
+ console.log('PASS independent teacher class setup, forty persistent combined-roster reads, shared-section isolation, full fingerprints, concurrent updates, protected sections, admin transfer/replay and archive.');
+});

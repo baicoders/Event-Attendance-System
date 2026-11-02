@@ -1,0 +1,27 @@
+import os,shutil
+from pathlib import Path
+from urllib.parse import urlparse
+from playwright.sync_api import sync_playwright,expect
+expect.set_options(timeout=30000)
+base=os.environ['CLASSROOM_TEST_BASE'];cookie=os.environ['CLASSROOM_TEACHER_COOKIE']
+def no_overflow(page):
+ if not page.evaluate('document.documentElement.scrollWidth<=window.innerWidth'):
+  Path('.superpowers/classroom-tests').mkdir(parents=True,exist_ok=True);page.screenshot(path='.superpowers/classroom-tests/class-overflow.png',full_page=True)
+  raise AssertionError('375px page overflows: '+str(page.evaluate("[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(0,8).map(e=>({tag:e.tagName,cls:e.className,right:e.getBoundingClientRect().right}))")))
+with sync_playwright() as p:
+ browser=p.chromium.launch(executable_path=shutil.which('google-chrome') or '/opt/google/chrome/chrome',headless=True,args=['--no-sandbox','--disable-dev-shm-usage','--renderer-process-limit=2']);context=browser.new_context(viewport={'width':375,'height':812});name,value=cookie.split('=',1);context.add_cookies([{'name':name,'value':value,'url':base,'httpOnly':True,'sameSite':'Lax','secure':False}]);page=context.new_page()
+ page.goto(base+'/class/classes/new');expect(page.get_by_role('heading',name='Create class',exact=True)).to_be_visible();page.get_by_role('button',name='Add missing subject',exact=True).click();page.get_by_label('Subject title',exact=True).fill('Mobile subject');page.get_by_label('Subject code (optional)',exact=True).fill('MOB101');page.get_by_role('button',name='Save subject',exact=True).click();expect(page.get_by_role('dialog')).to_have_count(0)
+ expect(page.get_by_label('Subject',exact=True)).not_to_have_value('');expect(page.get_by_label('Academic term',exact=True)).not_to_have_value('');page.get_by_label('Class name',exact=True).fill('Mobile combined class');page.get_by_role('checkbox',name='BSIT 3A',exact=True).check();page.get_by_role('checkbox',name='BSIT 3B',exact=True).check();expect(page.get_by_label('Late grace period (minutes)',exact=True)).to_have_value('15')
+ page.get_by_role('checkbox',name='Add an optional weekly schedule',exact=True).check();page.get_by_role('checkbox',name='Monday',exact=True).check();page.get_by_role('checkbox',name='Wednesday',exact=True).check();page.get_by_label('Scheduled start',exact=True).fill('08:00');page.get_by_label('Scheduled end (optional)',exact=True).fill('09:00');page.get_by_label('Room (optional)',exact=True).fill('Lab 101');no_overflow(page)
+ def drop_ack(route):
+  if route.request.method=='POST':route.fetch();route.abort()
+  else:route.continue_()
+ page.route(base+'/api/classroom/classes',drop_ack);page.get_by_role('button',name='Save class and review roster',exact=True).click();expect(page.get_by_role('alert').filter(has_text='Save not confirmed')).to_be_visible();assert page.url.endswith('/new');expect(page.get_by_label('Class name',exact=True)).to_be_disabled();page.unroute(base+'/api/classroom/classes',drop_ack);page.get_by_role('button',name='Retry same save',exact=True).click();page.wait_for_url('**/class/classes/*/roster');class_id=urlparse(page.url).path.split('/')[3]
+ expect(page.get_by_role('heading',name='Mobile combined class',exact=True)).to_be_visible();expect(page.get_by_text('3 students · 3 matching · 100 per page',exact=True)).to_be_visible();no_overflow(page)
+ irregular=page.locator('section').filter(has=page.get_by_role('heading',name='Add irregular students',exact=True))
+ for student in ['irregular-1','irregular-2']:
+  page.get_by_label('Find an existing student',exact=True).fill(student);expect(irregular.get_by_text(student+', Student',exact=True)).to_be_visible();irregular.get_by_role('button',name='Add to this class',exact=True).click()
+ saved_roster=page.locator('section').filter(has=page.get_by_role('heading',name='Saved class roster',exact=True));saved_roster.locator('li').filter(has=page.get_by_text('excluded, Student',exact=True)).get_by_role('button',name='Exclude from class',exact=True).click();page.get_by_role('button',name='Save roster configuration',exact=True).click();expect(page.get_by_text('4 students · 4 matching · 100 per page',exact=True)).to_be_visible();page.reload();expect(page.get_by_text('4 students · 4 matching · 100 per page',exact=True)).to_be_visible();expect(page.get_by_role('checkbox',name='BSIT 3A',exact=True)).to_be_checked();expect(page.get_by_role('checkbox',name='BSIT 3B',exact=True)).to_be_checked();expect(page.get_by_role('heading',name='Persistent roster exceptions',exact=True)).to_be_visible();no_overflow(page)
+ page.goto(base+'/class/classes/'+class_id+'/settings');expect(page.get_by_label('Late grace period (minutes)',exact=True)).to_have_value('15');expect(page.get_by_label('Scheduled start',exact=True)).to_have_value('08:00');page.get_by_role('button',name='Save class settings',exact=True).click();page.wait_for_url('**/class/classes/'+class_id);expect(page.get_by_role('heading',name='Mobile combined class',exact=True)).to_be_visible();no_overflow(page)
+ page.goto(base+'/class');expect(page.get_by_role('heading',name='Mobile combined class',exact=True)).to_be_visible();no_overflow(page);Path('.superpowers/classroom-tests').mkdir(parents=True,exist_ok=True);page.screenshot(path='.superpowers/classroom-tests/classes-375.png',full_page=True);browser.close()
+print('PASS mobile inline subject setup, combined sections, schedule/grace, lost-ack creation retry, persistent irregular additions/exclusion, reload, settings and375px layout.')

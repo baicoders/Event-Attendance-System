@@ -22,7 +22,7 @@ export function commandHash(input: unknown) {
 export async function executeClassroomCommand<T>(
   db: PrismaClient, actor: ActorContext, policy: CommandPolicy, raw: CommandEnvelope,
   operation: (tx: Prisma.TransactionClient, user: Awaited<ReturnType<typeof guardCommandActor>>) => Promise<T>,
-  options: { userIds?: string[]; updateUsers?: boolean; membershipUserIds?: string[]; updateMemberships?: boolean; authorizeResource?: (tx: Prisma.TransactionClient) => Promise<void>; timeout?: number } = {},
+  options: { httpStatus?: number; authorizeReplay?: (tx: Prisma.TransactionClient, user: Awaited<ReturnType<typeof guardCommandActor>>, result: Prisma.JsonValue) => Promise<void>; userIds?: string[]; updateUsers?: boolean; membershipUserIds?: string[]; updateMemberships?: boolean; authorizeResource?: (tx: Prisma.TransactionClient, user: Awaited<ReturnType<typeof guardCommandActor>>) => Promise<void>; timeout?: number } = {},
 ): Promise<CommandResult<T>> {
   const commandId = commandIdSchema.parse(raw.commandId);
   const input = { ...raw, commandId };
@@ -43,16 +43,17 @@ export async function executeClassroomCommand<T>(
         const user = await guardCommandActor(tx, actor, policy);
         await takeCommandLock(tx, `classroom-command:${actor.userId}:${commandId}`);
         // Resource authorization must run even on replay; lifecycle/revision checks belong in operation.
-        await options.authorizeResource?.(tx);
+        await options.authorizeResource?.(tx, user);
         const prior = await tx.classroomCommandReceipt.findUnique({ where: { actorId_commandId: { actorId: actor.userId, commandId } } });
         if (prior) {
           if (prior.requestHash !== hash) throw new AuthError('Command ID already used for another request.', 409, 'COMMAND_REUSED');
+          await options.authorizeReplay?.(tx, user, prior.result);
           return { data: prior.result as T, replayed: true };
         }
         const data = await operation(tx, user);
         // JSON serialization is also the wire contract, so initial and replayed responses agree.
         const result = JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
-        await tx.classroomCommandReceipt.create({ data: { actorId: actor.userId, commandId, operation: raw.operation, resourceId: raw.resourceId, requestHash: hash, result } });
+        await tx.classroomCommandReceipt.create({ data: { actorId: actor.userId, commandId, operation: raw.operation, resourceId: raw.resourceId, requestHash: hash, result, httpStatus: options.httpStatus ?? 200 } });
         return { data: result as T, replayed: false };
       }, { maxWait: 1500, timeout: options.timeout ?? 5000 });
     } catch (error) {

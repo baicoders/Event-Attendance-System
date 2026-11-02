@@ -61,3 +61,12 @@ Final evidence:
 Regression fixtures now preserve history-backed students and use separate identities instead of deleting audited records. Material-write counters exclude profileRevision-only bookkeeping while replay/no-op checks still demand zero additional writes. Manual Events actions use canonical Student.id; raw scanner actions continue accepting existing ID/USN/LRN codes. UI tests locate the displayed identifier and still assert canonical database FKs.
 
 The375px check exposed a full-width field label plus4px outer margin; shared FormInput now preserves indentation with inner padding. A clean build recovered from an incremental Turbopack graph panic; generated artifacts were preserved under ignored test storage. Browser cleanup now waits for the owned Chrome process before removing its temporary profile. No production data, migration, deployment, push or merge occurred. Tasks5–11 and external release gates remain required before launch.
+
+## Classes and persistent combined-section rosters (Task 5)
+
+- `node --import tsx --test features/classroom/utils/composeRoster.test.ts`:3/3. Stable-ID union, exclusion precedence, independent classes, full fingerprint and academic eligibility.
+- `node --conditions=react-server --import tsx --test features/classroom/server/classes.db.test.ts`:9/9 on disposable PostgreSQL. Combined sections/two irregulars/exclusion,40 repeated reads, separate config/roster revisions, concurrent edits, invalid section SQL guards, admin assistance/transfer, replay after transfer, later student archival, JSONB no-op settings, shared catalog corrections/archive.
+- `CLASSROOM_TEST_BROWSER=true node --import tsx scripts/test-classroom-rosters-api.mjs`: production build API and375px browser pass. Inline subject creation, combined roster, persistent exceptions/reload, schedule/grace, exact same-key retry after losing a committed creation response, permission boundaries, protected section deletion, full fingerprints after central changes, ownership and archive.
+- Production build, TypeScript, touched ESLint and whitespace checks pass. An earlier build received SIGTERM after compilation; the complete retry passed. Existing groups `_req` lint warning remains.
+
+`pnpm test:classroom:rosters` runs the roster unit/database/API subsets; add `CLASSROOM_TEST_BROWSER=true` for mobile browser verification. No teacher-facing session/start claims are made at this intermediate milestone; lifecycle, onboarding and reports are still required before release.

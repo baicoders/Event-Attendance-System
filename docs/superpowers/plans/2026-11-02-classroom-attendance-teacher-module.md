@@ -595,10 +595,10 @@ Commit: `feat(students): preserve QR identity and audit profile verification` (s
 
 **Consumes:** T4 stable Student IDs/directory, T2 authorization/commands. **Produces:** `composeClassRoster(tx,classId): Promise<RosterMemberProjection[]>`; `fingerprintClassRoster(roster,config): string` using §6.4; `saveClassRoster(db,actor,{classId,expectedRosterRevision,sectionIds,exceptions,commandId})`; class summaries with separate config/roster revisions and full live-roster fingerprint.
 
-- [ ] Add combined BSIT 3A/3B + two irregulars − one excluded fixtures, duplicate/exception precedence, same sections in another teacher's subject, 40 repeated roster reads and no official section change assertions. Test section transfer versus save, concurrent roster PUT conflict, invalid category/employee groups and non-owner reads/writes.
-- [ ] Implement bounded catalog/class CRUD with archive, inline missing term/subject creation, duplicate candidates and admin on-behalf ownership setup. Reuse common access service, never infer ownership from a supplied teacher ID for non-admins.
-- [ ] Implement live roster and persistence UI, preserving unrelated memberships and warning about future roster recomputation. Invalidate Class live-roster queries on shared student changes without modifying stored sessions.
-- [ ] Verify `pnpm test:classroom:unit` roster subset, DB/API subsets and mobile class setup smoke. Acceptance: scenario B persistent configuration passes; teachers create/manage without admin approval.
+- [x] Add combined BSIT 3A/3B + two irregulars − one excluded fixtures, duplicate/exception precedence, same sections in another teacher's subject, 40 repeated roster reads and no official section change assertions. Test section transfer versus save, concurrent roster PUT conflict, invalid category/employee groups and non-owner reads/writes.
+- [x] Implement bounded catalog/class CRUD with archive, inline missing term/subject creation, duplicate candidates and admin on-behalf ownership setup. Reuse common access service, never infer ownership from a supplied teacher ID for non-admins.
+- [x] Implement live roster and persistence UI, preserving unrelated memberships and warning about future roster recomputation. Invalidate Class live-roster queries on shared student changes without modifying stored sessions.
+- [x] Verify `pnpm test:classroom:unit` roster subset, DB/API subsets and mobile class setup smoke. Acceptance: scenario B persistent configuration passes; teachers create/manage without admin approval.
 
 Commit: `feat(classroom): add classes and persistent combined-section rosters`.
 

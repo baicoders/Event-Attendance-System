@@ -52,6 +52,7 @@ model Student {
 
   profileRevision Int @default(0)
   archivedAt DateTime? @db.Timestamptz(3)
+  rosterExceptions ClassRosterException[]
   qrCodes StudentQrCode[]
   profileChanges StudentProfileChange[]
   verifications StudentVerification[]
@@ -172,6 +173,7 @@ model User {
   accountState    AccountState @default(ENABLED)
   classroomMembership ClassroomMembership?
   teacherOnboarding TeacherOnboarding?
+  primaryClasses ClassOffering[] @relation("PrimaryClassTeacher")
 
   @@index([accountState])
 
@@ -180,6 +182,7 @@ model User {
 }
 
 model Group {
+  classroomSections ClassSection[]
   id       String        @id @default(cuid())
   name     String
   slug     String        @unique
@@ -306,6 +309,8 @@ model ClassroomMembership {
 }
 
 model TeacherOnboarding {
+  classId String?
+  class ClassOffering? @relation(fields:[classId],references:[id],onDelete:Restrict)
   userId String @id
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   flowVersion Int @default(1)
@@ -420,4 +425,83 @@ model StudentProfilePending {
   metadata Json @db.JsonB
   flushed Boolean @default(false)
   @@id([transactionId, studentId])
+}
+
+model AcademicTerm {
+ id String @id @default(cuid())
+ name String @db.VarChar(100)
+ normalizedKey String @unique @db.VarChar(260)
+ startDate DateTime @db.Date
+ endDate DateTime @db.Date
+ timeZone String @default("Asia/Manila")
+ archivedAt DateTime? @db.Timestamptz(3)
+ createdById String
+ revision Int @default(0)
+ classes ClassOffering[]
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@index([startDate,endDate])
+}
+model Subject {
+ id String @id @default(cuid())
+ code String? @db.VarChar(40)
+ normalizedCode String? @unique @db.VarChar(80)
+ title String @db.VarChar(160)
+ normalizedTitle String @db.VarChar(320)
+ archivedAt DateTime? @db.Timestamptz(3)
+ createdById String
+ revision Int @default(0)
+ classes ClassOffering[]
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@index([normalizedTitle])
+}
+model ClassOffering {
+ id String @id @default(cuid())
+ termId String
+ term AcademicTerm @relation(fields:[termId],references:[id],onDelete:Restrict)
+ subjectId String
+ subject Subject @relation(fields:[subjectId],references:[id],onDelete:Restrict)
+ primaryTeacherId String
+ primaryTeacher User @relation("PrimaryClassTeacher",fields:[primaryTeacherId],references:[id],onDelete:Restrict)
+ displayName String @db.VarChar(160)
+ schedule Json? @db.JsonB
+ graceMinutes Int @default(15)
+ configRevision Int @default(0)
+ rosterRevision Int @default(0)
+ archivedAt DateTime? @db.Timestamptz(3)
+ sections ClassSection[]
+ rosterExceptions ClassRosterException[]
+ onboarding TeacherOnboarding[]
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@index([primaryTeacherId,termId,archivedAt,id])
+ @@index([termId,subjectId])
+}
+model ClassSection {
+ classId String
+ class ClassOffering @relation(fields:[classId],references:[id],onDelete:Restrict)
+ sectionId String
+ section Group @relation(fields:[sectionId],references:[id],onDelete:Restrict)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@id([classId,sectionId])
+ @@index([sectionId,classId])
+}
+enum RosterExceptionKind {
+ INCLUDE
+ EXCLUDE
+}
+model ClassRosterException {
+ classId String
+ class ClassOffering @relation(fields:[classId],references:[id],onDelete:Restrict)
+ studentId String
+ student Student @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ kind RosterExceptionKind
+ reason String @db.VarChar(1000)
+ createdById String
+ updatedById String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@id([classId,studentId])
+ @@index([studentId,classId])
 }

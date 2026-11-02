@@ -1,0 +1,9 @@
+export type AcademicTermOption={id:string;name:string;startDate:string;endDate:string;timeZone:string;revision:number;archivedAt:string|null};
+export type SubjectOption={id:string;code:string|null;title:string;revision:number;archivedAt:string|null};
+export type SectionOption={id:string;name:string;slug:string;studentCount:number};
+export type ClassSchedule={v:1;days:number[];startTime:string;endTime?:string;room?:string};
+export type ClassException={studentId:string;kind:'INCLUDE'|'EXCLUDE';reason:string;student?:{id:string;usn:string|null;lrn:string|null;firstName:string;lastName:string;archivedAt:string|null}};
+export type ClassDetails={id:string;displayName:string;termId:string;subjectId:string;primaryTeacherId:string;primaryTeacher:{id:string;name:string};term:Omit<AcademicTermOption,'revision'>;subject:Pick<SubjectOption,'id'|'code'|'title'|'archivedAt'>;schedule:ClassSchedule|null;graceMinutes:number;configRevision:number;rosterRevision:number;archivedAt:string|null;sections:Array<{sectionId:string;name:string;slug:string}>;exceptions:ClassException[];createdAt:string;updatedAt:string};
+export type ClassList={items:ClassDetails[];total:number;page:number;pageSize:number};
+export type RosterMember={studentId:string;profileRevision:number;contentHash:string;studentSnapshot:{v:1;id:string;usn:string|null;lrn:string|null;firstName:string;lastName:string;middleName:string|null;schoolLevel:string|null;yearLevel:string|null;profileRevision:number;groups:Array<{id:string;name:string;slug:string;category:string}>};originSnapshot:{v:1;selectedSectionIds:string[];individualAddition:boolean;includeReason:string|null}};
+export type RosterPage={items:RosterMember[];total:number;filteredCount:number;page:number;pageSize:number;rosterRevision:number;configRevision:number;rosterFingerprint:string;configuration:{classId:string;rosterRevision:number;sectionIds:string[];exceptions:ClassException[]}};

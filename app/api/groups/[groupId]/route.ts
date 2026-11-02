@@ -171,6 +171,9 @@ export async function DELETE(
         }
       }
 
+      const classReferences=await tx.classSection.count({where:{sectionId:groupId}});
+      if(classReferences)return NextResponse.json(err('This section is selected by classroom classes. Review those class rosters before deleting it.','GROUP_HAS_CLASSES'),{status:409});
+
       const studentIds = group.students.map((student) => ({ id: student.id }));
 
       if (reassignToGroupId && studentIds.length > 0) {

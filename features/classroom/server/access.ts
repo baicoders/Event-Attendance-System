@@ -1,5 +1,6 @@
 import 'server-only';
-import type { Prisma } from '@prisma/client';
+import type { Prisma,PrismaClient } from '@prisma/client';
+import { takeRosterSharedLock } from '@/globals/utils/pgLocks';
 import { AuthError } from '@/globals/utils/authError';
 import { workspaceCapabilities } from '@/features/auth/utils/accessPolicy';
 
@@ -29,4 +30,16 @@ export async function guardCommandActor(tx: Prisma.TransactionClient, actor: Act
 }
 export async function guardClassroomActor(tx: Prisma.TransactionClient, actor: ActorContext) {
   return guardCommandActor(tx, actor, 'APPROVED_CLASSROOM');
+}
+
+export type ClassroomUser=Awaited<ReturnType<typeof guardClassroomActor>>;
+export function classroomAdministrator(user:ClassroomUser){return workspaceCapabilities(user).admin;}
+/** Read grants remain locked until all scoped data has been collected. */
+export async function classroomRead<T>(db:PrismaClient,actor:ActorContext,read:(tx:Prisma.TransactionClient,user:ClassroomUser)=>Promise<T>,options:{roster?:boolean}={}){
+ return db.$transaction(async tx=>{
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id=${actor.userId} FOR SHARE`;
+  const user=await guardClassroomActor(tx,actor);
+  if(options.roster)await takeRosterSharedLock(tx);
+  return read(tx,user);
+ },{timeout:10000});
 }
