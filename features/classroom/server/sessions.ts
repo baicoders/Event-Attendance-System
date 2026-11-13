@@ -2,7 +2,7 @@ import 'server-only';
 import type { Prisma,PrismaClient } from '@prisma/client';
 import { AuthError } from '@/globals/utils/authError';
 import { takeRosterSharedLock } from '@/globals/utils/pgLocks';
-import { classroomRead,classroomAdministrator,type ActorContext,type ClassroomUser } from './access';
+import { classroomRead,type ActorContext,type ClassroomUser } from './access';
 import { lockOwnedClass,classDto,requireAssistanceReason,type ClassRow } from './classAccess';
 import { composeClassRoster,rosterConfig } from './rosters';
 import { fingerprintClassRoster } from '../utils/composeRoster';
@@ -12,9 +12,10 @@ import { startSessionSchema,finalizeSessionSchema,cancelSessionSchema,amendPolic
 import { executeClassroomCommand,commandHash } from './commands';
 import { lockOwnedSession,requireActiveSession,requireLifecycleRevision,sessionDto,sessionCounts,emptyAttendanceCounts,rosterMemberDto,attendanceDto } from './sessionAccess';
 const MAX_SESSION_ROSTER=1000;
-/** Caller holds roster SHARE. Catalog locks precede the Class lock. */
+/** Start-only policy: caller holds enabled/approved actor and roster SHARE locks. Catalog locks precede the Class lock. */
 async function loadStartClass(tx:Prisma.TransactionClient,classId:string,user:ClassroomUser,mode:'SHARE'|'UPDATE'){
-  const reference=await tx.classOffering.findFirst({where:{id:classId,...(!classroomAdministrator(user)?{primaryTeacherId:user.id}:{})},select:{termId:true,subjectId:true}});
+  if(user.role==='ADMIN')throw new AuthError('Only an approved teacher can start their own classroom meeting.',403,'TEACHER_START_REQUIRED');
+  const reference=await tx.classOffering.findFirst({where:{id:classId,primaryTeacherId:user.id},select:{termId:true,subjectId:true}});
   if(!reference)throw new AuthError('Class not found.',404,'CLASS_NOT_FOUND');
   await tx.$queryRaw`SELECT id FROM "AcademicTerm" WHERE id=${reference.termId} FOR SHARE`;
   await tx.$queryRaw`SELECT id FROM "Subject" WHERE id=${reference.subjectId} FOR SHARE`;

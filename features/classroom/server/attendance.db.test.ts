@@ -6,6 +6,8 @@ import { createAcademicTerm,createSubject } from './catalog';
 import { createClassOffering } from './classes';
 import { getClassRoster } from './rosters';
 import { getClassroomStartPreview,startClassroomSession,getSessionRoster,finalizeClassroomSession,cancelClassroomSession } from './sessions';
+import { attendanceResult } from './attendanceWrite';
+import { commandHash } from './commands';
 import { recordClassroomScan,setClassroomAttendance,adjustSessionRoster,readAttendanceCommand } from './attendance';
 let fixture:Awaited<ReturnType<typeof createDisposableDb>>;let client:ReturnType<typeof createTestClient>;
 const actor={userId:'teacher',credentialVersion:0};const other={userId:'other',credentialVersion:0};let termId:string;let subjectId:string;
@@ -143,4 +145,41 @@ test('a row-audit failure rolls back status, revision and command receipt, then 
   assert.equal(await client.db.classroomCommandReceipt.count({where:{commandId:input.commandId}}),0);
  }finally{await client.db.$executeRawUnsafe('DROP TRIGGER fixture_row_audit ON "ClassroomAttendanceChange"');await client.db.$executeRawUnsafe('DROP FUNCTION fixture_reject_row_audit()');}
  assert.equal((await recordClassroomScan(client.db,actor,input)).data.outcome,'RECORDED');assert.equal(await client.db.classroomAttendanceChange.count({where:{sessionId:current.id,studentId:'a'}}),1);
+});
+
+
+test('attendance acknowledgments freeze student display identity across success, duplicates, manual unchanged and receipts',async()=>{
+ const current=await session();
+ const expected={id:'b',firstName:'Student',middleName:null,lastName:'b',usn:'00000001001',lrn:'000000123456'};
+ await client.db.student.update({where:{id:'b'},data:{firstName:'Corrected directory name',middleName:'Directory middle'}});
+ const input={sessionId:current.id,code:'000000123456',commandId:randomUUID()};
+ const saved=await recordClassroomScan(client.db,actor,input);assert.deepEqual(saved.data.student,expected);
+ const duplicate=await scan(current.id,'b');assert.equal(duplicate.data.outcome,'ALREADY_RECORDED');assert.deepEqual(duplicate.data.student,expected);
+ const unchanged=await manual(current.id,'b',saved.data.attendance.status,1,{reason:'Confirm unchanged attendance'});assert.equal(unchanged.data.outcome,'UNCHANGED');assert.deepEqual(unchanged.data.student,expected);
+ const corrected=await manual(current.id,'b','ABSENT',1,{reason:'Correct the meeting attendance'});assert.deepEqual(corrected.data.student,expected);
+ const protectedMark=await scan(current.id,'b');assert.equal(protectedMark.data.outcome,'ALREADY_MARKED');assert.deepEqual(protectedMark.data.student,expected);
+ assert.deepEqual((await readAttendanceCommand(client.db,actor,input.commandId)).result,saved.data);
+ assert.deepEqual((await recordClassroomScan(client.db,actor,input)).data,saved.data);
+});
+test('enroll-and-scan acknowledgments and duplicate enrollments use the retained identity snapshot',async()=>{
+ const current=await session();const expected={id:'outside-student',firstName:'Student',middleName:null,lastName:'outside-student',usn:'00000001005',lrn:null};
+ const input={sessionId:current.id,studentId:'outside-student',action:'INCLUDE',scope:'SESSION',expectedSnapshotRevision:0,reason:'Join this meeting',recordScan:true,code:'outside-student',commandId:randomUUID()};
+ const added=await adjustSessionRoster(client.db,actor,input);assert.deepEqual(added.data.student,expected);assert.equal(added.data.outcome,'RECORDED');
+ await client.db.student.update({where:{id:'outside-student'},data:{firstName:'Changed after admission'}});
+ const duplicate=await adjustSessionRoster(client.db,actor,{...input,expectedSnapshotRevision:1,commandId:randomUUID()});assert.equal(duplicate.data.outcome,'ALREADY_RECORDED');assert.deepEqual(duplicate.data.student,expected);
+ assert.deepEqual((await adjustSessionRoster(client.db,actor,input)).data,added.data);
+});
+
+
+test('legacy attendance receipts replay byte-for-byte without adding newly available display identity',async()=>{
+ const current=await session();const input={sessionId:current.id,code:'a',commandId:randomUUID()};
+ const saved=await recordClassroomScan(client.db,actor,{...input,commandId:randomUUID()});
+ const {student,...legacyResult}=saved.data;assert.equal(student.id,'a');
+ await client.db.classroomCommandReceipt.create({data:{actorId:actor.userId,commandId:input.commandId,operation:'RECORD_CLASSROOM_SCAN',resourceId:current.id,httpStatus:200,result:legacyResult,requestHash:commandHash({commandId:input.commandId,operation:'RECORD_CLASSROOM_SCAN',resourceId:current.id,payload:input,actorId:actor.userId,policy:'APPROVED_CLASSROOM'})}});
+ const replay=await recordClassroomScan(client.db,actor,input);assert.equal(replay.replayed,true);assert.equal(Object.hasOwn(replay.data,'student'),false);assert.deepEqual(replay.data,legacyResult);
+ assert.deepEqual((await readAttendanceCommand(client.db,actor,input.commandId)).result,legacyResult);
+});
+test('a mismatched frozen display identity cannot acknowledge another student attendance result',async()=>{
+ const current=await session();const member=await client.db.sessionRosterMember.findUniqueOrThrow({where:{sessionId_studentId:{sessionId:current.id,studentId:'a'}},include:{attendance:true}});
+ assert.throws(()=>attendanceResult(member.attendance!,'UNCHANGED',false,{...(member.studentSnapshot as Record<string,string>),id:'different-student'}),{status:500,code:'INCOMPLETE_SESSION'});
 });

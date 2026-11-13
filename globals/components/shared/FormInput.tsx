@@ -28,7 +28,7 @@ interface FormInputProps extends ComponentProps<typeof Input> {
  *
  * ## Prefer this over
  * A bare `<Input>` plus a hand-written `<label>`. Doing that loses the
- * label/error spacing, the uppercase label treatment, and the automatic
+ * label/error spacing, the readable label treatment, and the automatic
  * `htmlFor`/`id` association that keeps the field accessible.
  *
  * ## Constraints
@@ -58,23 +58,25 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
       <Field className="gap-1.5">
         <FieldLabel
           htmlFor={inputId}
-          className="text-[10px] uppercase font-bold text-slate-400 px-1"
+          className="text-sm font-medium text-slate-700"
         >
           {label}
         </FieldLabel>
         <Input
           ref={ref}
           id={inputId}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${inputId}-error` : description ? `${inputId}-description` : undefined}
           className={`border-slate-300 rounded-xl mb-0 ${className}`}
           {...props}
         />
         {description && !error && (
-          <FieldDescription className="text-[11px] px-1 mt-1 flex items-center text-slate-500">
+          <FieldDescription id={`${inputId}-description`} className="text-xs mt-1 text-slate-600">
             {description}
           </FieldDescription>
         )}
         {error && (
-          <FieldError className="flex items-center-safe text-[11px] font-medium text-rose-500 px-1">
+          <FieldError id={`${inputId}-error`} className="flex items-center-safe text-xs font-medium text-rose-700">
             <Info size={12} className="mr-1 inline-block" />
             {error}
           </FieldError>

@@ -140,4 +140,4 @@ const StatusBadge = ({
 
 export default StatusBadge;
 
-export const CLASSROOM_STATUS_TONE={UNMARKED:'neutral',PRESENT:'success',LATE:'warning',ABSENT:'danger',EXCUSED:'info',ACTIVE:'primary',FINALIZED:'success',CANCELED:'neutral'} as const satisfies Record<string,Tone>;
+export const CLASSROOM_STATUS_TONE={UNMARKED:'neutral',PRESENT:'success',LATE:'warning',ABSENT:'danger',EXCUSED:'primary',ACTIVE:'primary',FINALIZED:'success',CANCELED:'neutral'} as const satisfies Record<string,Tone>;

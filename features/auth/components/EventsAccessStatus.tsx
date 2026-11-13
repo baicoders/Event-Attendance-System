@@ -16,7 +16,7 @@ export default function EventsAccessStatus() {
   const grants = user ? workspaceCapabilities(user, user.classroomStatus) : null;
   useEffect(() => { if (grants?.events && !isUnavailable) router.replace('/dashboard'); }, [grants?.events, isUnavailable, router]);
   if (isLoading) return <main className="p-6">Checking Events access…</main>;
-  if (!user) return <main className="p-6"><Link href="/login?workspace=EVENTS">Sign in</Link></main>;
+  if (!user) return <main className="p-6"><Button asChild variant="outline"><Link href="/login?workspace=EVENTS">Sign in</Link></Button></main>;
   return <main className="mx-auto min-h-screen max-w-xl space-y-6 p-6 text-slate-900">
     <h1 className="text-2xl font-semibold">{user.role === 'MEMBER' ? 'Request Events access' : user.status === 'PENDING' ? 'Events access pending' : 'Events access unavailable'}</h1>
     <p className="text-sm text-slate-600">{user.role === 'MEMBER' ? 'You can request organizer access for the Events workspace using this same account. Your Classroom access is unchanged.' : user.rejectionReason || 'An administrator reviews organizer access separately. Your existing Classroom access is unchanged.'}</p>
@@ -28,7 +28,7 @@ export default function EventsAccessStatus() {
       finally { setBusy(false); }
     }}>{busy ? 'Submitting…' : 'Request organizer access'}</Button> : null}
     <Button className="min-h-12" variant="outline" onClick={() => void refresh()}>Check status</Button>
-    {grants?.classroom ? <Link href="/class" className="flex min-h-12 items-center text-indigo-700 underline">Return to Class</Link> : <Link href="/class/access" className="flex min-h-12 items-center text-indigo-700 underline">Apply for Teacher Access</Link>}
+    {grants?.classroom ? <Link href="/class" className="text-sm font-semibold flex min-h-12 items-center text-indigo-700 underline">Return to Class</Link> : <Link href="/class/access" className="text-sm font-semibold flex min-h-12 items-center text-indigo-700 underline">Apply for Teacher Access</Link>}
     <AccountControls />
   </main>;
 }

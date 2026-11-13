@@ -60,7 +60,7 @@ const NavigationLink = ({ item, isExpanded, current }: NavigationLinkProps) => {
     <Link
       href={item.route}
       className={cn(
-        "group flex w-full items-center rounded-xl px-3 py-2.5 transition-all duration-200",
+        "group flex min-h-12 w-full items-center rounded-xl px-3 py-2.5 transition-all duration-200",
         darkFocusRing,
         isExpanded ? "gap-3" : "justify-center",
         current
@@ -142,7 +142,7 @@ const Sidebar = ({ items = navigationItems, workspace = "EVENTS" }: { items?: Na
                 type="button"
                 onClick={toggleExpanded}
                 className={cn(
-                  "rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
+                  "flex size-12 shrink-0 items-center justify-center rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
                   darkFocusRing
                 )}
                 aria-label="Collapse sidebar"
@@ -156,7 +156,7 @@ const Sidebar = ({ items = navigationItems, workspace = "EVENTS" }: { items?: Na
                 type="button"
                 onClick={toggleExpanded}
                 className={cn(
-                  "rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
+                  "flex size-12 shrink-0 items-center justify-center rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
                   darkFocusRing
                 )}
                 aria-label="Expand sidebar"
@@ -180,7 +180,7 @@ const Sidebar = ({ items = navigationItems, workspace = "EVENTS" }: { items?: Na
         </nav>
 
         <div className="space-y-2 border-t border-white/10 pt-3">
-          {isExpanded ? <WorkspaceSwitcher /> : null}
+          {isExpanded ? <WorkspaceSwitcher appearance="dark" /> : null}
           {isExpanded ? (
             <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
               <p className="truncate text-sm font-semibold text-white">
@@ -208,7 +208,7 @@ const Sidebar = ({ items = navigationItems, workspace = "EVENTS" }: { items?: Na
             type="button"
             onClick={handleLogout}
             className={cn(
-              "flex w-full items-center rounded-xl bg-red-600 px-3 py-2.5 text-white transition-colors hover:bg-red-700",
+              "flex min-h-12 w-full items-center rounded-xl bg-red-600 px-3 py-2.5 text-white transition-colors hover:bg-red-700",
               darkFocusRing,
               isExpanded ? "gap-3" : "justify-center"
             )}

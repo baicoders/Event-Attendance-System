@@ -33,9 +33,9 @@ export async function recordClassroomScan(db:PrismaClient,actor:ActorContext,raw
     const member=await tx.sessionRosterMember.findUnique({where:{sessionId_studentId:{sessionId:input.sessionId,studentId}},include:{attendance:true}});
     if(!member?.included)return notInSession(tx,locked,studentId);
     const row=member.attendance;if(!row)throw new AuthError('The attendance snapshot is incomplete.',500,'INCOMPLETE_SESSION');
-    if(row.status!=='UNMARKED')return attendanceResult(row,row.status==='PRESENT'||row.status==='LATE'?'ALREADY_RECORDED':'ALREADY_MARKED',false);
+    if(row.status!=='UNMARKED')return attendanceResult(row,row.status==='PRESENT'||row.status==='LATE'?'ALREADY_RECORDED':'ALREADY_MARKED',false,member.studentSnapshot);
     const now=new Date();const next=await writeClassroomResult(tx,user,locked,row,{status:classifyClassroomArrival(effectivePolicy(locked),now),method:'SCANNED',excuseNote:null,reason:input.reason,commandId:input.commandId},now);
-    return attendanceResult(next,'RECORDED',true);
+    return attendanceResult(next,'RECORDED',true,member.studentSnapshot);
   },{authorizeResource:async(tx,user)=>{await takeRosterSharedLock(tx);locked=await lockOwnedSession(tx,input.sessionId,user,'SHARE');}});
 }
 export async function setClassroomAttendance(db:PrismaClient,actor:ActorContext,raw:unknown){
@@ -44,13 +44,13 @@ export async function setClassroomAttendance(db:PrismaClient,actor:ActorContext,
     requireAssistanceReason(user,locked.offering,input.reason);
     if(locked.session.state==='CANCELED')throw new AuthError('This session is canceled.',409,'SESSION_CANCELED');
     await takeClassroomAttendancePairLock(tx,input.sessionId,input.studentId);
-    const row=await eligibleResult(tx,input.sessionId,input.studentId);
+    const {attendance:row,studentSnapshot}=await eligibleResult(tx,input.sessionId,input.studentId);
     if(row.revision!==input.expectedRevision)throw new AuthError('Another device updated this attendance. Review the current result before correcting it.',409,'ATTENDANCE_CHANGED',{current:attendanceDto(row)});
     if((row.status!=='UNMARKED'||locked.session.state==='FINALIZED')&&!input.reason)throw new AuthError('Enter a reason for this attendance correction.',400,'REASON_REQUIRED');
     const excuseNote=input.status==='EXCUSED'?input.excuseNote||null:null;
-    if(row.status===input.status&&row.excuseNote===excuseNote)return attendanceResult(row,'UNCHANGED',false);
+    if(row.status===input.status&&row.excuseNote===excuseNote)return attendanceResult(row,'UNCHANGED',false,studentSnapshot);
     const next=await writeClassroomResult(tx,user,locked,row,{status:input.status,method:'MANUAL',excuseNote,reason:input.reason,commandId:input.commandId},new Date());
-    return attendanceResult(next,'RECORDED',true);
+    return attendanceResult(next,'RECORDED',true,studentSnapshot);
   },{authorizeResource:async(tx,user)=>{locked=await lockOwnedSession(tx,input.sessionId,user,'SHARE');}});
 }
 const SESSION_RECEIPT_OPERATIONS=new Set(['RECORD_CLASSROOM_SCAN','SET_CLASSROOM_ATTENDANCE','ADJUST_SESSION_ROSTER','FINALIZE_CLASSROOM_SESSION','CANCEL_CLASSROOM_SESSION','AMEND_CLASSROOM_POLICY']);

@@ -84,7 +84,7 @@ const SignupPage = () => {
           Already registered?{" "}
           <Link
             href={`/login?workspace=${workspace}`}
-            className="font-semibold text-slate-900 underline-offset-2 hover:text-indigo-600 hover:underline"
+            className="inline-flex min-h-12 items-center text-sm font-semibold text-slate-900 underline-offset-2 hover:text-indigo-600 hover:underline"
           >
             Return to login
           </Link>

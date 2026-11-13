@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { entityId } from './rosterSchema';
 import { commandIdSchema } from './commandId';
+export const attendanceStudentDisplaySchema=z.object({id:z.string(),firstName:z.string(),middleName:z.string().nullable(),lastName:z.string(),usn:z.string().nullable(),lrn:z.string().nullable()});
 export const finalAttendanceStatus=z.enum(['PRESENT','LATE','ABSENT','EXCUSED']);
 const revision=z.number().int().nonnegative();
 const note=z.string().trim().max(1000).nullable().optional();

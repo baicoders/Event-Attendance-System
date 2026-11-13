@@ -20,3 +20,15 @@ test('repeat-correction prompts link to evidence without changing teacher access
  const page=await listClassroomActivity(client.db,admin,{actorId:teacher.userId,studentId:'activity-student',source:'profile'});assert.ok(page.signals.some(signal=>signal.kind==='PROFILE_CORRECTIONS'&&signal.studentId==='activity-student'&&signal.count>=3));assert.equal((await client.db.classroomMembership.findUniqueOrThrow({where:{userId:teacher.userId}})).status,'APPROVED');
 });
 test('audit detail response limits use UTF8 bytes, including multibyte text',async()=>{const row=await client.db.classroomAudit.create({data:{action:'OVERSIZED_TEST',entityType:'Test',entityId:'large',actorId:admin.userId,actorName:'Administrator',commandId:randomUUID(),after:{text:'😀'.repeat(600000)}}});await assert.rejects(getClassroomActivityDetail(client.db,admin,'audit',String(row.id)),{code:'ACTIVITY_DETAIL_TOO_LARGE'});});
+
+test('activity summaries resolve student names and printed identifiers without exposing full records',async()=>{
+ const page=await listClassroomActivity(client.db,admin,{source:'profile',studentId:'activity-student'});
+ const entry=page.items.find(row=>row.id===profileId);
+ assert.ok(entry);
+ assert.equal((entry as unknown as {studentIdentifier:string}).studentIdentifier,'00000123457');
+ assert.ok((entry as unknown as {studentName:string}).studentName.includes('Original'));
+ assert.equal(Object.hasOwn(entry,'before'),false);
+ assert.equal(Object.hasOwn(entry,'after'),false);
+ const decisions=await listClassroomActivity(client.db,admin,{source:'audit',entityId:teacher.userId});
+ assert.equal((decisions.items[0] as unknown as {targetName:string}).targetName,'activity-teacher');
+});

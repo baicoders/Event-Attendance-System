@@ -368,9 +368,6 @@ const AdminDashboard = () => {
                   <tr key={organizer.id} className="transition-colors hover:bg-slate-50/70">
                     <td className="px-6 py-4">
                       <div className="font-semibold text-slate-900">{organizer.name}</div>
-                      <div className="text-xs text-slate-500">
-                        ID: {organizer.id.slice(0, 6)}...
-                      </div>
                     </td>
                     <td className="px-6 py-4 text-slate-600">{organizer.email}</td>
                     <td className="px-6 py-4 text-slate-600">
@@ -378,9 +375,9 @@ const AdminDashboard = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-2">
-                        <button
+                        <Button
                           type="button"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="bg-emerald-600 hover:bg-emerald-500"
                           onClick={() => handleApprove(organizer.id)}
                           disabled={
                             approve.isPending ||
@@ -392,10 +389,11 @@ const AdminDashboard = () => {
                           {processingId === organizer.id && processingAction === "APPROVE"
                             ? "Approving..."
                             : "Approve"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          variant="destructive"
+                          className="bg-rose-600 hover:bg-rose-500"
                           onClick={() => handleReject(organizer)}
                           disabled={
                             approve.isPending ||
@@ -407,7 +405,7 @@ const AdminDashboard = () => {
                           {processingId === organizer.id && processingAction === "REJECT"
                             ? "Rejecting..."
                             : "Reject"}
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -460,7 +458,7 @@ const AdminDashboard = () => {
                         </div>
                       ) : event.createdById ? (
                         <div className="text-xs text-slate-500">
-                          Organizer ID: {event.createdById.slice(0, 6)}...
+                          Organizer information unavailable
                         </div>
                       ) : null}
                     </td>
@@ -474,9 +472,9 @@ const AdminDashboard = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-2">
-                        <button
+                        <Button
                           type="button"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="bg-emerald-600 hover:bg-emerald-500"
                           onClick={() => {
                             setProcessingEventId(event.id);
                             setProcessingEventAction("APPROVE");
@@ -510,10 +508,11 @@ const AdminDashboard = () => {
                           processingEventAction === "APPROVE"
                             ? "Approving..."
                             : "Approve"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          variant="destructive"
+                          className="bg-rose-600 hover:bg-rose-500"
                           onClick={() => handleOpenEventReject(event)}
                           disabled={
                             approveEvent.isPending ||
@@ -526,7 +525,7 @@ const AdminDashboard = () => {
                           processingEventAction === "REJECT"
                             ? "Rejecting..."
                             : "Reject"}
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

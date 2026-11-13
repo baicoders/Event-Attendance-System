@@ -63,11 +63,11 @@ export async function adjustSessionRoster(db:PrismaClient,actor:ActorContext,raw
       const row=member?.attendance;if(!row)throw new AuthError('The session attendance snapshot is incomplete.',500,'INCOMPLETE_SESSION');
       if(input.finalStatus){
         const next=await writeClassroomResult(tx,user,locked,row,{status:input.finalStatus,method:'MANUAL',excuseNote:input.finalStatus==='EXCUSED'?input.excuseNote||null:null,reason:input.reason,commandId:input.commandId},new Date());
-        mark=attendanceResult(next,'RECORDED',true);
+        mark=attendanceResult(next,'RECORDED',true,member!.studentSnapshot);
       }else if(input.recordScan){
         if(row.status==='UNMARKED'){
-          const at=new Date();const next=await writeClassroomResult(tx,user,locked,row,{status:classifyClassroomArrival(effectivePolicy(locked),at),method:'SCANNED',excuseNote:null,reason:input.reason,commandId:input.commandId},at);mark=attendanceResult(next,'RECORDED',true);
-        }else mark=attendanceResult(row,row.status==='PRESENT'||row.status==='LATE'?'ALREADY_RECORDED':'ALREADY_MARKED',false);
+          const at=new Date();const next=await writeClassroomResult(tx,user,locked,row,{status:classifyClassroomArrival(effectivePolicy(locked),at),method:'SCANNED',excuseNote:null,reason:input.reason,commandId:input.commandId},at);mark=attendanceResult(next,'RECORDED',true,member!.studentSnapshot);
+        }else mark=attendanceResult(row,row.status==='PRESENT'||row.status==='LATE'?'ALREADY_RECORDED':'ALREADY_MARKED',false,member!.studentSnapshot);
       }
     }
     let snapshotRevision=session.snapshotRevision;
@@ -79,6 +79,6 @@ export async function adjustSessionRoster(db:PrismaClient,actor:ActorContext,raw
     }
     if(mark?.changed&&!sessionChanged)member=await tx.sessionRosterMember.findUniqueOrThrow({where:{sessionId_studentId:{sessionId:session.id,studentId:student.id}},include:{attendance:true}});
     const currentMember=changesSession&&member?rosterMemberDto(member):null;
-    return {sessionId:session.id,studentId:student.id,scope:input.scope,action:input.action,snapshotRevision,rosterRevision,changed:classChanged||sessionChanged||!!mark?.changed,member:currentMember,attendance:currentMember?.attendance??null,outcome:mark?.outcome??null};
+    return {sessionId:session.id,studentId:student.id,...(mark?{student:mark.student}:{}),scope:input.scope,action:input.action,snapshotRevision,rosterRevision,changed:classChanged||sessionChanged||!!mark?.changed,member:currentMember,attendance:currentMember?.attendance??null,outcome:mark?.outcome??null};
   },{timeout:10000,maxWait:2000,authorizeResource:async(tx,user)=>{await takeRosterSharedLock(tx);locked=await lockOwnedSession(tx,input.sessionId,user,'UPDATE',changesClass?'UPDATE':'SHARE');}});
 }

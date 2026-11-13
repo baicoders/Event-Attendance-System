@@ -1,4 +1,5 @@
 import type { RosterMember,ClassDetails } from './class';
+export type AttendanceStudentDisplay={id:string;firstName:string;middleName:string|null;lastName:string;usn:string|null;lrn:string|null};
 export type AttendanceStatus='UNMARKED'|'PRESENT'|'LATE'|'ABSENT'|'EXCUSED';
 export type FinalAttendanceStatus=Exclude<AttendanceStatus,'UNMARKED'>;
 export type AttendanceCounts=Record<AttendanceStatus,number>;

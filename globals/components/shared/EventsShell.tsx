@@ -25,7 +25,7 @@ const EventsShell = ({ children }: { children: React.ReactNode }) => {
     }
   }, [isLoading, isUnavailable, user, eventsAllowed, router]);
 
-  if (isUnavailable) return <main className="p-6 text-slate-700" role="alert">Unable to check access. <button className="min-h-12 underline" onClick={() => void refresh()}>Retry connection</button></main>;
+  if (isUnavailable) return <main className="p-6 text-slate-700" role="alert">Unable to check access. <button className="min-h-12 text-sm font-semibold underline" onClick={() => void refresh()}>Retry connection</button></main>;
 
   if (isLoading) {
     return (
@@ -56,7 +56,7 @@ const EventsShell = ({ children }: { children: React.ReactNode }) => {
           </p>
           <button
             type="button"
-            className="w-full rounded-lg bg-slate-900 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="min-h-12 w-full rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
             onClick={async () => {
               // Navigate only if logout actually succeeded server-side.
               if (await logout()) {
@@ -92,7 +92,7 @@ const EventsShell = ({ children }: { children: React.ReactNode }) => {
 
           <button
             type="button"
-            className="w-full rounded-lg border border-slate-200 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+            className="min-h-12 w-full rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
             onClick={async () => {
               if (await logout()) {
                 router.replace("/login");
@@ -116,9 +116,9 @@ const EventsShell = ({ children }: { children: React.ReactNode }) => {
     <SidebarProvider>
       <div className="flex min-h-screen bg-slate-100">
         <Sidebar />
-        <div className="flex min-h-screen flex-1 flex-col overflow-x-hidden">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden">
           <MobileTopBar />
-          <main className="flex-1 overflow-x-hidden pb-24 lg:pb-0">{children}</main>
+          <main className="mx-auto w-full max-w-7xl flex-1 pb-24 lg:pb-0">{children}</main>
           <MobileBottomNav />
         </div>
       </div>

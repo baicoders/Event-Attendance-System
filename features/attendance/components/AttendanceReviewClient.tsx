@@ -33,18 +33,18 @@ export default function AttendanceReviewClient() {
     router.replace(`/attendance/corrections?eventId=${encodeURIComponent(eventId)}`, { scroll: false });
   };
 
-  return <section className={`${page.surface} min-h-svh`}><div className={`${page.containerWide} space-y-6 py-6 [&_button]:min-h-10`}>
-    <div className="space-y-2"><Link href={`/attendance?eventId=${encodeURIComponent(eventId)}`} className="text-sm font-medium text-slate-700 underline">← Attendance</Link>
+  return <section className={`${page.surface} min-h-svh`}><div className={`${page.containerWide} space-y-6 py-6 [&_button]:min-h-12`}>
+    <div className="space-y-2"><Link href={`/attendance?eventId=${encodeURIComponent(eventId)}`} className="inline-flex min-h-12 items-center text-sm font-semibold text-slate-700 underline">← Attendance</Link>
       <h1 className="text-2xl font-bold text-slate-900">Attendance review</h1>
       <p className="text-sm text-slate-600">{review.data?.eventTitle ?? "Review recorded evidence"}. Times shown in Asia/Manila (UTC+08:00).</p>
     </div>
     {!eventId && <p role="alert">Choose an event from Attendance to review its evidence.</p>}
     {eventId && <>
       <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); setPageNumber(1); setSearch(searchInput.trim()); }}>
-        <label className="min-w-56 flex-1 text-sm">Search recorded student name or ID
-          <input className="mt-1 block w-full rounded-md border p-2" value={searchInput} maxLength={100} onChange={(event) => setSearchInput(event.target.value)} /></label>
+        <label className="min-w-0 basis-56 flex-1 text-sm">Search student name, USN or LRN
+          <input className="mt-1 block min-h-12 w-full rounded-xl border p-3" value={searchInput} maxLength={100} onChange={(event) => setSearchInput(event.target.value)} /></label>
         <label className="text-sm">Evidence
-          <select className="mt-1 block min-h-10 rounded-md border p-2" value={state} onChange={(event) => { setState(event.target.value as typeof state); setPageNumber(1); }}>
+          <select className="mt-1 block min-h-12 rounded-xl border p-2" value={state} onChange={(event) => { setState(event.target.value as typeof state); setPageNumber(1); }}>
             <option value="all">All evidence</option><option value="recorded">Current records</option><option value="voided">Voided records</option>
           </select></label>
         <Button type="submit" className="self-end">Search</Button>
@@ -55,7 +55,7 @@ export default function AttendanceReviewClient() {
         <p className="text-sm text-slate-600">Showing {review.data.items.length ? (pageNumber - 1) * 25 + 1 : 0}–{Math.min(pageNumber * 25, review.data.total)} of {review.data.total} recorded or historical student-event pairs.</p>
         {!review.data.items.length && <p className="rounded-lg border p-6 text-sm">No recorded or historical evidence matches this search.</p>}
         <div className="space-y-2">{review.data.items.map((row) => <article key={row.studentId} className="flex flex-col gap-3 rounded-lg border bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><p className="font-semibold">{row.studentLabel}</p><p className="text-sm text-slate-600">{row.studentId}</p>
+          <div><p className="font-semibold">{row.studentLabel}</p><p className="text-sm text-slate-600">{row.studentIdentifier||'No printed identifier'}</p>
             {!row.inCurrentAudience && <p className="text-sm text-amber-700">Outside current event audience</p>}</div>
           <div className="text-sm">{row.record ? <><p>In {displayTime(row.record.timein)}</p><p>Out {displayTime(row.record.timeout)}</p></> : <p>Voided · no current record</p>}</div>
           <div className="flex flex-wrap gap-2">

@@ -126,3 +126,48 @@ test('session reads expose current ownership while preserving the original teach
  await transferClassOwner(client.db,{userId:'session-admin',credentialVersion:0},classId,{commandId:randomUUID(),expectedConfigRevision:row.configRevision,teacherId:other.userId,reason:'Correct primary teacher assignment'});
  const current=await getClassroomSession(client.db,other,firstSessionId);assert.equal(current.currentPrimaryTeacherId,other.userId);assert.equal((current.classSnapshot as {primaryTeacher:{id:string}}).primaryTeacher.id,actor.userId);await assert.rejects(getClassroomSession(client.db,actor,firstSessionId),{code:'CLASS_NOT_FOUND'});
 });
+
+
+test('only the enabled approved non-admin owner may preview, create or replay a meeting start',async()=>{
+ const teacher={userId:'start-policy-teacher',credentialVersion:0};
+ const administrator={userId:'start-policy-admin',credentialVersion:0};
+ for(const [person,role,status] of [[teacher,'MEMBER','PENDING'],[administrator,'ADMIN','ACTIVE']] as const){
+  await client.db.user.create({data:{id:person.userId,name:person.userId,email:person.userId+'@example.test',password:'test',role,status}});
+  await client.db.classroomMembership.create({data:{userId:person.userId,status:'APPROVED',departmentOrDesignation:'Teacher'}});
+ }
+ const source=await client.db.classOffering.findUniqueOrThrow({where:{id:classId}});
+ const offering=(await createClassOffering(client.db,teacher,{commandId:randomUUID(),termId:source.termId,subjectId:source.subjectId,displayName:'Start authorization',sectionIds:['3b'],exceptions:[]})).data;
+ const preview=await getClassroomStartPreview(client.db,teacher,offering.id);
+ const input={commandId:randomUUID(),scheduledStartAt,expectedConfigRevision:0,expectedRosterRevision:0,expectedRosterFingerprint:preview.rosterFingerprint};
+ const forbidden={status:403,code:'TEACHER_START_REQUIRED'};
+ for(const ownerId of [teacher.userId,administrator.userId]){
+  await client.db.classOffering.update({where:{id:offering.id},data:{primaryTeacherId:ownerId}});
+  await assert.rejects(getClassroomStartPreview(client.db,administrator,offering.id),forbidden);
+  const commandId=randomUUID();await assert.rejects(startClassroomSession(client.db,administrator,offering.id,{...input,commandId,reason:'Administrative help'}),forbidden);
+  assert.equal(await client.db.classroomCommandReceipt.count({where:{commandId}}),0);
+  assert.equal(await client.db.classroomSession.count({where:{classId:offering.id}}),0);
+ }
+ await client.db.user.update({where:{id:administrator.userId},data:{status:'PENDING'}});
+ await assert.rejects(getClassroomStartPreview(client.db,administrator,offering.id),forbidden);
+ await assert.rejects(startClassroomSession(client.db,administrator,offering.id,{...input,commandId:randomUUID()}),forbidden);
+ await client.db.classOffering.update({where:{id:offering.id},data:{primaryTeacherId:teacher.userId}});
+ await assert.rejects(getClassroomStartPreview(client.db,other,offering.id),{code:'CLASS_NOT_FOUND'});
+ await assert.rejects(startClassroomSession(client.db,other,offering.id,input),{code:'CLASS_NOT_FOUND'});
+ const created=await startClassroomSession(client.db,teacher,offering.id,input);
+ await client.db.user.update({where:{id:teacher.userId},data:{role:'ADMIN',status:'ACTIVE'}});
+ await assert.rejects(getClassroomStartPreview(client.db,teacher,offering.id),forbidden);
+ await assert.rejects(startClassroomSession(client.db,teacher,offering.id,input),forbidden);
+ assert.deepEqual((await client.db.classroomCommandReceipt.findUniqueOrThrow({where:{actorId_commandId:{actorId:teacher.userId,commandId:input.commandId}}})).result,created.data);
+ await client.db.user.update({where:{id:teacher.userId},data:{role:'MEMBER',status:'PENDING'}});
+ assert.deepEqual((await startClassroomSession(client.db,teacher,offering.id,input)).data,created.data);
+ await client.db.classroomMembership.update({where:{userId:teacher.userId},data:{status:'REVOKED'}});
+ await assert.rejects(getClassroomStartPreview(client.db,teacher,offering.id),{code:'CLASSROOM_SUSPENDED'});
+ await assert.rejects(startClassroomSession(client.db,teacher,offering.id,input),{code:'CLASSROOM_SUSPENDED'});
+ await client.db.classroomMembership.update({where:{userId:teacher.userId},data:{status:'APPROVED'}});
+ await client.db.user.update({where:{id:teacher.userId},data:{accountState:'DISABLED'}});
+ await assert.rejects(startClassroomSession(client.db,teacher,offering.id,input),{code:'ACCOUNT_DISABLED'});
+ await client.db.user.update({where:{id:teacher.userId},data:{accountState:'ENABLED'}});
+ await client.db.classOffering.update({where:{id:offering.id},data:{primaryTeacherId:other.userId}});
+ await assert.rejects(startClassroomSession(client.db,teacher,offering.id,input),{code:'CLASS_NOT_FOUND'});
+ assert.equal(await client.db.classroomSession.count({where:{classId:offering.id}}),1);
+});

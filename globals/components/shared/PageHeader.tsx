@@ -77,7 +77,7 @@ const PageHeader = ({
       )}
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
+        <div className="min-w-0">
           {eyebrow ? (
             <p className={isHero ? typeToken.eyebrowOnDark : typeToken.eyebrow}>
               {eyebrow}
@@ -103,7 +103,7 @@ const PageHeader = ({
         </div>
 
         {actions ? (
-          <div className="flex flex-wrap items-center gap-2">{actions}</div>
+          <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 md:max-w-[50%]">{actions}</div>
         ) : null}
       </div>
     </header>

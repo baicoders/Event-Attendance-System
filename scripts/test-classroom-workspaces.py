@@ -85,6 +85,55 @@ with sync_playwright() as p:
     view.get_by_role('button', name='Account menu for Teacher', exact=True).click()
     view.get_by_role('menuitem', name='Switch to Events', exact=True).click()
     view.wait_for_url('**/dashboard')
+    # Shared actions and switcher contrast are checked in both explicit appearances.
+    view.set_viewport_size({'width': 1920, 'height': 1080})
+    expand = view.get_by_role('button', name='Expand sidebar', exact=True)
+    if expand.is_visible():
+        expand.click()
+    switcher = view.get_by_role('button', name='Switch to Class', exact=True)
+    expect(switcher).to_be_visible()
+    view.wait_for_timeout(350) # Sidebar width transition must settle before control measurement.
+    measurements = switcher.evaluate("""element => {
+      const style = getComputedStyle(element), box = element.getBoundingClientRect();
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const context=canvas.getContext('2d');
+      const rgb=value=>{context.clearRect(0,0,1,1);context.fillStyle=value;context.fillRect(0,0,1,1);return Array.from(context.getImageData(0,0,1,1).data).slice(0,3);};
+      const lum = value => rgb(value).map(n => { const c=n/255; return c<=.04045?c/12.92:((c+.055)/1.055)**2.4; }).reduce((s,n,i)=>s+n*[.2126,.7152,.0722][i],0);
+      const front=lum(style.color), back=lum(style.backgroundColor);
+      return {height:box.height,fontSize:style.fontSize,color:style.color,background:style.backgroundColor,contrast:(Math.max(front,back)+.05)/(Math.min(front,back)+.05)};
+    }""")
+    assert measurements['height'] >= 48 and measurements['fontSize'] == '14px', measurements
+    assert measurements['contrast'] >= 4.5, measurements
+    assert view.locator('main').evaluate('element => element.getBoundingClientRect().width') <= 1280
+    Path('.superpowers/classroom-tests').mkdir(parents=True, exist_ok=True)
+    view.screenshot(path='.superpowers/classroom-tests/workspace-expanded-1920.png', full_page=True)
+    view.get_by_role('button', name='Collapse sidebar', exact=True).click()
+    expect(view.get_by_role('button', name='Expand sidebar', exact=True)).to_be_visible()
+    expect(switcher).to_have_count(0)
+    view.wait_for_timeout(350)
+    no_overflow(view)
+    view.screenshot(path='.superpowers/classroom-tests/workspace-collapsed-1920.png', full_page=True)
+    view.set_viewport_size({'width':375,'height':812})
+    view.get_by_role('button', name='Account menu for Teacher', exact=True).click()
+    light_switcher=view.get_by_role('menuitem', name='Switch to Class', exact=True)
+    expect(light_switcher).to_be_visible()
+    expect(light_switcher).to_have_css('min-height','48px')
+    view.wait_for_timeout(250) # Radix opening scale animation must settle before target measurement.
+    light=light_switcher.evaluate("""element => {
+      let ancestor=element, background='';
+      while(ancestor){const value=getComputedStyle(ancestor).backgroundColor;if(value!=='rgba(0, 0, 0, 0)'&&value!=='transparent'){background=value;break;}ancestor=ancestor.parentElement;}
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const context=canvas.getContext('2d');
+      const rgb=value=>{context.clearRect(0,0,1,1);context.fillStyle=value;context.fillRect(0,0,1,1);return Array.from(context.getImageData(0,0,1,1).data).slice(0,3);};
+      const lum=value=>rgb(value).map(n=>{const c=n/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;}).reduce((s,n,i)=>s+n*[.2126,.7152,.0722][i],0);
+      const color=getComputedStyle(element).color,front=lum(color),back=lum(background);
+      return {color,background,height:element.getBoundingClientRect().height,contrast:(Math.max(front,back)+.05)/(Math.min(front,back)+.05)};
+    }""")
+    assert light['height'] >= 48, light
+    assert light['contrast'] >= 4.5, light
+    assert light['color'] not in ['rgb(255, 255, 255)','rgba(255, 255, 255, 1)'], light
+    no_overflow(view)
+    view.screenshot(path='.superpowers/classroom-tests/workspace-menu-375.png', full_page=True)
+    view.keyboard.press('Escape')
+    print('Shared switcher measurements:',json.dumps({'dark':measurements,'light':light}))
     admin.get_by_label('Teacher access status', exact=True).select_option('APPROVED')
     card = admin.locator('article').filter(has=admin.get_by_role('heading', name='Teacher', exact=True))
     card.get_by_role('button', name='Suspend Class access', exact=True).click()

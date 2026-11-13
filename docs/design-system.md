@@ -77,7 +77,9 @@ console's user table — same rule, same reason.
 
 ### Typography
 
-Poppins (`--font-sans`) throughout. The **eyebrow + title** pair is the app's
+Poppins (`--font-sans`) throughout. Ordinary actions use 14px (`text-sm`), semibold sentence-case text, including navigation links styled as buttons. Use the shared `Button` with `asChild` for action links. Status badges and mobile navigation captions may remain smaller.
+
+The **eyebrow + title** pair is the app's
 signature header treatment:
 
 ```
@@ -104,8 +106,7 @@ behind a `relative` content wrapper.
 
 ### Spacing & focus
 
-Page padding `p-6 md:p-8`. Stack gap `gap-6`. Container `max-w-6xl`
-(`max-w-7xl` for data-heavy screens).
+Page padding `p-4 sm:p-6 md:p-8`. Stack gap `gap-6`. App content is centered with a maximum width of 1280px (`max-w-7xl`). Forms use `max-w-3xl`; account forms use `max-w-xl`. Use `min-w-0` on flex and grid content columns.
 
 Every custom interactive element needs a visible focus ring — use the shared
 `focusRing` token. shad-cn primitives carry their own.
@@ -124,7 +125,7 @@ Live examples: [`/design-system`](../app/(main)/design-system/page.tsx) →
 | Need | Use | Not |
 |---|---|---|
 | Ordinary action | `Button` (shad-cn) | A hand-styled `<button>` |
-| Toolbar action | `pill.primary` / `pill.secondary` tokens | `Button` mixed into a pill row |
+| Toolbar action | `Button`; legacy `pill` tokens share its 14px/48px styling | Uppercase 12px actions |
 | Text field | `FormInput` | Bare `Input` + hand-written label |
 | Select | `FormSelect` (needs `control`) | Raw `Select` in a `Controller` |
 | Searchable select | `ComboBox` | `FormSelect` with 50 options |
@@ -226,7 +227,7 @@ at `md`, titles step at `md`, toolbars collapse at `lg`/`xl`.
    toolbars, chip rows — scrolls inside its own `overflow-x-auto` container.
 3. **Stack, don't shrink.** Toolbar rows are `flex-col` by default, `flex-row` at
    `lg`/`xl`. Shrinking a control below its tap target is worse than stacking.
-4. **Tap targets ≥ 40px** in any flow an organizer uses during an event.
+4. **Tap targets ≥ 48px** in any flow an organizer uses during an event.
 5. **Test at 375px.** If the page scrolls sideways there, it's wrong.
 
 **Known to need responsive work** (not in scope here):
@@ -251,7 +252,7 @@ is deliberately out of scope. **Follow the "preferred" column in new work.**
 | Event-status colours duplicated | Dashboard `chipClass`, calendar `EventCard` | `EVENT_STATUS_TONE` |
 | `Sheet` and `Drawer` coexist | `StudentFormDrawer` vs `EventDrawer` | `Sheet` |
 | Student List `Pagination` duplicates the shared one | `StudentsDataTable/Pagination.tsx` | Shared `DataTablePagination` |
-| Dark mode is dead code | `globals.css` `.dark` block and a `prefers-color-scheme` rule that sets inverted values; nothing activates either | Don't write `dark:` variants |
+| Dark mode is inactive | `globals.css` retains the `.dark` variables; no app control activates them | Don't write `dark:` variants |
 
 Each has a tracked backlog issue under the `ui` label.
 
@@ -299,10 +300,19 @@ If you are asked to *"create a new screen for X"*, these are binding.
   weighted so heavily on the attendance screen
 - Component JSDoc — API detail, constraints, and worked examples
 
-## Dedicated Class workspace (November2026)
+## Dedicated Class workspace (November 2026)
 
 Class reuses the indigo/Poppins tokens, shared headers, forms, dialogs, toasts and status indicators. Its focused sidebar and compact mobile tabs expose Dashboard, My Classes, Attendance, Students, Reports and Settings according to capability. The Events mobile shutter layout remains the default Events pattern.
 
-Attendance uses stacked student cards and bottom sheets rather than a dense phone table. Actions have48px targets, text plus status indicators, visible saved/unconfirmed/error states and row-local same-save recovery. Default pagination is100, with server search/filter and stable scroll. Preserve accessible names, search/filter/page/mode across updates/reload. Scan success requires acknowledgment, never color or sound alone.
+Attendance uses stacked student cards and bottom sheets rather than a dense phone table. Actions have 48px targets, text plus status indicators, visible saved/unconfirmed/error states and row-local same-save recovery. Default pagination is 100, with server search/filter and stable scroll. Preserve accessible names, search/filter/page/mode across updates/reload. Scan success requires acknowledgment, never color or sound alone.
 
-Verify375px and200% zoom with both page-overflow and adjacent-tab/label bounds; a page fitting the viewport can still contain overlapping tabs. Sheets need bounded scrolling, focused accessible labels and a usable manual camera fallback. Physical one-handed teacher and screen-reader trials remain release gates, not claims from automated bounds checks.
+Verify 375px and 200% zoom with both page-overflow and adjacent-tab/label bounds; a page fitting the viewport can still contain overlapping tabs. Sheets need bounded scrolling, focused accessible labels and a usable manual camera fallback. Physical one-handed teacher and screen-reader trials remain release gates, not claims from automated bounds checks.
+
+### Shared controls and Classroom presentation
+
+- `Button` variants share a 48px minimum target, `text-sm` semibold text and `rounded-xl` corners. Text can wrap for narrow screens. Small variants reduce padding, never touch-target height. Use the same treatment for action navigation links.
+- `FormInput` uses readable 14px labels, a 48px control and separate helper/error copy. Catalog, roster and class forms keep a single main surface with simple section dividers.
+- The workspace switcher has an explicit light/dark appearance. A dark sidebar uses slate surfaces and white text; white account/menu surfaces use slate text. Never inherit foreground color across those surfaces.
+- Classroom setup shows a wrapping six-step progress list with `aria-current="step"`; progress is informational and does not bypass saved prerequisites.
+- Administrators view and correct existing sessions. Only teachers start sessions, including when an administrator also has approved teacher access. Cards and history label administrator session navigation “View session”; direct start routes explain the restriction.
+- Routine feedback uses names and printed USN/LRN identifiers. Missing display information gets a readable placeholder; internal keys remain in URLs, mutations and explicit advanced technical details. Administrator activity summaries resolve current labels in bounded batches and preserve immutable actor names.

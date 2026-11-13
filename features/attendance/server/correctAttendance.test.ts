@@ -311,3 +311,14 @@ test("BigInt journal IDs remain decimal strings through receipts and history cur
     sourceChangeId: second.changeId, reason: "Verified original scan" }, { id: ownerId, credentialVersion: 0 });
   assert.ok(BigInt(restored.changeId) > BigInt(second.changeId));
 });
+
+test("review and history labels keep printed identifiers separate from internal student keys", async () => {
+  const { listAttendanceReview, getAttendanceHistory } = await import("./attendanceReview");
+  const student=await db.student.create({data:{id:randomUUID(),usn:"00000654321",lrn:"000000012345",firstName:"Printed",lastName:"Identifier"}});
+  await db.record.create({data:{eventId,studentId:student.id,method:"MANUAL",timein:new Date("2026-09-25T00:00:00Z")}});
+  const page=await listAttendanceReview(db,eventId,{id:ownerId,credentialVersion:0},{search:"00000654321"});
+  assert.equal(page.items[0].studentId,student.id);
+  assert.equal((page.items[0] as unknown as {studentIdentifier:string}).studentIdentifier,"00000654321");
+  const history=await getAttendanceHistory(db,eventId,student.id,{id:ownerId,credentialVersion:0},{});
+  assert.equal((history as unknown as {studentIdentifier:string}).studentIdentifier,"00000654321");
+});

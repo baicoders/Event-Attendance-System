@@ -7,7 +7,7 @@ import { useAuth } from '@/globals/contexts/AuthContext';
 import { workspaceCapabilities } from '../utils/accessPolicy';
 import { resolveWorkspaceDestination } from '../utils/workspaceDestination';
 import { useWorkspacePreference } from '../hooks/useWorkspacePreference';
-export default function WorkspaceSwitcher({ menu = false }: { menu?: boolean }) {
+export default function WorkspaceSwitcher({ menu = false, appearance = 'light' }: { menu?: boolean; appearance?: 'light' | 'dark' }) {
   const { user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -23,5 +23,5 @@ export default function WorkspaceSwitcher({ menu = false }: { menu?: boolean }) 
     router.refresh();
   };
   const label = `Switch to ${target === 'CLASS' ? 'Class' : 'Events'}`;
-  return menu ? <DropdownMenuItem className="min-h-12" onSelect={switchWorkspace}><ArrowLeftRight aria-hidden className="size-4" />{label}</DropdownMenuItem> : <Button className="min-h-12 w-full" variant="outline" onClick={switchWorkspace}><ArrowLeftRight aria-hidden className="size-4" />{label}</Button>;
+  return menu ? <DropdownMenuItem className="min-h-12" onSelect={switchWorkspace}><ArrowLeftRight aria-hidden className="size-4" />{label}</DropdownMenuItem> : <Button className={appearance === 'dark' ? 'min-h-12 w-full border-slate-600 bg-slate-800 text-white hover:bg-slate-700 hover:text-white' : 'min-h-12 w-full border-slate-300 bg-white text-slate-800 hover:bg-slate-100 hover:text-slate-900'} variant="outline" onClick={switchWorkspace}><ArrowLeftRight aria-hidden className="size-4" />{label}</Button>;
 }

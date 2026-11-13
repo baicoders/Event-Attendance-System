@@ -63,9 +63,9 @@ export default function TeacherAccessStatus({ moduleAvailable }: { moduleAvailab
       {error ? <div role="alert" className="space-y-2 text-sm text-rose-700"><p>{error}</p><Button type="button" variant="outline" className="min-h-12" onClick={() => void loadCurrent()}>Reload current application</Button></div> : null}
       <Button type="submit" className="min-h-12 w-full" disabled={busy}>{busy ? 'Saving…' : member?.status === 'PENDING' ? 'Save application details' : member ? 'Resubmit application' : 'Submit application'}</Button>
     </form> : error ? <p role="alert">{error}</p> : null}
-    {member?.status === 'APPROVED' && grants?.classroom && moduleAvailable ? <Link href="/class" className="flex min-h-12 items-center justify-center rounded-xl bg-indigo-600 px-4 font-semibold text-white">Continue to Class</Link> : null}
+    {member?.status === 'APPROVED' && grants?.classroom && moduleAvailable ? <Link href="/class" className="flex min-h-12 items-center justify-center rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">Continue to Class</Link> : null}
     <Button className="min-h-12" variant="outline" onClick={() => { void application.refetch(); void refresh(); }}>Check status</Button>
-    {grants?.events ? <Link className="flex min-h-12 items-center text-indigo-700 underline" href="/dashboard">Open Events</Link> : null}
-    <Link className="flex min-h-12 items-center text-indigo-700 underline" href="/account/settings">Profile and password</Link><AccountControls />
+    {grants?.events ? <Link className="flex min-h-12 items-center text-sm font-semibold text-indigo-700 underline" href="/dashboard">Open Events</Link> : null}
+    <Link className="flex min-h-12 items-center text-sm font-semibold text-indigo-700 underline" href="/account/settings">Profile and password</Link><AccountControls />
   </main>;
 }

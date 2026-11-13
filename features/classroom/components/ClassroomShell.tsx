@@ -20,5 +20,5 @@ export default function ClassroomShell({ children, admin = false }: { children: 
   }, [isLoading, isUnavailable, user, allowed, router]);
   if (isUnavailable) return <main className="space-y-4 p-6" role="alert"><p>Connection unavailable. Attendance saves must be confirmed by the server.</p><Button className="min-h-12" onClick={() => void refresh()}>Retry connection</Button></main>;
   if (isLoading || !user || !allowed) return <main className="p-6 text-slate-600">Checking Class access…</main>;
-  return <SidebarProvider key={user.id}><div className="flex min-h-screen bg-slate-100"><ClassroomSidebar admin={admin} /><div className="flex min-w-0 flex-1 flex-col"><MobileTopBar workspace="CLASS" /><main className="flex-1 pb-24 lg:pb-0">{children}</main><ClassroomBottomNav admin={admin} /></div></div></SidebarProvider>;
+  return <SidebarProvider key={user.id}><div className="flex min-h-screen bg-slate-100"><ClassroomSidebar admin={admin} /><div className="flex min-w-0 flex-1 flex-col"><MobileTopBar workspace="CLASS" /><main className="mx-auto w-full min-w-0 max-w-7xl flex-1 pb-24 lg:pb-0">{children}</main><ClassroomBottomNav admin={admin} /></div></div></SidebarProvider>;
 }

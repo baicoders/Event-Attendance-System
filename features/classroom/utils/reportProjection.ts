@@ -18,6 +18,7 @@ export function buildClassroomReport(snapshot:ClassroomReportSnapshot):Classroom
    let group=grouped.get(entry.studentId);if(!group){group={row:{studentId:entry.studentId,identity:entry.identity,identityAsOf:session.scheduledStartAt,counts:attendanceRateCounts(empty())},counts:empty()};grouped.set(entry.studentId,group);}
    group.row.identity=entry.identity;group.row.identityAsOf=entry.scheduledStartAt;group.counts[entry.status.toLowerCase() as keyof typeof group.counts]++;
   }
+  if(snapshot.filters.studentId&&!selected.length)continue;
   meetings.push({id:session.id,classId:session.classId,className:session.classSnapshot.displayName,subject:session.classSnapshot.subject.title,scheduledStartAt:session.scheduledStartAt,counts:countEntries(selected)});
  }
  const rows=[...grouped.values()].map(({row,counts})=>({...row,counts:attendanceRateCounts(counts)})).sort((a,b)=>a.identity.lastName.localeCompare(b.identity.lastName)||a.identity.firstName.localeCompare(b.identity.firstName)||a.studentId.localeCompare(b.studentId));

@@ -3,19 +3,22 @@ import type { Prisma,ClassroomAttendance,ClassroomAttendanceStatus,ClassroomAtte
 import { AuthError } from '@/globals/utils/authError';
 import type { ClassroomUser } from './access';
 import { lockOwnedSession,attendanceDto } from './sessionAccess';
+import { attendanceStudentDisplaySchema } from '../schemas/attendanceSchema';
 import { buildAttendancePolicy } from '../utils/attendancePolicy';
 export type LockedAttendanceSession=Awaited<ReturnType<typeof lockOwnedSession>>;
 export async function eligibleResult(tx:Prisma.TransactionClient,sessionId:string,studentId:string){
   const member=await tx.sessionRosterMember.findUnique({where:{sessionId_studentId:{sessionId,studentId}},include:{attendance:true}});
   if(!member?.included)throw new AuthError('This student is not included in this session.',409,'STUDENT_NOT_IN_SESSION');
   if(!member.attendance)throw new AuthError('The attendance snapshot is incomplete.',500,'INCOMPLETE_SESSION');
-  return member.attendance;
+  return {attendance:member.attendance,studentSnapshot:member.studentSnapshot};
 }
 export function effectivePolicy(locked:LockedAttendanceSession){
   return {...buildAttendancePolicy(locked.session.scheduledStartAt.toISOString(),locked.session.graceMinutes),lifecycleRevision:locked.session.lifecycleRevision};
 }
-export function attendanceResult(row:ClassroomAttendance,outcome:'RECORDED'|'ALREADY_RECORDED'|'ALREADY_MARKED'|'UNCHANGED',changed:boolean){
-  return {outcome,sessionId:row.sessionId,studentId:row.studentId,attendance:attendanceDto(row),changed};
+export function attendanceResult(row:ClassroomAttendance,outcome:'RECORDED'|'ALREADY_RECORDED'|'ALREADY_MARKED'|'UNCHANGED',changed:boolean,studentSnapshot:Prisma.JsonValue){
+  const student=attendanceStudentDisplaySchema.parse(studentSnapshot);
+  if(student.id!==row.studentId)throw new AuthError('The attendance identity snapshot is inconsistent.',500,'INCOMPLETE_SESSION');
+  return {outcome,sessionId:row.sessionId,studentId:row.studentId,student,attendance:attendanceDto(row),changed};
 }
 /** Caller owns Session SHARE/UPDATE and this result's pair lock. */
 export async function writeClassroomResult(tx:Prisma.TransactionClient,user:ClassroomUser,locked:LockedAttendanceSession,row:ClassroomAttendance,input:{status:Exclude<ClassroomAttendanceStatus,'UNMARKED'>;method:ClassroomAttendanceMethod;excuseNote:string|null;reason?:string;commandId:string},at:Date){

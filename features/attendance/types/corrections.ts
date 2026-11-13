@@ -14,12 +14,12 @@ export type RecordSnapshot = {
 };
 export type CurrentRecord = Omit<RecordSnapshot, "version">;
 
-export type ReviewRow = { studentId: string; studentLabel: string; record: CurrentRecord | null;
+export type ReviewRow = { studentId: string; studentLabel: string; studentIdentifier?: string; record: CurrentRecord | null;
   latestAction: string | null; latestChangeId: string | null; latestChangedAt: string | null; inCurrentAudience: boolean };
 export type ReviewPage = { eventId: string; eventTitle: string; page: number; pageSize: number; total: number; items: ReviewRow[] };
 export type HistoryChange = { id: string; action: string; recordId: string; actorId: string | null; actorName: string | null;
   reason: string | null; before: RecordSnapshot | null; after: RecordSnapshot | null; sourceChangeId: string | null; createdAt: string };
-export type HistoryPage = { eventId: string; studentId: string; eventTitle: string; eventStart: string; eventEnd: string; studentLabel: string; inCurrentAudience: boolean;
+export type HistoryPage = { eventId: string; studentId: string; eventTitle: string; eventStart: string; eventEnd: string; studentLabel: string; studentIdentifier?: string; inCurrentAudience: boolean;
   record: CurrentRecord | null; changes: HistoryChange[]; nextBeforeId: string | null; earlierHistoryUnavailable: boolean };
 export type CorrectionCommand =
   | { commandId: string; action: "CORRECT"; studentId: string; recordId: string; expectedRevision: number; timein: string | null; timeout: string | null; reason: string }

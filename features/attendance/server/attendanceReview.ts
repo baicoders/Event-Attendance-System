@@ -1,3 +1,4 @@
+import { studentDisplayIdentifier } from "@/globals/utils/studentDisplay";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { buildEventStudentFilter } from "@/globals/utils/buildEventStudentFilter";
@@ -41,7 +42,7 @@ export async function listAttendanceReview(db: PrismaClient, eventId: string, vi
   const total = await tx.student.count({ where });
   const students = await tx.student.findMany({ where, orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
       skip: (query.page - 1) * query.pageSize, take: query.pageSize,
-      select: { id: true, firstName: true, middleName: true, lastName: true,
+      select: { id: true, usn: true, lrn: true, firstName: true, middleName: true, lastName: true,
         records: { where: { eventId }, take: 1 },
         attendanceChanges: { where: { eventId }, orderBy: { id: "desc" }, take: 1,
           select: { id: true, action: true, createdAt: true } },
@@ -50,7 +51,7 @@ export async function listAttendanceReview(db: PrismaClient, eventId: string, vi
   const eligibleIds = new Set(eligible.map((item) => item.id));
   return { eventId, eventTitle: event.title, page: query.page, pageSize: query.pageSize, total,
     items: students.map((student) => ({
-      studentId: student.id, studentLabel: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "),
+      studentId: student.id, studentLabel: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "), studentIdentifier: studentDisplayIdentifier(student),
       record: student.records[0] ?? null, latestAction: student.attendanceChanges[0]?.action ?? null,
       latestChangeId: student.attendanceChanges[0]?.id.toString() ?? null,
       latestChangedAt: student.attendanceChanges[0]?.createdAt ?? null,
@@ -63,7 +64,7 @@ export async function getAttendanceHistory(db: PrismaClient, eventId: string, st
   const paging = z.object({ beforeId: positiveChangeIdSchema.optional(), limit: z.number().int().min(1).max(100).default(25) }).parse(rawPaging);
   return db.$transaction(async (tx) => {
   const event = await loadManagerEvent(tx, eventId, viewer);
-  const student = await tx.student.findUnique({ where: { id: studentId }, select: { id: true, firstName: true, middleName: true, lastName: true } });
+  const student = await tx.student.findUnique({ where: { id: studentId }, select: { id: true, usn: true, lrn: true, firstName: true, middleName: true, lastName: true } });
   if (!student) throw new CorrectionError("Student not found", 404, "STUDENT_NOT_FOUND");
   const record = await tx.record.findUnique({ where: { eventId_studentId: { eventId, studentId } } });
   const eligible = await tx.student.findFirst({ where: { id: studentId, ...buildEventStudentFilter(event) }, select: { id: true } });
@@ -71,7 +72,7 @@ export async function getAttendanceHistory(db: PrismaClient, eventId: string, st
       orderBy: { id: "desc" }, take: paging.limit + 1 });
   const page = rows.slice(0, paging.limit);
   return { eventId, studentId, eventTitle: event.title, eventStart: event.start, eventEnd: event.end,
-    studentLabel: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "),
+    studentLabel: [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" "), studentIdentifier: studentDisplayIdentifier(student),
     inCurrentAudience: !!eligible, record,
     changes: page.map((change) => ({ id: change.id.toString(), action: change.action, recordId: change.recordId,
       actorId: change.actorId, actorName: change.actorName, reason: change.reason,

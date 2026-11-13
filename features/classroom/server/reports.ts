@@ -50,4 +50,10 @@ export async function loadAuthorizedClassroomReport(db:PrismaClient,actor:ActorC
   return {filters,evaluatedAt,reportVersion,sessions:projected};
  },{isolationLevel:'RepeatableRead',timeout:15000,maxWait:2000});}catch(error){if(attempt===0&&isRetryableTransactionError(error))continue;throw error;}
 }
-export function buildReportPage(report:ClassroomReport,{page=1,pageSize=100}:{page?:number;pageSize?:number}={}){const offset=(page-1)*pageSize;return {...report,rows:report.rows.slice(offset,offset+pageSize),entries:report.entries.slice(offset,offset+pageSize),totalRows:report.rows.length,totalEntries:report.entries.length,page,pageSize};}
+/** Table lookup matches frozen identities, including earlier included meeting names. */
+export function buildReportPage(report:ClassroomReport,{page=1,pageSize=100,q=''}:{page?:number;pageSize?:number;q?:string}={}){
+ const offset=(page-1)*pageSize;const needle=q.trim().toLocaleLowerCase();
+ const matchingIds=needle?new Set(report.entries.filter(entry=>[entry.identity.firstName,entry.identity.lastName,entry.identity.middleName,entry.identity.usn,entry.identity.lrn,[entry.identity.firstName,entry.identity.middleName,entry.identity.lastName].filter(Boolean).join(' '),[entry.identity.lastName,entry.identity.firstName].join(', ')].some(value=>value?.toLocaleLowerCase().includes(needle))).map(entry=>entry.studentId)):null;
+ const rows=matchingIds?report.rows.filter(row=>matchingIds.has(row.studentId)):report.rows;
+ return {...report,rows:report.filters.studentId?rows:rows.slice(offset,offset+pageSize),entries:report.entries.slice(offset,offset+pageSize),totalRows:rows.length,totalStudents:report.rows.length,totalEntries:report.entries.length,page,pageSize};
+}

@@ -29,3 +29,9 @@ First-class POST may include `onboardingExpectedRevision`. The command locks tha
 Roster acknowledgement binds the full live fingerprint and roster revision; settings acknowledgement binds configRevision. A class with no eligible students can be saved, but cannot pass Ready. Finishing setup checks all current prerequisites and does not start a meeting. Progress has optimistic concurrency, immutable audit events and honest confirmation/retry behavior.
 
 The camera/manual tutorial is a clearly labeled simulation. It requests camera permission only on a deliberate action, stops tracks on exit, and never invokes production attendance endpoints. Real session start/first-attendance guidance is completed with the attendance interface before release.
+
+## Classroom presentation and administrator actions
+
+Administrators can manage classes, assist with rosters and settings, and view/correct existing sessions. Starting a new meeting is reserved for teachers who own the class. The UI checks the actual account role, so an administrator with an approved teacher membership still sees no Start action in cards, class details or onboarding. Direct start routes show a clear unavailable state. Teacher setup keeps its saved prerequisites and optimistic concurrency; the visible six-step list does not allow jumping past them.
+
+Activity summaries show current student names, printed USN/LRN and class/target names through bounded batch lookups. Immutable historical actor names and before/after evidence remain unchanged. Reference IDs and raw evidence are available in explicit advanced details.

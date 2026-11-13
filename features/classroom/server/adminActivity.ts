@@ -32,6 +32,21 @@ export async function listClassroomActivity(db:PrismaClient,actor:ActorContext,r
   // Review prompts describe repetition, not guilt or automatic access changes.
   const since=new Date(Date.now()-30*86400000);const signals:ActivityPage['signals']=[];
   if(!input.entityId){const repeated=await tx.classroomAttendanceChange.groupBy({by:['studentId'],where:{...attendanceWhere,action:'CORRECT',createdAt:{gte:since}},_count:{_all:true},having:{studentId:{_count:{gte:3}}},orderBy:{_count:{studentId:'desc'}},take:20});for(const row of repeated)signals.push({kind:'ATTENDANCE_CORRECTIONS',studentId:row.studentId,count:row._count._all});if(globalStudentActivityIncluded){const profiles=await tx.studentProfileChange.groupBy({by:['studentId'],where:{...profileWhere,fromRevision:{not:null},createdAt:{gte:since}},_count:{_all:true},having:{studentId:{_count:{gte:3}}},orderBy:{_count:{studentId:'desc'}},take:20});for(const row of profiles)signals.push({kind:'PROFILE_CORRECTIONS',studentId:row.studentId,count:row._count._all});}}
+  // Resolve a bounded page and its review prompts in batches, not one lookup per row.
+  // These are current labels for navigation; immutable actor names and audit evidence stay intact.
+  const studentIds=[...new Set([...visible.map(row=>row.studentId),...signals.map(row=>row.studentId)].filter((id):id is string=>!!id))];
+  const classIds=[...new Set(visible.map(row=>row.classId).filter((id):id is string=>!!id))];
+  const targetIds=[...new Set(visible.filter(row=>row.source==='audit').map(row=>row.entityId).filter((id):id is string=>!!id))];
+  const [students,classes,targets]=await Promise.all([
+   studentIds.length?tx.student.findMany({where:{id:{in:studentIds}},select:{id:true,firstName:true,lastName:true,usn:true,lrn:true}}):[],
+   classIds.length?tx.classOffering.findMany({where:{id:{in:classIds}},select:{id:true,displayName:true}}):[],
+   targetIds.length?tx.user.findMany({where:{id:{in:targetIds}},select:{id:true,name:true}}):[],
+  ]);
+  const studentLabels=new Map(students.map(row=>[row.id,{studentName:row.lastName+', '+row.firstName,studentIdentifier:row.usn||row.lrn||null}]));
+  const classLabels=new Map(classes.map(row=>[row.id,row.displayName]));
+  const targetLabels=new Map(targets.map(row=>[row.id,row.name]));
+  for(const row of visible){if(row.studentId)Object.assign(row,studentLabels.get(row.studentId)??{studentName:null,studentIdentifier:null});if(row.classId)row.className=classLabels.get(row.classId)??null;if(row.entityId)row.targetName=targetLabels.get(row.entityId)??null;}
+  for(const signal of signals)Object.assign(signal,studentLabels.get(signal.studentId)??{studentName:null,studentIdentifier:null});
   return {items:visible,nextCursor:items.length>input.pageSize&&visible.length?encodeCursor(visible[visible.length-1]):null,globalStudentActivityIncluded,signals};
  });
 }

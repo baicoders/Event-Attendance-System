@@ -3,11 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { withClassroomTestApp } from './classroom-test-app.mjs';
 await withClassroomTestApp(async({db,request})=>{
  const password='session-test-password';
- async function teacher(name,status='APPROVED'){
-  const user=await db.user.create({data:{name,email:name+'@example.test',password,role:'MEMBER'}});
+ async function teacher(name,status='APPROVED',role='MEMBER'){
+  const user=await db.user.create({data:{name,email:name+'@example.test',password,role,status:role==='ADMIN'?'ACTIVE':'PENDING'}});
   await db.classroomMembership.create({data:{userId:user.id,status,departmentOrDesignation:'Teacher'}});
   const login=await request('/api/auth/login',{method:'POST',body:{email:user.email,password,workspace:'CLASS'}});assert.equal(login.response.status,200,login.text);return {...user,cookie:login.cookie};
  }
+ const administrator=await teacher('session-administrator','APPROVED','ADMIN');
  const owner=await teacher('session-owner');const other=await teacher('other-owner');const applicant=await teacher('applicant','PENDING');
  for(const id of ['3a','other'])await db.group.create({data:{id,name:id,slug:id,category:'SECTION'}});
  for(const id of ['a','b','c'])await db.student.create({data:{id,firstName:'Student',lastName:id,groups:{connect:{id:'3a'}}}});
@@ -16,8 +17,27 @@ await withClassroomTestApp(async({db,request})=>{
  const offering=await request('/api/classroom/classes',{cookie:owner.cookie,method:'POST',body:{commandId:randomUUID(),termId:term.json.data.data.id,subjectId:subject.json.data.data.id,displayName:'Programming A',sectionIds:['3a'],exceptions:[]}});assert.equal(offering.response.status,201,offering.text);const classId=offering.json.data.data.id;const classPath='/api/classroom/classes/'+classId;
  const preview=await request(classPath+'/start-preview',{cookie:owner.cookie});assert.equal(preview.response.status,200,preview.text);assert.match(preview.response.headers.get('cache-control'),/private.*no-store/);assert.equal(preview.json.data.rosterCount,3);assert.equal(await db.classroomAttendance.count(),0);
  const input={commandId:randomUUID(),scheduledStartAt:'2026-08-03T08:00:00+08:00',expectedConfigRevision:0,expectedRosterRevision:0,expectedRosterFingerprint:preview.json.data.rosterFingerprint};
+ for(const ownerId of [owner.id,administrator.id]){
+  await db.classOffering.update({where:{id:classId},data:{primaryTeacherId:ownerId}});
+  for(const [suffix,method,body] of [['/start-preview','GET',undefined],['/sessions','POST',{...input,commandId:randomUUID(),reason:'Assist teacher'}]]){
+   const denied=await request(classPath+suffix,{cookie:administrator.cookie,method,body});assert.equal(denied.response.status,403,denied.text);assert.equal(denied.json.code,'TEACHER_START_REQUIRED');
+  }
+ }
+ await db.classOffering.update({where:{id:classId},data:{primaryTeacherId:owner.id}});
+ assert.equal(await db.classroomSession.count(),0);assert.equal(await db.classroomCommandReceipt.count({where:{operation:'START_CLASSROOM_SESSION'}}),0);
+ assert.equal((await request(classPath+'/start-preview',{cookie:other.cookie})).response.status,404);
+ assert.equal((await request(classPath+'/sessions',{cookie:other.cookie,method:'POST',body:input})).response.status,404);
  const missingOffset=await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:{...input,scheduledStartAt:'2026-08-03T08:00:00'}});assert.equal(missingOffset.response.status,400);
  const started=await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:input});assert.equal(started.response.status,201,started.text);const sessionId=started.json.data.data.id;const path='/api/classroom/sessions/'+sessionId;
+ await db.user.update({where:{id:owner.id},data:{role:'ADMIN',status:'ACTIVE'}});
+ for(const [suffix,method,body] of [['/start-preview','GET',undefined],['/sessions','POST',input]]){
+  const denied=await request(classPath+suffix,{cookie:owner.cookie,method,body});assert.equal(denied.response.status,403,denied.text);assert.equal(denied.json.code,'TEACHER_START_REQUIRED');
+ }
+ await db.user.update({where:{id:owner.id},data:{role:'MEMBER',status:'PENDING'}});
+ assert.deepEqual((await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:input})).json.data.data,started.json.data.data);
+ await db.classOffering.update({where:{id:classId},data:{primaryTeacherId:other.id}});
+ assert.equal((await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:input})).response.status,404);
+ await db.classOffering.update({where:{id:classId},data:{primaryTeacherId:owner.id}});
  assert.equal(started.json.data.data.scheduledStartAt,'2026-08-03T00:00:00.000Z');assert.equal(started.json.data.data.lateAfter,'2026-08-03T00:15:00.000Z');
  for(const [cookie,status] of [[undefined,401],[applicant.cookie,403],[other.cookie,404]])assert.equal((await request(path,{cookie})).response.status,status);
  assert.equal((await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:{...input,commandId:randomUUID()}})).json.code,'ACTIVE_SESSION_EXISTS');
@@ -39,6 +59,8 @@ await withClassroomTestApp(async({db,request})=>{
  const list=await request(classPath+'/sessions?date=2026-08-03',{cookie:owner.cookie});assert.equal(list.json.data.total,2);
  const archive=await request(classPath,{cookie:owner.cookie,method:'PATCH',body:{commandId:randomUUID(),expectedConfigRevision:0,archived:true}});assert.equal(archive.response.status,200);
  await db.classroomMembership.update({where:{userId:owner.id},data:{status:'SUSPENDED'}});
+ assert.equal((await request(classPath+'/start-preview',{cookie:owner.cookie})).response.status,403);
+ assert.equal((await request(classPath+'/sessions',{cookie:owner.cookie,method:'POST',body:input})).response.status,403);
  assert.equal((await request(path,{cookie:owner.cookie})).response.status,403);
  assert.equal((await request(path+'/finalize',{cookie:owner.cookie,method:'POST',body:command})).response.status,403);
  console.log('PASS private session preview/start/lifecycle, UTC-Manila policy, unmarked/finalize/cancel, exact receipt recovery, stale directory fingerprint, immutable history, multiple same-day meetings, amendment, archive and suspension.');
