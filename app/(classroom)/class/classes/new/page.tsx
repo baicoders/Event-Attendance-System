@@ -1,3 +1,3 @@
-import PageHeader from '@/globals/components/shared/PageHeader';
+import { ClassroomPage } from '@/features/classroom/components/ui';
 import ClassForm from '@/features/classroom/components/ClassForm';
-export default function NewClassPage(){return <div className="mx-auto min-w-0 max-w-3xl space-y-6 px-4 py-6 sm:px-6"><PageHeader title="Create class" eyebrow="My Classes"/><ClassForm/></div>;}
+export default function NewClassPage(){return <ClassroomPage title="Create a class" eyebrow="Class setup" description="Save the basics, choose your sections, then review the roster." breadcrumbs={[{label:'My Classes',href:'/class/classes'},{label:'Create class'}]}><ClassForm/></ClassroomPage>;}

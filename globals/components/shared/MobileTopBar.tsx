@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LogOut, Settings, Network, BookOpen } from "lucide-react";
+import { useAccountBackgroundPathname } from "@/features/auth/hooks/useAccountBackgroundPathname";
+import { LogOut, Settings, Network, BookOpen, UserRound } from "lucide-react";
 
 import WorkspaceSwitcher from "@/features/auth/components/WorkspaceSwitcher";
 import { useAuth } from "@/globals/contexts/AuthContext";
@@ -27,7 +27,7 @@ import {
 const MobileTopBar = ({ workspace = "EVENTS" }: { workspace?: "EVENTS" | "CLASS" }) => {
   const { user } = useAuth();
   const handleLogout = useLogout();
-  const pathname = usePathname();
+  const pathname = useAccountBackgroundPathname();
 
   const initials = (user?.name ?? "Organizer")
     .split(" ")
@@ -72,10 +72,11 @@ const MobileTopBar = ({ workspace = "EVENTS" }: { workspace?: "EVENTS" | "CLASS"
             {user?.name ?? "Organizer"}
           </DropdownMenuLabel>
           <WorkspaceSwitcher menu />
+          {workspace === "CLASS" ? <DropdownMenuItem asChild><Link href="/account/settings" scroll={false}><UserRound aria-hidden className="size-4" />Account settings</Link></DropdownMenuItem> : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
             <Link
-              href={workspace === "CLASS" ? "/class/classes" : "/custom-groups"}
+              href={workspace === "CLASS" ? user?.role === "ADMIN" ? "/class/admin/classes" : "/class/classes" : "/custom-groups"}
               aria-current={
                 pathname === "/custom-groups"
                   ? "page"
@@ -85,7 +86,7 @@ const MobileTopBar = ({ workspace = "EVENTS" }: { workspace?: "EVENTS" | "CLASS"
               }
             >
               {workspace === "CLASS" ? <BookOpen aria-hidden="true" /> : <Network aria-hidden="true" />}
-              {workspace === "CLASS" ? "My Classes" : "Custom Groups"}
+              {workspace === "CLASS" ? user?.role === "ADMIN" ? "Classes" : "My Classes" : "Custom Groups"}
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>

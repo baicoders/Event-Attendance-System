@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { deepestNavigationRoute } from "@/globals/utils/navigation";
+import { useAccountBackgroundPathname } from "@/features/auth/hooks/useAccountBackgroundPathname";
 import {
   BarChart3,
   CalendarDays,
@@ -13,6 +14,7 @@ import {
   QrCode,
   Settings,
   Users,
+  UserRound,
   Network,
   type LucideIcon,
 } from "lucide-react";
@@ -85,13 +87,11 @@ const Sidebar = ({ items = navigationItems, workspace = "EVENTS" }: { items?: Na
   const { toggleExpanded, isExpanded } = useSidebar();
   const { user } = useAuth();
   const handleLogout = useLogout();
-  const pathname = usePathname();
+  const pathname = useAccountBackgroundPathname();
 
   const currentRoute = (route: string): "page" | "location" | undefined => {
-    if (pathname === route) return "page";
-    if (route === "/class") return undefined;
-    if (pathname.startsWith(`${route}/`)) return "location";
-    return undefined;
+    if (deepestNavigationRoute(pathname, items.map(item => item.route)) !== route) return undefined;
+    return pathname === route ? "page" : "location";
   };
 
   const initials = (user?.name ?? (workspace === "CLASS" ? "Teacher" : "Organizer"))
@@ -180,6 +180,7 @@ const Sidebar = ({ items = navigationItems, workspace = "EVENTS" }: { items?: Na
         </nav>
 
         <div className="space-y-2 border-t border-white/10 pt-3">
+          {workspace === "CLASS" ? <Link href="/account/settings" scroll={false} aria-label="Account settings" className={cn("flex min-h-12 items-center rounded-xl px-3 text-sm text-slate-200 hover:bg-white/10", darkFocusRing, isExpanded ? "gap-3" : "justify-center")}><UserRound aria-hidden className="size-5 shrink-0" />{isExpanded ? 'Account settings' : null}</Link> : null}
           {isExpanded ? <WorkspaceSwitcher appearance="dark" /> : null}
           {isExpanded ? (
             <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">

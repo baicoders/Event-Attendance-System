@@ -9,3 +9,7 @@ export type ClassroomSession={id:string;classId:string;state:'ACTIVE'|'FINALIZED
 export type SessionRosterPage={sessionId:string;state:ClassroomSession['state'];lifecycleRevision:number;snapshotRevision:number;items:SessionMember[];counts:AttendanceCounts;total:number;filteredCount:number;page:number;pageSize:number;pageCount:number;excludedCount:number};
 export type StartPreview={class:ClassDetails;configRevision:number;rosterRevision:number;rosterFingerprint:string;rosterCount:number;serverNow:string;suggestedStartAt:string;activeSessionId:string|null};
 export const attendanceLabels:Record<AttendanceStatus,string>={UNMARKED:'Unmarked',PRESENT:'Present',LATE:'Late',ABSENT:'Absent',EXCUSED:'Excused'};
+
+export type MeetingCounts={counts:AttendanceCounts;rosterCount:number;markedCount:number};
+export type SessionHistoryItem=MeetingCounts&{id:string;classId:string;state:ClassroomSession['state'];scheduledStartAt:string;startedAt:string;finalizedAt:string|null;canceledAt:string|null;lifecycleRevision:number;snapshotRevision:number};
+export type SessionHistoryPage={items:SessionHistoryItem[];total:number;page:number;pageSize:number};

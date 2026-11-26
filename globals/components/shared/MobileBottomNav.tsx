@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { deepestNavigationRoute } from "@/globals/utils/navigation";
+import { useAccountBackgroundPathname } from "@/features/auth/hooks/useAccountBackgroundPathname";
 import {
   BarChart3,
   CalendarDays,
@@ -38,13 +39,11 @@ const navigationItems: MobileNavigationItem[] = [
  * and indigo active treatment as the desktop `Sidebar`; the Attendance tab —
  * the primary operator screen — is raised like a shutter button. */
 const MobileBottomNav = ({ items = navigationItems, compact = false }: { items?: MobileNavigationItem[]; compact?: boolean }) => {
-  const pathname = usePathname();
+  const pathname = useAccountBackgroundPathname();
 
   const currentRoute = (route: string): "page" | "location" | undefined => {
-    if (pathname === route) return "page";
-    if (route === "/class") return undefined;
-    if (pathname.startsWith(`${route}/`)) return "location";
-    return undefined;
+    if (deepestNavigationRoute(pathname, items.map(item => item.route)) !== route) return undefined;
+    return pathname === route ? "page" : "location";
   };
 
   // Class uses flat, wrapping tabs so zoomed labels and the scanner control

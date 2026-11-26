@@ -15,6 +15,10 @@ def begin(page,size):
  page.goto(base+'/class/classes/'+classes[str(size)]['id']+'/start');button(page,'Start attendance').click();expect(page).to_have_url(re.compile('/class/sessions/'));expect(current(page)).to_have_count(1);return page.url.split('?')[0]
 def request(page,path,body,method='POST'):
  return page.evaluate("""async ([path,body,method])=>{const response=await fetch(path,{method,headers:{'content-type':'application/json'},body:JSON.stringify(body)});return {status:response.status,body:await response.json()}}""",[path,body,method])
+def choose_attendance_filter(page, value):
+ page.get_by_role('combobox',name='Attendance filter',exact=True).click()
+ page.get_by_role('option',name={'':'All results','UNMARKED':'Unmarked','PRESENT':'Present','LATE':'Late','ABSENT':'Absent','EXCUSED':'Excused'}[value],exact=True).click()
+
 with sync_playwright() as p:
  browser=p.chromium.launch(executable_path=shutil.which('google-chrome') or '/opt/google/chrome/chrome',headless=True,args=['--no-sandbox','--disable-dev-shm-usage','--renderer-process-limit=2'])
  context=browser.new_context(viewport={'width':375,'height':812});name,value=F['cookie'].split('=',1);context.add_cookies([{'name':name,'value':value,'url':base,'httpOnly':True,'sameSite':'Lax'}]);page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
@@ -62,7 +66,7 @@ with sync_playwright() as p:
   choose(page,'Present');expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][9]['id'])
   page.get_by_label('Find an unmarked student').fill('no-such-name');expect(page.get_by_text('No unmarked search matches',exact=True)).to_be_visible();button(page,'Clear search').click();expect(current(page)).to_have_count(1)
   # Preserve roster preferences across Focus and reload.
-  button(page,'Roster').click();page.get_by_label('Attendance filter').select_option('ABSENT');expect(page.locator('[data-roster-student]')).to_have_count(1);button(page,'Focus on unmarked').click();expect(current(page)).to_have_count(1);page.reload();expect(current(page)).to_have_count(1);button(page,'Roster').click();expect(page.get_by_label('Attendance filter')).to_have_value('ABSENT');button(page,'Focus on unmarked').click()
+  button(page,'Roster').click();choose_attendance_filter(page, 'ABSENT');expect(page.locator('[data-roster-student]')).to_have_count(1);button(page,'Focus on unmarked').click();expect(current(page)).to_have_count(1);page.reload();expect(current(page)).to_have_count(1);button(page,'Roster').click();expect(page.get_by_role('combobox',name='Attendance filter',exact=True)).to_contain_text('Absent');button(page,'Focus on unmarked').click()
   # Camera mode is gated while saves are uncertain; switching modes retains session.
   button(page,'Scan QR').click();button(page,'Use manual attendance').click();expect(current(page)).to_have_count(1)
   for width in [375,768,1440,1920]:

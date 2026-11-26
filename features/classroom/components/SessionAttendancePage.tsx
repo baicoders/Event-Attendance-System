@@ -1,4 +1,6 @@
 'use client';
+import { AttendanceStatusIcon } from './ui';
+import { ScanLine, ListChecks, BarChart3, Pencil, CircleMinus, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect,useRef,useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -6,7 +8,7 @@ import { useAuth } from '@/globals/contexts/AuthContext';
 import { ApiError,fetchApi } from '@/globals/utils/api';
 import PageHeader from '@/globals/components/shared/PageHeader';
 import FormInput from '@/globals/components/shared/FormInput';
-import { Button,buttonVariants } from '@/globals/components/shad-cn/button';
+import { Button } from '@/globals/components/shad-cn/button';
 import { useClassroomSession } from '../hooks/useClassroomSession';
 import { useClassroomRoster } from '../hooks/useClassroomRoster';
 import { useClassroomAttendance } from '../hooks/useClassroomAttendance';
@@ -17,6 +19,7 @@ import { parseAttendanceView,attendanceViewParams } from '../utils/attendanceVie
 import ManualRoster from './ManualRoster';
 import FocusedAttendance from './FocusedAttendance';
 import ClassroomScanner from './ClassroomScanner';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/globals/components/shad-cn/dropdown-menu';
 import SessionSummary from './SessionSummary';
 import FinalizeSessionSheet from './FinalizeSessionSheet';
 import AttendanceCorrectionSheet from './AttendanceCorrectionSheet';
@@ -38,12 +41,12 @@ export default function SessionAttendancePage({sessionId}:{sessionId:string}){
  const [lastSaved,setLastSaved]=useState<AttendanceRecord|null>(null);const [reviewMember,setReviewMember]=useState<SessionMember|null>(null);const [reviewing,setReviewing]=useState(false);
  const [feedback,setFeedback]=useState('');const [rowErrors,setRowErrors]=useState<Record<string,string>>({});const [reason,setReason]=useState('');const [action,setAction]=useState<'FINALIZE'|'CANCEL'|'POLICY'|null>(null);
  const [edit,setEdit]=useState<{member:SessionMember;status:FinalAttendanceStatus}|null>(null);const [enrollment,setEnrollment]=useState<SessionMember|null>(null);const [ineligible,setIneligible]=useState<IneligibleChoice|null>(null);const anchor=useRef<(()=>void)|null>(null);
- useEffect(()=>{const restore=()=>{const view=parseAttendanceView(new URLSearchParams(window.location.search));setSearch(view.q);setQ(view.q);setStatus(view.status);setPage(view.page);setIncludeExcluded(view.includeExcluded);setMode(view.mode);setManualView(view.manualView);setViewReady(true);};restore();window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore);},[sessionId]);
- useEffect(()=>{if(!viewReady)return;const url=new URL(window.location.href);url.search=attendanceViewParams({q,status,page,includeExcluded,mode,manualView}).toString();window.history.replaceState(window.history.state,'',url);},[q,status,page,includeExcluded,mode,manualView,viewReady]);
+ useEffect(()=>{const restore=()=>{if(window.location.pathname.startsWith('/account/'))return;const view=parseAttendanceView(new URLSearchParams(window.location.search));setSearch(view.q);setQ(view.q);setStatus(view.status);setPage(view.page);setIncludeExcluded(view.includeExcluded);setMode(view.mode);setManualView(view.manualView);setViewReady(true);};restore();window.addEventListener('popstate',restore);return()=>window.removeEventListener('popstate',restore);},[sessionId]);
+ useEffect(()=>{if(!viewReady||window.location.pathname.startsWith('/account/'))return;const url=new URL(window.location.href);url.search=attendanceViewParams({q,status,page,includeExcluded,mode,manualView}).toString();window.history.replaceState(window.history.state,'',url);},[q,status,page,includeExcluded,mode,manualView,viewReady]);
  useEffect(()=>{if(search.trim()===q)return;const timer=setTimeout(()=>{setQ(search.trim());setPage(1);},250);return()=>clearTimeout(timer);},[search,q]);
  useEffect(()=>{if(!focused&&roster.data)setPage(value=>clampRosterPage(value,roster.data.filteredCount));},[roster.data,focused]);
  useEffect(()=>{if(!departing)return;const timer=setTimeout(()=>setDeparting(null),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:180);return()=>clearTimeout(timer);},[departing]);
- const refresh=()=>{anchor.current?.();void client.invalidateQueries({queryKey:['classroom','session',user?.id,sessionId]});void client.invalidateQueries({queryKey:['classroom','session-roster',user?.id,sessionId]});void client.invalidateQueries({queryKey:['classroom','classes',user?.id]});};
+ const refresh=()=>{anchor.current?.();void client.invalidateQueries({queryKey:['classroom','session',user?.id,sessionId]});void client.invalidateQueries({queryKey:['classroom','session-roster',user?.id,sessionId]});void client.invalidateQueries({queryKey:['classroom','classes',user?.id]});void client.invalidateQueries({queryKey:['classroom','overview']});void client.invalidateQueries({queryKey:['classroom','meetings']});};
  const commands=useClassroomAttendance('SESSION',sessionId,{
   onConfirmed:(entry,value)=>{
    const result=value as {attendance?:AttendanceRecord|null;outcome?:string;studentId?:string;student?:AttendanceStudentDisplay;scope?:string;state?:string};
@@ -104,7 +107,7 @@ export default function SessionAttendancePage({sessionId}:{sessionId:string}){
     <div className="min-w-0 space-y-4">
      {assisting?<FormInput label="Reason for assisting this teacher" minLength={3} maxLength={1000} value={reason} onChange={event=>setReason(event.target.value)} description="Your name and reason are recorded for every administrative change."/>:null}
      {session.showFirstAttendanceGuidance?<p className="rounded-xl bg-indigo-50 p-4 text-sm text-indigo-900">Scan or mark students, wait for confirmation, then finalize this meeting. Camera and manual modes use the same saved session.</p>:null}
-     <div role="group" aria-label="Attendance entry mode" className="grid grid-cols-2 gap-2"><Button variant={mode==='SCAN'?'default':'outline'} aria-pressed={mode==='SCAN'} disabled={session.state!=='ACTIVE'||disabled||blocked} onClick={()=>setMode('SCAN')}>Scan QR</Button><Button variant={mode==='MANUAL'?'default':'outline'} aria-pressed={mode==='MANUAL'} onClick={()=>setMode('MANUAL')}>Manual attendance</Button></div>
+     <div role="group" aria-label="Attendance entry mode" className="grid grid-cols-2 gap-2"><Button variant={mode==='SCAN'?'default':'outline'} aria-pressed={mode==='SCAN'} disabled={session.state!=='ACTIVE'||disabled||blocked} onClick={()=>setMode('SCAN')}><ScanLine aria-hidden className="size-4 shrink-0"/>Scan QR</Button><Button variant={mode==='MANUAL'?'default':'outline'} aria-pressed={mode==='MANUAL'} onClick={()=>setMode('MANUAL')}><ListChecks aria-hidden className="size-4 shrink-0"/>Manual attendance</Button></div>
      <div role="status" aria-label="Attendance save status" aria-live="polite" className="sticky top-20 z-20 flex min-h-12 items-center break-words rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-900 shadow-sm lg:top-3">{commands.pending.some(entry=>entry.state==='UNCONFIRMED')?'Save not confirmed. Check the same save.':blocked?'Checking attendance saves…':feedback||'Choose a student’s attendance result.'}</div>
      {commands.error?<div role="alert" className="break-words rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{commands.error}</div>:null}
      <PendingAttendanceCommands items={commands.pending} onRetry={id=>void commands.retry(id)}/>
@@ -113,21 +116,21 @@ export default function SessionAttendancePage({sessionId}:{sessionId:string}){
       <ManualRoster data={roster.data} loading={roster.isLoading} settling={blocked||roster.isFetching} error={roster.isError} onRetry={()=>{anchor.current?.();void roster.refetch();void query.refetch();}} q={search} onSearch={setSearch} status={status} onFilter={value=>{setStatus(value);setPage(1);}} page={page} onPage={setPage} pending={commands.pending} rowErrors={rowErrors} onRetrySave={id=>void commands.retry(id)} disabled={disabled||blocked} onMark={mark} onEnrollment={member=>{commands.clearError();setEnrollment(member);}} includeExcluded={includeExcluded} onIncludeExcluded={value=>{setIncludeExcluded(value);setPage(1);}} anchorRegister={anchor}/>
      </>}
     </div>
-    <aside className="min-w-0 space-y-4 lg:sticky lg:top-4"><SessionSummary session={session} counts={counts}/><Button asChild variant="outline" className="w-full"><Link href={'/class/reports?'+new URLSearchParams({sessionId:session.id,classId:session.classId,termId:session.classSnapshot.term.id})}>View session report</Link></Button></aside>
+    <aside className="min-w-0 space-y-4 lg:sticky lg:top-4"><SessionSummary session={session} counts={counts}/><Button asChild variant="outline" className="w-full"><Link href={'/class/reports?'+new URLSearchParams({sessionId:session.id,classId:session.classId,termId:session.classSnapshot.term.id})}><BarChart3 aria-hidden className="size-4 shrink-0"/>View session report</Link></Button></aside>
    </div>
    {session.state!=='CANCELED'?<div className="sticky bottom-20 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:bottom-3">
     {session.state==='ACTIVE'?<Button className="min-w-0 flex-1 sm:flex-none" aria-label="Review and finalize attendance" disabled={blocked||disabled||!!departing} onClick={()=>{commands.clearError();setAction('FINALIZE');}}>Review &amp; finalize</Button>:null}
-    <details className="relative"><summary className={buttonVariants({variant:'outline',className:'cursor-pointer list-none [&::-webkit-details-marker]:hidden'})}>Session options <span aria-hidden>⌄</span></summary><div className="absolute bottom-full right-0 mb-2 w-64 max-w-[calc(100vw-2rem)] space-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
-     {session.state==='ACTIVE'?<Button className="w-full justify-start whitespace-normal text-left" variant="ghost" disabled={blocked||disabled} onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');commands.clearError();setAction('POLICY');}}>Adjust late policy</Button>:null}
-     <Button className="w-full justify-start" variant="destructive" disabled={blocked||disabled} onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');commands.clearError();setAction('CANCEL');}}>Cancel session</Button>
-    </div></details>
+    <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline">Session options <span aria-hidden>⌄</span></Button></DropdownMenuTrigger><DropdownMenuContent side="top" align="end">
+     {session.state==='ACTIVE'?<DropdownMenuItem disabled={blocked||disabled} onSelect={()=>{commands.clearError();setAction('POLICY');}}><Pencil aria-hidden className="size-4 shrink-0"/>Adjust late policy</DropdownMenuItem>:null}
+     <DropdownMenuItem variant="destructive" disabled={blocked||disabled} onSelect={()=>{commands.clearError();setAction('CANCEL');}}><CircleMinus aria-hidden className="size-4 shrink-0"/>Cancel session</DropdownMenuItem>
+    </DropdownMenuContent></DropdownMenu>
    </div>:null}
-   {reviewMember?<AttendanceActionSheet open title="Review last mark" description={reviewMember.studentSnapshot.firstName+' '+reviewMember.studentSnapshot.lastName+' · '+attendanceLabels[reviewMember.attendance.status]} onClose={()=>setReviewMember(null)}><p className="text-sm text-slate-600">Choose the corrected result. A reason is required for changes.</p><div className="grid grid-cols-2 gap-3">{(['PRESENT','ABSENT','LATE','EXCUSED'] as const).map(value=><Button key={value} variant="outline" disabled={blocked||!reviewMember.included} onClick={()=>{setEdit({member:reviewMember,status:value});setReviewMember(null);}}>{value==='EXCUSED'?'Excuse':attendanceLabels[value]}</Button>)}</div>{!reviewMember.included?<p className="text-sm">This student is excluded. Open Roster to review enrollment.</p>:null}</AttendanceActionSheet>:null}
+   {reviewMember?<AttendanceActionSheet open title="Review last mark" description={reviewMember.studentSnapshot.firstName+' '+reviewMember.studentSnapshot.lastName+' · '+attendanceLabels[reviewMember.attendance.status]} onClose={()=>setReviewMember(null)}><p className="text-sm text-slate-600">Choose the corrected result. A reason is required for changes.</p><div className="grid grid-cols-2 gap-3">{(['PRESENT','ABSENT','LATE','EXCUSED'] as const).map(value=><Button key={value} variant="outline" disabled={blocked||!reviewMember.included} onClick={()=>{setEdit({member:reviewMember,status:value});setReviewMember(null);}}><AttendanceStatusIcon status={value}/>{value==='EXCUSED'?'Excuse':attendanceLabels[value]}</Button>)}</div>{!reviewMember.included?<p className="text-sm">This student is excluded. Open Roster to review enrollment.</p>:null}</AttendanceActionSheet>:null}
    {action==='FINALIZE'||action==='CANCEL'?<FinalizeSessionSheet key={action} session={{...session,counts:counts??session.counts}} cancel={action==='CANCEL'} assisting={assisting} busy={blocked} error={commands.error} onClose={()=>setAction(null)} onConfirm={value=>void commands.submit(action,{expectedLifecycleRevision:session.lifecycleRevision,...(action==='FINALIZE'?{expectedSnapshotRevision:session.snapshotRevision}:{}),...(value?{reason:value}:{})})}/>:null}
    {action==='POLICY'?<SessionPolicySheet session={session} busy={blocked} error={commands.error} onClose={()=>setAction(null)} onSave={payload=>void commands.submit('POLICY',payload)}/>:null}
    {edit?(edit.status==='EXCUSED'?<ExcuseSheet key={edit.member.studentId+edit.status} member={edit.member} requiresReason={edit.member.attendance.status!=='UNMARKED'||session.state==='FINALIZED'} busy={blocked} error={commands.error} onClose={()=>setEdit(null)} onSave={saveEdit}/>:<AttendanceCorrectionSheet key={edit.member.studentId+edit.status} member={edit.member} status={edit.status} requiresReason busy={blocked} error={commands.error} onClose={()=>setEdit(null)} onSave={saveEdit}/>):null}
    {ineligible?<IneligibleStudentSheet choice={ineligible} busy={blocked} error={commands.error} onClose={()=>setIneligible(null)} onSave={payload=>void commands.submit('ADJUSTMENT',{sessionId,...payload})}/>:null}
    {enrollment?<SessionEnrollmentSheet member={enrollment} session={session} busy={blocked} error={commands.error} onClose={()=>setEnrollment(null)} onSave={payload=>void commands.submit('ADJUSTMENT',{sessionId,...payload})}/>:null}
-  </>:<div role="alert"><p>Attendance could not load.</p><Button onClick={()=>void query.refetch()}>Retry session</Button></div>}
+  </>:<div role="alert"><p>Attendance could not load.</p><Button onClick={()=>void query.refetch()}><RefreshCw aria-hidden className="size-4 shrink-0"/>Retry session</Button></div>}
  </div>;
 }

@@ -1,2 +1,2 @@
-import ClassDashboard from '@/features/classroom/components/ClassDashboard';
-export default function ClassroomDashboard(){return <ClassDashboard/>;}
+import ClassroomOverview from '@/features/classroom/components/ClassroomOverview';
+export default function ClassroomDashboard(){return <ClassroomOverview/>;}

@@ -1,12 +1,14 @@
 'use client';
+import { ArrowRight, RefreshCw, Save, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/globals/contexts/AuthContext';
 import { ApiError, fetchApi } from '@/globals/utils/api';
 import { Button } from '@/globals/components/shad-cn/button';
+import { Textarea } from '@/globals/components/shad-cn/textarea';
 import FormInput from '@/globals/components/shared/FormInput';
-import PageHeader from '@/globals/components/shared/PageHeader';
+import { ActionFooter, ClassroomPage, Feedback, FormSection, LoadingState, SectionPanel, StatusBadge } from './ui';
 import AccountControls from '@/features/auth/components/AccountControls';
 import { workspaceCapabilities } from '@/features/auth/utils/accessPolicy';
 import { teacherApplicationSchema } from '../schemas/applicationSchema';
@@ -14,7 +16,7 @@ import type { TeacherApplicationDto } from '../types/application';
 
 export default function TeacherAccessStatus({ moduleAvailable }: { moduleAvailable: boolean }) {
   const { user, isLoading, isUnavailable, refresh } = useAuth();
-  const application = useQuery({ queryKey: ['classroom', 'application', user?.id], enabled: !!user && !user.mustChangePassword && !isUnavailable, staleTime: 0, refetchOnMount: 'always',
+  const application = useQuery({ queryKey: ['classroom', 'application', user?.id, user?.role, user?.classroomStatus, user?.credentialVersion], enabled: !!user && !user.mustChangePassword && !isUnavailable, staleTime: 0, refetchOnMount: 'always',
     queryFn: () => fetchApi<TeacherApplicationDto | null>('/api/classroom/application') });
   const [designation, setDesignation] = useState('');
   const [reference, setReference] = useState('');
@@ -49,23 +51,27 @@ export default function TeacherAccessStatus({ moduleAvailable }: { moduleAvailab
       if (cause instanceof ApiError && cause.status < 500) pending.current = null;
     } finally { setBusy(false); }
   };
-  if (isLoading || application.isLoading || application.isFetching) return <main className="p-6">Loading your teacher application…</main>;
-  if (isUnavailable || application.isError) return <main className="space-y-4 p-6" role="alert"><p>Unable to load your application. Check your connection and retry.</p><Button className="min-h-12" onClick={() => { void refresh(); void application.refetch(); }}>Retry connection</Button></main>;
+  if (isLoading || application.isLoading || application.isFetching) return <main><ClassroomPage eyebrow="Workspace access" title="Teacher access"><LoadingState label="Loading your teacher application…" /></ClassroomPage></main>;
+  if (isUnavailable || application.isError) return <main><ClassroomPage eyebrow="Workspace access" title="Teacher access"><Feedback title="Unable to load your application" onRetry={() => { void refresh(); void application.refetch(); }}>Check your connection and retry.</Feedback></ClassroomPage></main>;
   const canEdit = !member || member.status === 'PENDING' || member.status === 'REJECTED';
-  const title = !member ? 'Apply for Teacher Access' : ({ PENDING: 'Teacher access pending', APPROVED: 'Teacher access approved', REJECTED: 'Teacher access rejected', SUSPENDED: 'Class access suspended', REVOKED: 'Class access revoked' }[member.status]);
-  return <main className="mx-auto min-h-screen w-full max-w-xl space-y-6 p-6 text-slate-900">
-    <PageHeader eyebrow="Class" title={title} />
-    <p className="text-sm text-slate-600">{member?.status === 'PENDING' ? 'Your application is waiting for a school administrator to review it. After one approval, you can manage your own classes.' : member?.status === 'APPROVED' ? (moduleAvailable ? 'Your teacher account is ready.' : 'Your approval is saved. Classroom will be available when the school opens this workspace.') : member?.decisionReason || 'Apply once. After approval, create classes, save your roster and scan students’ existing QR codes.'}</p>
-    {canEdit ? <form className="space-y-4" onSubmit={event => { event.preventDefault(); void save(member?.status === 'PENDING' ? 'SAVE' : 'SUBMIT'); }}>
-      <FormInput className="min-h-12" label="Department or teaching designation" value={designation} maxLength={160} disabled={busy} onChange={event => { setDesignation(event.target.value); pending.current = null; }} />
-      <FormInput className="min-h-12" label="Staff reference (optional)" value={reference} maxLength={100} disabled={busy} onChange={event => { setReference(event.target.value); pending.current = null; }} />
-      <label className="block text-sm font-medium">Application information (optional)<textarea className="mt-2 min-h-24 w-full rounded-xl border border-slate-300 p-3" value={message} maxLength={1000} disabled={busy} onChange={event => { setMessage(event.target.value); pending.current = null; }} /></label>
-      {error ? <div role="alert" className="space-y-2 text-sm text-rose-700"><p>{error}</p><Button type="button" variant="outline" className="min-h-12" onClick={() => void loadCurrent()}>Reload current application</Button></div> : null}
-      <Button type="submit" className="min-h-12 w-full" disabled={busy}>{busy ? 'Saving…' : member?.status === 'PENDING' ? 'Save application details' : member ? 'Resubmit application' : 'Submit application'}</Button>
-    </form> : error ? <p role="alert">{error}</p> : null}
-    {member?.status === 'APPROVED' && grants?.classroom && moduleAvailable ? <Link href="/class" className="flex min-h-12 items-center justify-center rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">Continue to Class</Link> : null}
-    <Button className="min-h-12" variant="outline" onClick={() => { void application.refetch(); void refresh(); }}>Check status</Button>
-    {grants?.events ? <Link className="flex min-h-12 items-center text-sm font-semibold text-indigo-700 underline" href="/dashboard">Open Events</Link> : null}
-    <Link className="flex min-h-12 items-center text-sm font-semibold text-indigo-700 underline" href="/account/settings">Profile and password</Link><AccountControls />
-  </main>;
+  const title = !member ? 'Apply for teacher access' : ({ PENDING: 'Teacher access pending', APPROVED: 'Teacher access approved', REJECTED: 'Update your teacher application', SUSPENDED: 'Class access suspended', REVOKED: 'Class access revoked' }[member.status]);
+  const description = member?.status === 'PENDING' ? 'Your application is waiting for a school administrator to review it. You can keep your details up to date while you wait.' : member?.status === 'APPROVED' ? (moduleAvailable ? 'Your teacher account is ready. Open Classroom to manage your classes and attendance.' : 'Your approval is saved. Classroom will be available when the school opens this workspace.') : member?.status === 'REJECTED' ? 'Review the administrator’s feedback, update your details, and resubmit your application.' : member?.status === 'SUSPENDED' ? 'An administrator has paused your Classroom access. Review the recorded reason and contact your school administrator about next steps.' : member?.status === 'REVOKED' ? 'Your Classroom access has been removed. Contact your school administrator to discuss restoring access.' : 'Apply once to create classes, save your roster, and scan students’ existing QR codes after approval.';
+  return <main><ClassroomPage eyebrow="Workspace access" title={title} description="Manage your teacher application and Classroom access." className="max-w-5xl">
+    <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"><div className="min-w-0 space-y-6"><SectionPanel title="Your access status" actions={<StatusBadge tone={member?.status === 'APPROVED' ? 'success' : member?.status === 'PENDING' ? 'warning' : member?.status === 'SUSPENDED' || member?.status === 'REVOKED' ? 'danger' : 'neutral'}>{member ? member.status.charAt(0) + member.status.slice(1).toLowerCase() : 'Not applied'}</StatusBadge>}>
+      <p className="text-sm leading-6 text-slate-600">{description}</p>
+      {member?.decisionReason ? <Feedback title="Administrator’s reason" tone={member.status === 'APPROVED' ? 'info' : 'warning'}><p className="whitespace-pre-wrap break-words">{member.decisionReason}</p></Feedback> : null}
+      {member?.status === 'APPROVED' && grants?.classroom && moduleAvailable ? <Button asChild><Link href="/class"><ArrowRight aria-hidden className="size-4 shrink-0"/>Continue to Classroom →</Link></Button> : null}
+      <Button variant="outline" onClick={() => { void application.refetch(); void refresh(); }}><RefreshCw aria-hidden className="size-4 shrink-0"/>Check status</Button>
+    </SectionPanel>
+    {canEdit ? <form className="space-y-5" onSubmit={event => { event.preventDefault(); if (!busy) void save(member?.status === 'PENDING' ? 'SAVE' : 'SUBMIT'); }}>
+      <FormSection title="Application details" description="Give your school administrator the information needed to review your application.">
+        <FormInput className="min-h-12" label="Department or teaching designation" value={designation} maxLength={160} disabled={busy} onChange={event => { setDesignation(event.target.value); pending.current = null; }} />
+        <FormInput className="min-h-12" label="Staff reference (optional)" value={reference} maxLength={100} disabled={busy} onChange={event => { setReference(event.target.value); pending.current = null; }} />
+        <label className="block text-sm font-medium text-slate-700">Application information (optional)<Textarea className="mt-2 min-h-28 w-full rounded-xl border border-slate-300 p-3" value={message} maxLength={1000} disabled={busy} onChange={event => { setMessage(event.target.value); pending.current = null; }} /></label>
+      </FormSection>
+      {error ? <Feedback title="Application save not confirmed"><p>{error}</p><Button type="button" variant="outline" className="mt-3" onClick={() => void loadCurrent()}><RefreshCw aria-hidden className="size-4 shrink-0"/>Reload current application</Button></Feedback> : null}
+      <ActionFooter description={member?.status === 'PENDING' ? 'Your application stays pending while your details are updated.' : 'A school administrator will review your application.'}><Button type="submit" disabled={busy}><Save aria-hidden className="size-4 shrink-0"/>{busy ? 'Saving…' : member?.status === 'PENDING' ? 'Save application details' : member ? 'Resubmit application' : 'Submit application'}</Button></ActionFooter>
+    </form> : error ? <Feedback title="Application unavailable">{error}</Feedback> : null}</div>
+    <SectionPanel title="Account and workspaces" description="Your account stays available while your application is reviewed."><nav aria-label="Account and workspace links" className="space-y-1"><Link className="gap-2 flex min-h-12 items-center text-sm font-semibold text-indigo-700 hover:underline" href="/account/settings"><KeyRound aria-hidden className="size-4 shrink-0"/>Profile and password →</Link>{grants?.events ? <Link className="flex min-h-12 items-center text-sm font-semibold text-indigo-700 hover:underline" href="/dashboard">Open Events →</Link> : null}</nav><div className="border-t border-slate-100 pt-4"><AccountControls /></div></SectionPanel></div>
+  </ClassroomPage></main>;
 }

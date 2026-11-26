@@ -316,3 +316,22 @@ Verify 375px and 200% zoom with both page-overflow and adjacent-tab/label bounds
 - Classroom setup shows a wrapping six-step progress list with `aria-current="step"`; progress is informational and does not bypass saved prerequisites.
 - Administrators view and correct existing sessions. Only teachers start sessions, including when an administrator also has approved teacher access. Cards and history label administrator session navigation “View session”; direct start routes explain the restriction.
 - Routine feedback uses names and printed USN/LRN identifiers. Missing display information gets a readable placeholder; internal keys remain in URLs, mutations and explicit advanced technical details. Administrator activity summaries resolve current labels in bounded batches and preserve immutable actor names.
+
+
+## Classroom compositions
+
+Classroom uses `features/classroom/components/ui` over the installed shared components. Reuse these compositions rather than copying bordered containers or implementing keyboard behavior. Keep Poppins, navy/indigo, 14px action labels, 48px targets, and the 1280px content cap.
+
+- `ClassroomPage` composes `PageHeader`, breadcrumbs and content spacing. Use `hero` for overview pages and plain headers for working pages. Breadcrumbs and section navigation are links; links between routes are never ARIA tabs.
+- `SectionPanel` composes Card header/title/description/action/content/footer. Pair it with `IdentityBlock` and the application's existing `StatusBadge`. Keep identifiers labeled USN/LRN and preserve leading zeroes.
+- `FilterToolbar` combines shared `FormInput`, controlled `ClassroomSelect`, counts and reset. `ClassroomSelect` uses installed Radix Select because `FormSelect` requires react-hook-form. Keep search/filter/page state in the URL with `useClassroomListState`.
+- `ResponsiveDataList` uses the existing DataTable in manual server mode on desktop and the same page of identity-first rows on mobile. The fixed page-size option hides the page-size selector for fixed-contract lists. Neither presentation sorts or filters the loaded page. `ListPagination` uses the server's totals.
+- `FormSection` uses FieldSet, FieldLegend, FieldDescription and FieldGroup. Keep form content around 760px and put useful next-step guidance beside it. `ActionFooter` puts save/cancel or progression controls together. Use installed Switch, Checkbox, Textarea and Collapsible for their controls.
+- `LoadingState` uses Skeleton with reduced-motion support. `Feedback` uses Alert. Treat initial load errors, retained data with refresh failure, validation errors and uncertain writes separately. The data layer owns command keys and retry behavior.
+- `AttendanceActionSheet` retains the installed Sheet focus trap/escape behavior and restores the originating control where it remains present. Use DropdownMenu for options, Dialog for existing shared confirmations and explicit reasons for administrative/destructive actions.
+
+Representative compositions: `ClassroomOverview` (hero/metrics/active progress), `ClassDashboard` (URL toolbar/cards/pagination), `StudentDirectory` (manual desktop table/mobile rows), `ClassForm` (grouped fields/supporting guidance), and `ClassroomClassPage` (semantic route navigation and primary session action).
+
+Attendance keeps the approved Focus/Roster/scanner composition and its 380px desktop summary column. Reports retain their summary/charts/historical-table/print composition and calculations. Their panels, identities and feedback adopt the same visual language without changing their data scope.
+
+Classroom's full-height shell owns its continuous pale-indigo-to-white canvas, including the space below short content and the gutters outside the centered page. `ClassroomPage` keeps its existing padding and content cap but has a transparent outer surface. Standalone access pages sit on the white document background. Cards and forms retain their white surfaces. Do not put a content-height background back on individual Classroom pages.

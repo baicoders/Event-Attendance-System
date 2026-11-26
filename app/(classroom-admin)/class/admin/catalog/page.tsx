@@ -1,3 +1,3 @@
-import PageHeader from '@/globals/components/shared/PageHeader';
+import { ClassroomPage } from '@/features/classroom/components/ui';
 import CatalogManager from '@/features/classroom/components/CatalogManager';
-export default function CatalogPage(){return <div className="mx-auto min-w-0 max-w-6xl space-y-6 px-4 py-6 sm:px-6"><PageHeader eyebrow="Class administration" title="Academic catalog"/><CatalogManager/></div>;}
+export default function CatalogPage(){return <ClassroomPage eyebrow="Class administration" title="Academic catalog" description="Manage the terms and subjects shared across Classroom."><CatalogManager/></ClassroomPage>;}

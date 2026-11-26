@@ -1,7 +1,8 @@
+import { IdentityBlock } from '../ui';
 import { formatReportDateTime } from '@/globals/utils/reportTime';
 import { attendanceLabels } from '../../types/attendance';
 import type { ClassroomReportPage,ClassroomReportRow } from '../../types/report';
-function Identity({row}:{row:ClassroomReportRow}) {return <><span className="block break-words font-medium text-slate-900">{row.identity.lastName}, {row.identity.firstName} {row.identity.middleName}</span><span className="mt-1 block break-words text-xs text-slate-500">{row.identity.usn?'USN '+row.identity.usn:row.identity.lrn?'LRN '+row.identity.lrn:'No printed identifier'}</span></>;}
+function Identity({row}:{row:ClassroomReportRow}) {return <IdentityBlock name={[row.identity.lastName+',',row.identity.firstName,row.identity.middleName].filter(Boolean).join(' ')} identifier={[row.identity.usn?'USN: '+row.identity.usn:'',row.identity.lrn?'LRN: '+row.identity.lrn:''].filter(Boolean).join(' · ')||'No printed identifier'}/>;}
 export default function ClassroomReportRows({report}:{report:ClassroomReportPage}) {
  return <div className="space-y-4"><section aria-label="Student report rows">
   {!report.rows.length?<p className="rounded-xl border bg-white p-4 text-sm text-slate-600">{report.totalStudents?'No students match this search. Clear the search to see all students in this report.':'No finalized eligible attendance in this selection. Change the class, term or dates.'}</p>:<>

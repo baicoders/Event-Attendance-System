@@ -1,3 +1,3 @@
-import PageHeader from '@/globals/components/shared/PageHeader';
+import { ClassroomPage } from '@/features/classroom/components/ui';
 import StudentDirectory from '@/features/classroom/components/StudentDirectory';
-export default function StudentsPage(){return <div className="mx-auto min-w-0 max-w-6xl space-y-6 px-4 py-6 sm:px-6"><PageHeader title="Students" eyebrow="Class"/><StudentDirectory/></div>;}
+export default function StudentsPage(){return <ClassroomPage title="Find the right student" eyebrow="Student directory" description="Review official details and verify student information. Attendance remains private."><StudentDirectory/></ClassroomPage>;}

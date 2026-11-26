@@ -1,5 +1,6 @@
 'use client';
 import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, QrCode, Settings, Users, Activity } from 'lucide-react';
+import { useAuth } from '@/globals/contexts/AuthContext';
 import Sidebar, { type NavigationItem } from '@/globals/components/shared/Sidebar';
 import MobileBottomNav, { type MobileNavigationItem } from '@/globals/components/shared/MobileBottomNav';
 const teacherItems: NavigationItem[] = [
@@ -13,8 +14,9 @@ const teacherItems: NavigationItem[] = [
 const adminItems: NavigationItem[] = [
   { text: 'Teacher Access', route: '/class/admin/teachers', icon: GraduationCap },
   { text: 'Classes', route: '/class/admin/classes', icon: BookOpen },
+  { text: 'Academic catalog', route: '/class/admin/catalog', icon: BookOpen },
   { text: 'Activity', route: '/class/admin/activity', icon: Activity },
-  { text: 'Profile / Settings', route: '/account/settings', icon: Settings },
+  { text: 'Settings', route: '/class/settings', icon: Settings },
 ];
 const mobileItems: MobileNavigationItem[] = [
   { text: 'Home', route: '/class', icon: LayoutDashboard },
@@ -23,5 +25,5 @@ const mobileItems: MobileNavigationItem[] = [
   { text: 'Students', route: '/class/students', icon: Users },
   { text: 'Reports', route: '/class/reports', icon: BarChart3 },
 ];
-export function ClassroomSidebar({ admin = false }: { admin?: boolean }) { return <Sidebar items={admin ? adminItems : teacherItems} workspace="CLASS" />; }
-export function ClassroomBottomNav({ admin = false }: { admin?: boolean }) { return <MobileBottomNav compact items={admin ? [...adminItems, { text: 'Attendance', route: '/class', icon: QrCode }] : mobileItems} />; }
+export function ClassroomSidebar() { const {user}=useAuth(); return <Sidebar items={user?.role==='ADMIN'?adminItems:teacherItems} workspace="CLASS" />; }
+export function ClassroomBottomNav() { const {user}=useAuth(); const items=user?.role==='ADMIN'?adminItems.map(item=>({...item,text:item.route.endsWith('/teachers')?'Teachers':item.route.endsWith('/catalog')?'Catalog':item.text})):mobileItems;return <MobileBottomNav compact items={items} />; }

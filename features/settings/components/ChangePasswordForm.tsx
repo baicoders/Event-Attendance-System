@@ -1,5 +1,7 @@
 "use client";
 
+import { useLayoutEffect } from "react";
+import { KeyRound } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -19,6 +21,7 @@ type Props = {
   /** Runs after the password has changed and the session has been re-read. */
   onSuccess?: () => void;
   submitLabel?: string;
+  onSubmittingChange?: (busy: boolean) => void;
 };
 
 /**
@@ -27,6 +30,7 @@ type Props = {
  */
 const ChangePasswordForm = ({
   onSuccess,
+  onSubmittingChange,
   submitLabel = "Change password",
 }: Props) => {
   const { refresh } = useAuth();
@@ -44,6 +48,8 @@ const ChangePasswordForm = ({
       confirmPassword: "",
     },
   });
+
+  useLayoutEffect(() => { onSubmittingChange?.(isSubmitting); }, [isSubmitting, onSubmittingChange]);
 
   const onSubmit = handleSubmit(async ({ currentPassword, newPassword }) => {
     try {
@@ -126,7 +132,7 @@ const ChangePasswordForm = ({
             Saving…
           </>
         ) : (
-          submitLabel
+          <><KeyRound aria-hidden className="size-4" />{submitLabel}</>
         )}
       </Button>
     </form>

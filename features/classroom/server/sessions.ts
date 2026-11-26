@@ -10,7 +10,7 @@ import { buildAttendancePolicy,suggestClassroomStart,validateSessionStart } from
 import { scheduleSchema } from '../schemas/classSchema';
 import { startSessionSchema,finalizeSessionSchema,cancelSessionSchema,amendPolicySchema,sessionRosterQuerySchema,sessionListQuerySchema } from '../schemas/sessionSchema';
 import { executeClassroomCommand,commandHash } from './commands';
-import { lockOwnedSession,requireActiveSession,requireLifecycleRevision,sessionDto,sessionCounts,emptyAttendanceCounts,rosterMemberDto,attendanceDto } from './sessionAccess';
+import { lockOwnedSession,requireActiveSession,requireLifecycleRevision,sessionDto,sessionCounts,sessionCountsForIds,attendanceProgress,emptyAttendanceCounts,rosterMemberDto,attendanceDto } from './sessionAccess';
 const MAX_SESSION_ROSTER=1000;
 /** Start-only policy: caller holds enabled/approved actor and roster SHARE locks. Catalog locks precede the Class lock. */
 async function loadStartClass(tx:Prisma.TransactionClient,classId:string,user:ClassroomUser,mode:'SHARE'|'UPDATE'){
@@ -65,7 +65,8 @@ export async function listClassroomSessions(db:PrismaClient,actor:ActorContext,c
     await lockOwnedClass(tx,classId,user,'SHARE');
     const where:Prisma.ClassroomSessionWhereInput={classId,...(input.state?{state:input.state}:{}),...(input.date?{scheduledStartAt:{gte:new Date(input.date+'T00:00:00+08:00'),lt:new Date(new Date(input.date+'T00:00:00+08:00').getTime()+86400000)}}:{})};
     const rows=await tx.classroomSession.findMany({where,orderBy:[{scheduledStartAt:'desc'},{id:'desc'}],skip:(input.page-1)*input.pageSize,take:input.pageSize});
-    return {items:rows.map(row=>({id:row.id,classId,state:row.state,scheduledStartAt:row.scheduledStartAt.toISOString(),startedAt:row.startedAt.toISOString(),finalizedAt:row.finalizedAt?.toISOString()??null,canceledAt:row.canceledAt?.toISOString()??null,lifecycleRevision:row.lifecycleRevision,snapshotRevision:row.snapshotRevision})),total:await tx.classroomSession.count({where}),page:input.page,pageSize:input.pageSize};
+    const counts=await sessionCountsForIds(tx,rows.map(row=>row.id));
+    return {items:rows.map(row=>({...attendanceProgress(counts.get(row.id)!),id:row.id,classId,state:row.state,scheduledStartAt:row.scheduledStartAt.toISOString(),startedAt:row.startedAt.toISOString(),finalizedAt:row.finalizedAt?.toISOString()??null,canceledAt:row.canceledAt?.toISOString()??null,lifecycleRevision:row.lifecycleRevision,snapshotRevision:row.snapshotRevision})),total:await tx.classroomSession.count({where}),page:input.page,pageSize:input.pageSize};
   });
 }
 export async function getSessionRoster(db:PrismaClient,actor:ActorContext,sessionId:string,raw=new URLSearchParams()){

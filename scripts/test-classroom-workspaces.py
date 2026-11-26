@@ -33,22 +33,22 @@ with sync_playwright() as p:
     authenticate(teacher, os.environ['CLASSROOM_TEACHER_COOKIE'])
     view = teacher.new_page()
     view.goto(base + '/class')
-    expect(view.get_by_role('heading', name='My Classes', exact=True)).to_be_visible()
+    expect(view.get_by_role('heading', name='Welcome, Teacher', exact=True)).to_be_visible()
     expect(view.get_by_role('navigation', name='Primary').get_by_role('link', name='Classes', exact=True)).to_be_visible()
     expect(view.get_by_role('link', name='Calendar', exact=True)).to_have_count(0)
     no_overflow(view)
     view.goto(base + '/dashboard')
     view.wait_for_url('**/class')
-    expect(view.get_by_role('heading', name='My Classes', exact=True)).to_be_visible()
+    expect(view.get_by_role('heading', name='Welcome, Teacher', exact=True)).to_be_visible()
     view.goto(base + '/class/settings')
-    expect(view.get_by_role('heading', name='Profile / Settings', exact=True)).to_be_visible()
+    expect(view.get_by_role('heading', name='Settings', exact=True)).to_be_visible()
     no_overflow(view)
     view.route('**/api/auth/session', lambda route: route.abort())
     view.evaluate("window.dispatchEvent(new Event('focus'))")
     expect(view.get_by_text('Connection unavailable.', exact=False)).to_be_visible()
     view.unroute('**/api/auth/session')
     view.get_by_role('button', name='Retry connection', exact=True).click()
-    expect(view.get_by_role('heading', name='Profile / Settings', exact=True)).to_be_visible()
+    expect(view.get_by_role('heading', name='Settings', exact=True)).to_be_visible()
     pending = browser.new_context(viewport={'width': 375, 'height': 812})
     authenticate(pending, os.environ['CLASSROOM_PENDING_COOKIE'])
     status = pending.new_page()
@@ -68,15 +68,61 @@ with sync_playwright() as p:
     admin_context = browser.new_context(viewport={'width': 375, 'height': 812})
     authenticate(admin_context, os.environ['CLASSROOM_ADMIN_COOKIE'])
     admin = admin_context.new_page()
+    review_responses = []
+    review_response_objects = []
+    script_responses = []
+    request_failures = []
+    admin.on('response', lambda response: script_responses.append({'url': response.url, 'status': response.status}) if '/_next/' in response.url and response.request.resource_type == 'script' else None)
+    admin.on('requestfailed', lambda request: request_failures.append({'url': request.url, 'failure': request.failure}))
+    diagnostic_dir = Path('/tmp/classroom-overhaul-workspace-flight-' + os.environ.get('CLASSROOM_WORKSPACE_DIAGNOSTIC_NAME', 'normal'))
+    diagnostic_dir.mkdir(parents=True, exist_ok=True)
+    def capture_review_response(response):
+        if '/class/admin/teachers/' not in response.url:
+            return
+        request_headers = response.request.all_headers()
+        response_headers = response.all_headers()
+        review_responses.append({'url': response.url, 'status': response.status, 'request': {key: request_headers.get(key) for key in ['rsc', 'next-router-state-tree', 'next-url', 'next-router-prefetch', 'purpose', 'sec-purpose', 'accept']}, 'response': {key: response_headers.get(key) for key in ['content-type', 'x-nextjs-redirect', 'x-nextjs-rewrite', 'x-nextjs-cache', 'cache-control', 'vary', 'location']}})
+        review_response_objects.append(response)
+    if os.environ.get('CLASSROOM_WORKSPACE_NO_PREFETCH') == 'true':
+        def block_prefetch(route):
+            headers = route.request.all_headers()
+            if headers.get('next-router-prefetch') == '1' or 'prefetch' in headers.get('purpose', '') or 'prefetch' in headers.get('sec-purpose', ''):
+                route.abort('blockedbyclient')
+            else:
+                route.continue_()
+        admin.route('**/*', block_prefetch)
+    review_errors = []
+    review_console_errors = []
+    admin.on('console', lambda message: review_console_errors.append(message.text) if message.type == 'error' else None)
+    admin.on('pageerror', lambda error: review_errors.append(str(error)))
+    admin.on('response', capture_review_response)
     admin.goto(base + '/class/admin/teachers')
-    expect(admin.get_by_role('heading', name='Teacher Access', exact=True)).to_be_visible()
+    expect(admin.get_by_role('heading', name='Teacher access', exact=True)).to_be_visible()
+    review_href = admin.get_by_role('link', name='Review application — Pending Teacher', exact=True).get_attribute('href')
+    admin.get_by_role('link', name='Review application — Pending Teacher', exact=True).click()
+    try:
+        expect(admin.get_by_role('heading', name='Pending Teacher', exact=True)).to_be_visible()
+    finally:
+        for index, response in enumerate(review_response_objects):
+            try:
+                (diagnostic_dir / ('response-' + str(index) + '.txt')).write_text(response.text())
+            except Exception as error:
+                review_responses[index]['bodyError'] = str(error)
+        direct = admin.request.get(base + review_href, headers={'accept': 'text/html'})
+        (diagnostic_dir / 'direct.html').write_text(direct.text())
+        direct_headers = direct.headers
+        evidence = {'url': admin.url, 'expectedHref': review_href, 'prefetchDisabled': os.environ.get('CLASSROOM_WORKSPACE_NO_PREFETCH') == 'true', 'scriptResponses': script_responses, 'requestFailures': request_failures, 'responses': review_responses, 'errors': review_errors, 'consoleErrors': review_console_errors, 'history': admin.evaluate("({keys:Object.keys(window.history.state || {}),next:window.history.state?.__NA,tree:window.history.state?.__PRIVATE_NEXTJS_INTERNALS_TREE})"), 'direct': {'status': direct.status, 'url': direct.url, 'headers': {key: direct_headers.get(key) for key in ['content-type', 'x-nextjs-redirect', 'cache-control', 'location']}}}
+        (diagnostic_dir / 'evidence.json').write_text(json.dumps(evidence, indent=2))
+        print('Teacher review navigation evidence:', json.dumps({'url': admin.url, 'diagnosticDirectory': str(diagnostic_dir), 'responses': len(review_responses), 'errors': review_errors, 'consoleErrors': review_console_errors}))
     admin.get_by_role('button', name='Approve', exact=True).click()
     admin.get_by_role('button', name='Confirm approval', exact=True).click()
-    expect(admin.get_by_text('No teacher applications match this status.')).to_be_visible()
+    expect(admin.get_by_role('dialog')).to_have_count(0)
+    admin.goto(base + '/class/admin/teachers')
+    expect(admin.get_by_text('No pending applications', exact=True)).to_be_visible()
     status.get_by_role('button', name='Check status', exact=True).click()
-    status.get_by_role('link', name='Continue to Class', exact=True).click()
+    status.get_by_role('link', name='Continue to Classroom →', exact=True).click()
     status.wait_for_url('**/class')
-    expect(status.get_by_role('heading', name='My Classes', exact=True)).to_be_visible()
+    expect(status.get_by_role('heading', name='Welcome, Pending', exact=True)).to_be_visible()
     # Approve the original teacher's separately requested Events access through the existing workflow.
     approval = Request(base + '/api/admin/organizers/' + os.environ['CLASSROOM_TEACHER_ID'], data=json.dumps({'action': 'APPROVE'}).encode(), method='PATCH', headers={'content-type': 'application/json', 'origin': base, 'cookie': os.environ['CLASSROOM_ADMIN_COOKIE']})
     with urlopen(approval) as response:
@@ -134,9 +180,10 @@ with sync_playwright() as p:
     view.screenshot(path='.superpowers/classroom-tests/workspace-menu-375.png', full_page=True)
     view.keyboard.press('Escape')
     print('Shared switcher measurements:',json.dumps({'dark':measurements,'light':light}))
-    admin.get_by_label('Teacher access status', exact=True).select_option('APPROVED')
-    card = admin.locator('article').filter(has=admin.get_by_role('heading', name='Teacher', exact=True))
-    card.get_by_role('button', name='Suspend Class access', exact=True).click()
+    admin.get_by_role('navigation', name='Teacher access status', exact=True).get_by_role('link', name='Approved', exact=True).click()
+    admin.get_by_role('link', name='Review application — Teacher', exact=True).click()
+    expect(admin.get_by_role('heading', name='Teacher', exact=True)).to_be_visible()
+    admin.get_by_role('button', name='Suspend Class access', exact=True).click()
     admin.get_by_label('Reason', exact=True).fill('Workspace isolation test')
     admin.get_by_role('button', name='Confirm suspension', exact=True).click()
     expect(admin.get_by_role('dialog')).to_have_count(0)
@@ -145,7 +192,7 @@ with sync_playwright() as p:
     view.goto(base + '/class')
     view.wait_for_url('**/class/access')
     expect(view.get_by_role('heading', name='Class access suspended', exact=True)).to_be_visible()
-    expect(view.get_by_role('link', name='Open Events', exact=True)).to_be_visible()
+    expect(view.get_by_role('link', name='Open Events →', exact=True)).to_be_visible()
     no_overflow(admin)
     no_overflow(status)
     Path('.superpowers/classroom-tests').mkdir(parents=True, exist_ok=True)

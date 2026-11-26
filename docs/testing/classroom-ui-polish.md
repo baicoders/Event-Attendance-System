@@ -1,5 +1,7 @@
 # Classroom usability and platform UI polish
 
+This records the earlier polish pass. See [Classroom UI overhaul verification](classroom-ui-overhaul.md) for the current demo artifact and fresh record-count evidence.
+
 Implemented and verified on 2026-11-13 in the existing `feat/classroom-teacher-module` worktree. No migrations or dependencies were added; no production deployment, push or merge was performed.
 
 ## Behavior

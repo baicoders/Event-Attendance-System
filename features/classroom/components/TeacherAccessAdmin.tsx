@@ -1,46 +1,35 @@
 'use client';
+import { RefreshCw, Search, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ApiError, fetchApi } from '@/globals/utils/api';
+import { useAuth } from '@/globals/contexts/AuthContext';
+import { fetchApi } from '@/globals/utils/api';
 import { Button } from '@/globals/components/shad-cn/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/globals/components/shad-cn/sheet';
-import StatusBadge from '@/globals/components/shared/StatusBadge';
+import FormInput from '@/globals/components/shared/FormInput';
+import { formatReportDateTime } from '@/globals/utils/reportTime';
 import type { TeacherApplicationDto } from '../types/application';
+import { useClassroomListState } from '../hooks/useClassroomListState';
+import { Feedback, FilterToolbar, IdentityBlock, ListPagination, LoadingState, SectionPanel, StatusBadge } from './ui';
 type Teacher = TeacherApplicationDto & { user: { id: string; name: string; email: string } };
-type Action = 'APPROVE' | 'REJECT' | 'SUSPEND' | 'REVOKE' | 'RESTORE';
-const confirmations = { APPROVE: 'Confirm approval', REJECT: 'Confirm rejection', SUSPEND: 'Confirm suspension', REVOKE: 'Confirm revocation', RESTORE: 'Confirm restoration' };
-const labels = { APPROVE: 'Approve', REJECT: 'Reject', SUSPEND: 'Suspend Class access', REVOKE: 'Revoke Class access', RESTORE: 'Restore Class access' };
+const statuses = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED', 'REVOKED'];
 export default function TeacherAccessAdmin() {
-  const [status, setStatus] = useState('PENDING');
-  const [page, setPage] = useState(1);
-  const [selection, setSelection] = useState<{ teacher: Teacher; action: Action; commandId: string } | null>(null);
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const teachers = useQuery({ queryKey: ['classroom', 'admin', 'teachers', status, page], queryFn: () => fetchApi<{ items: Teacher[]; total: number }>('/api/admin/classroom/teachers?' + new URLSearchParams({ ...(status ? { status } : {}), page: String(page), pageSize: '100' })) });
-  const choose = (teacher: Teacher, action: Action) => { setSelection({ teacher, action, commandId: crypto.randomUUID() }); setReason(''); setError(''); };
+  const { user } = useAuth();
+  const { values, setValues, ready } = useClassroomListState({ status: 'PENDING', q: '', page: '1' });
+  const [search, setSearch] = useState(values.q);
+  useEffect(() => { setSearch(values.q); }, [values.q]);
+  const status = !values.status || statuses.includes(values.status) ? values.status : 'PENDING';
+  const page = Math.max(1, Math.min(100000, Number.parseInt(values.page, 10) || 1));
+  const teachers = useQuery({ queryKey: ['classroom', 'admin', 'teachers', user?.id, user?.role, user?.credentialVersion, status, values.q, page], enabled: !!user && ready, queryFn: ({ signal }) => fetchApi<{ items: Teacher[]; total: number }>('/api/admin/classroom/teachers?' + new URLSearchParams({ ...(status ? { status } : {}), q: values.q, page: String(page), pageSize: '100' }), { signal }), staleTime: 0 });
   return <div className="space-y-5">
-    <label className="block text-sm font-medium">Teacher access status<select aria-label="Teacher access status" className="ml-2 min-h-12 rounded-xl border border-slate-300 bg-white px-3" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
-      <option value="">All</option>{['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED', 'REVOKED'].map(value => <option key={value} value={value}>{value.toLowerCase()}</option>)}
-    </select></label>
-    <Button className="min-h-12" variant="outline" onClick={() => void teachers.refetch()}>Refresh applications</Button>
-    {teachers.isLoading ? <p>Loading teachers…</p> : teachers.isError ? <div role="alert"><p>Unable to load teacher applications.</p><Button className="min-h-12" onClick={() => void teachers.refetch()}>Retry</Button></div> : !teachers.data?.items.length ? <p className="rounded-2xl border border-slate-200 bg-white p-6">No teacher applications match this status.</p> : teachers.data.items.map(teacher => <article key={teacher.userId} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="break-words font-semibold">{teacher.user.name}</h2><StatusBadge tone={teacher.status === 'APPROVED' ? 'success' : teacher.status === 'PENDING' ? 'info' : 'warning'}>{teacher.status.toLowerCase()}</StatusBadge></div>
-      <p className="break-words text-sm text-slate-600">{teacher.user.email}</p><Link className="flex min-h-12 items-center text-sm font-semibold text-indigo-700 underline" href={'/class/admin/teachers/'+encodeURIComponent(teacher.userId)}>Review teacher details and history</Link><p className="text-sm">{teacher.departmentOrDesignation}</p>{teacher.staffReference ? <p className="break-words text-sm text-slate-600">Staff reference: {teacher.staffReference}</p> : null}
-      {teacher.applicationText ? <p className="whitespace-pre-wrap break-words text-sm text-slate-600">{teacher.applicationText}</p> : null}
-      {teacher.decisionReason ? <p className="whitespace-pre-wrap break-words text-sm text-slate-600">Reason: {teacher.decisionReason}</p> : null}
-      <div className="flex flex-wrap gap-2">{(teacher.status === 'PENDING' ? ['APPROVE', 'REJECT'] : teacher.status === 'APPROVED' ? ['SUSPEND', 'REVOKE'] : teacher.status === 'SUSPENDED' ? ['RESTORE', 'REVOKE'] : teacher.status === 'REVOKED' ? ['RESTORE'] : []).map(action => <Button className="min-h-12" key={action} variant={action === 'APPROVE' || action === 'RESTORE' ? 'default' : 'outline'} onClick={() => choose(teacher, action as Action)}>{labels[action as Action]}</Button>)}</div>
-    </article>)}
-    {teachers.data && teachers.data.total > 100 ? <div className="flex items-center gap-3"><Button className="min-h-12" variant="outline" disabled={page === 1} onClick={() => setPage(value => value - 1)}>Previous</Button><span>Page {page}</span><Button className="min-h-12" variant="outline" disabled={page * 100 >= teachers.data.total} onClick={() => setPage(value => value + 1)}>Next</Button></div> : null}
-    <Sheet open={!!selection} onOpenChange={open => { if (!open && !busy) setSelection(null); }}><SheetContent className="overflow-y-auto"><SheetHeader><SheetTitle>{selection ? labels[selection.action] : 'Review teacher'}</SheetTitle><SheetDescription>Class access changes independently of Events permissions. Every decision is recorded.</SheetDescription></SheetHeader>
-      {selection ? <form className="space-y-5 p-4" onSubmit={async event => {
-        event.preventDefault(); if (selection.action !== 'APPROVE' && !reason.trim()) { setError('Enter a reason.'); return; }
-        setBusy(true); setError('');
-        try { await fetchApi(`/api/admin/classroom/teachers/${selection.teacher.userId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commandId: selection.commandId, expectedRevision: selection.teacher.revision, action: selection.action, ...(reason.trim() ? { reason: reason.trim() } : {}) }) }); setSelection(null); await teachers.refetch(); }
-        catch (cause) { setError(cause instanceof ApiError ? cause.message : 'Decision not confirmed. Retry with the same request.'); }
-        finally { setBusy(false); }
-      }}><p className="break-words font-semibold">{selection.teacher.user.name}</p><label className="block text-sm font-medium">Reason{selection.action === 'APPROVE' ? ' (optional)' : ''}<textarea disabled={busy} className="mt-2 min-h-28 w-full rounded-xl border border-slate-300 p-3" value={reason} maxLength={1000} onChange={event => { setReason(event.target.value); setSelection(current => current ? { ...current, commandId: crypto.randomUUID() } : null); }} /></label>{error ? <div role="alert" className="space-y-2 text-sm text-rose-700"><p>{error}</p><Button type="button" variant="outline" className="min-h-12" onClick={() => { setSelection(null); void teachers.refetch(); }}>Reload applications</Button></div> : null}<Button type="submit" className="min-h-12 w-full" disabled={busy}>{busy ? 'Saving…' : confirmations[selection.action]}</Button></form> : null}
-    </SheetContent></Sheet>
+    <nav aria-label="Teacher access status" className="flex flex-wrap gap-1 border-b border-slate-200">{[...statuses, ''].map(value => <a key={value} href={'/class/admin/teachers?' + new URLSearchParams({ status: value, ...(values.q ? { q: values.q } : {}) })} aria-current={status === value ? 'page' : undefined} onClick={event => { event.preventDefault(); setValues({ status: value, page: '1' }); }} className={'inline-flex min-h-12 items-center border-b-2 px-4 text-sm font-medium ' + (status === value ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-900')}>{value ? value.charAt(0) + value.slice(1).toLowerCase() : 'All statuses'}</a>)}</nav>
+    <SectionPanel title={status === 'PENDING' ? 'Applications to review' : 'Teacher accounts'} description="Open an application to review the teacher’s details and make an access decision." contentClassName="p-0" actions={<Button variant="ghost" disabled={teachers.isFetching} onClick={() => void teachers.refetch()}><RefreshCw aria-hidden className="size-4 shrink-0"/>Refresh</Button>}>
+      <form onSubmit={event => { event.preventDefault(); setValues({ q: search.trim(), page: '1' }); }}><FilterToolbar resultCount={teachers.data?.total} onReset={values.q ? () => { setSearch(''); setValues({ q: '', page: '1' }); } : undefined}><div className="min-w-0 flex-1"><FormInput label="Search teachers" placeholder="Teacher name or email" maxLength={100} value={search} onChange={event => setSearch(event.target.value)} /></div><Button type="submit" variant="outline"><Search aria-hidden className="size-4 shrink-0"/>Search</Button></FilterToolbar></form>
+      {!ready || teachers.isLoading ? <LoadingState label="Loading teacher applications…" /> : teachers.isError ? <div className="p-5"><Feedback title="Unable to load teacher applications" onRetry={() => void teachers.refetch()}>Check your connection and administrator access.</Feedback></div> : !teachers.data?.items.length ? <div className="p-6"><Feedback title={status === 'PENDING' && !values.q ? 'No pending applications' : 'No matching teacher applications'} tone="info">{values.q ? 'Try another name or email, or choose another status.' : 'New applications will appear here when submitted.'}</Feedback></div> : <>
+        <ul className="divide-y divide-slate-100">{teachers.data.items.map(teacher => <li key={teacher.userId} className="flex flex-wrap items-center gap-4 p-5 sm:px-6"><div className="min-w-0 flex-1 basis-60"><IdentityBlock name={teacher.user.name} identifier={teacher.user.email} description={<><span className="block">{teacher.departmentOrDesignation}</span><span className="mt-1 block text-xs">Applied {formatReportDateTime(teacher.appliedAt)}</span></>} /></div><StatusBadge tone={teacher.status === 'APPROVED' ? 'success' : teacher.status === 'PENDING' ? 'warning' : teacher.status === 'REVOKED' ? 'danger' : 'neutral'}>{teacher.status.charAt(0) + teacher.status.slice(1).toLowerCase()}</StatusBadge><Button variant={teacher.status === 'PENDING' ? 'default' : 'outline'} asChild><Link prefetch={false} href={'/class/admin/teachers/' + encodeURIComponent(teacher.userId)} aria-label={'Review application — ' + teacher.user.name}><ClipboardCheck aria-hidden className="size-4 shrink-0"/>Review application →</Link></Button></li>)}</ul>
+        <div className="px-5 pb-4 sm:px-6"><ListPagination page={page} pageSize={100} total={teachers.data.total} onPageChange={next => setValues({ page: String(next) })} isPending={teachers.isFetching} /></div>
+      </>}
+    </SectionPanel>
+    <p className="text-sm leading-6 text-slate-500">Reasons and access decisions remain in the administrative history. Classroom and Events permissions are managed independently.</p>
   </div>;
 }

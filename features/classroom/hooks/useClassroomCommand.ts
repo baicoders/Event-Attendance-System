@@ -1,9 +1,11 @@
 'use client';
 import { useEffect,useRef,useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ApiError,fetchApi } from '@/globals/utils/api';
 import { settledCommandFailure } from '../utils/commandFailure';
 /** Honest confirmation/retry behavior, with no offline queue or background writes. */
 export function useClassroomCommand(){
+ const client=useQueryClient();
  const [busy,setBusy]=useState(false);const [unconfirmed,setUnconfirmed]=useState(false);const [error,setError]=useState('');const [problem,setProblem]=useState<ApiError|null>(null);
  const mounted=useRef(true);const inFlight=useRef(false);const controller=useRef<AbortController|null>(null);const pending=useRef<{fingerprint:string;body:string}|null>(null);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;controller.current?.abort();};},[]);
@@ -15,7 +17,7 @@ export function useClassroomCommand(){
   inFlight.current=true;setBusy(true);setError('');setProblem(null);controller.current=new AbortController();
   try{
    const result=await fetchApi<{data:T;replayed:boolean}>(path,{method,headers:{'Content-Type':'application/json'},body:pending.current.body,signal:controller.current.signal});
-   if(!mounted.current)return;pending.current=null;setUnconfirmed(false);return result.data;
+   if(!mounted.current)return;pending.current=null;setUnconfirmed(false);void client.invalidateQueries({queryKey:['classroom']});return result.data;
   }catch(cause){
    if(!mounted.current)return;
    const known=settledCommandFailure(cause,unconfirmed);

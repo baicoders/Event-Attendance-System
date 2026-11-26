@@ -1,33 +1,13 @@
+import { Play } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/globals/components/shad-cn/button';
+import { Card, CardContent, CardFooter } from '@/globals/components/shad-cn/card';
+import StatusBadge from '@/globals/components/shared/StatusBadge';
 import type { AuthUser } from '@/globals/contexts/AuthContext';
 import type { ClassSummary } from '../types/class';
 import { formatManila } from '../utils/manualRosterState';
-
-export default function ClassCard({ item, viewerRole, basePath = '/class/classes', showTeacher = false }: {
-  item: ClassSummary;
-  viewerRole: AuthUser['role'] | undefined;
-  basePath?: string;
-  showTeacher?: boolean;
-}) {
-  const href = basePath + '/' + encodeURIComponent(item.id);
-  const administrator = viewerRole === 'ADMIN';
-  const canStart = !!viewerRole && !administrator && !item.archivedAt;
-  return <article className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-    <div className="min-w-0 flex-1 space-y-3">
-      <h2 className="break-words text-xl font-semibold text-slate-900">{item.displayName}</h2>
-      <p className="break-words text-sm text-slate-600">{item.subject.code ? item.subject.code + ' · ' : ''}{item.subject.title} · {item.term.name}</p>
-      {showTeacher ? <p className="break-words text-sm text-slate-600">Teacher: {item.primaryTeacher.name}</p> : null}
-      <p className="break-words text-sm text-slate-700">{item.sections.map(section => section.name).join(' + ') || 'Individual student roster'}</p>
-      {item.schedule ? <p className="break-words text-sm text-slate-600">{item.schedule.startTime}{item.schedule.room ? ' · ' + item.schedule.room : ''} · Asia/Manila</p> : null}
-      {item.archivedAt ? <p className="text-sm font-medium text-amber-800">Archived</p> : null}
-      {item.latestSession ? <p className="text-sm text-slate-600">Latest meeting: {formatManila(item.latestSession.scheduledStartAt)} · {item.latestSession.state.toLowerCase()}</p> : null}
-    </div>
-    <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-      {item.activeSession || canStart ? <Button asChild><Link href={item.activeSession ? '/class/sessions/' + encodeURIComponent(item.activeSession.id) : '/class/classes/' + encodeURIComponent(item.id) + '/start'}>{item.activeSession ? administrator ? 'View session' : 'Continue session' : 'Start attendance'}</Link></Button> : null}
-      <Button asChild variant="outline"><Link href={href}>Open class</Link></Button>
-      <Button asChild variant="outline"><Link href={href + '/roster'}>Manage roster</Link></Button>
-      <Button asChild variant="outline"><Link href={'/class/reports?' + new URLSearchParams({ termId: item.termId, classId: item.id })}>Reports</Link></Button>
-    </div>
-  </article>;
+const weekdays=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+export default function ClassCard({item,viewerRole,basePath='/class/classes',showTeacher=false}:{item:ClassSummary;viewerRole:AuthUser['role']|undefined;basePath?:string;showTeacher?:boolean}){
+ const href=basePath+'/'+encodeURIComponent(item.id);const administrator=viewerRole==='ADMIN';const canStart=!!viewerRole&&!administrator&&!item.archivedAt;
+ return <Card className="min-w-0 gap-0 rounded-2xl border-slate-200 bg-white py-0"><CardContent className="min-w-0 flex-1 space-y-3 p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-medium text-slate-500">{item.subject.code||item.subject.title}</p><StatusBadge tone={item.archivedAt?'warning':item.activeSession?'primary':'neutral'}>{item.archivedAt?'Archived':item.activeSession?'Active meeting':'Ready for a meeting'}</StatusBadge></div><h2 className="break-words text-xl font-semibold text-slate-900">{item.displayName}</h2><p className="break-words text-sm text-slate-500">{item.subject.title} · {item.term.name}</p><p className="break-words text-sm text-slate-700">{item.sections.map(section=>section.name).join(' + ')||'Individual student roster'}</p>{showTeacher?<p className="break-words text-sm text-slate-500">Teacher: {item.primaryTeacher.name}</p>:null}{item.schedule?<p className="break-words text-sm text-slate-500">{item.schedule.days?.map(day=>weekdays[day-1]).join(' / ')} · {item.schedule.startTime}{item.schedule.room?' · '+item.schedule.room:''} · Asia/Manila</p>:null}{item.latestSession?<p className="text-xs text-slate-500">Latest meeting: {formatManila(item.latestSession.scheduledStartAt)} · {item.latestSession.state.toLowerCase()}</p>:null}</CardContent><CardFooter className="flex flex-wrap gap-2 border-t border-slate-100 p-4 sm:px-6">{item.activeSession||canStart?<Button asChild><Link href={item.activeSession?'/class/sessions/'+encodeURIComponent(item.activeSession.id):'/class/classes/'+encodeURIComponent(item.id)+'/start'}><Play aria-hidden className="size-4 shrink-0"/>{item.activeSession?administrator?'View session':'Continue session':'Start attendance'}</Link></Button>:null}<Button asChild variant={item.activeSession||canStart?'outline':'default'}><Link href={href}>Open class</Link></Button></CardFooter></Card>;
 }

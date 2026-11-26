@@ -40,9 +40,24 @@ await withClassroomTestApp(async({db,request,base})=>{
   assert.equal((await request(path,{cookie:actor.cookie,method:'PUT',body:welcome})).response.status,403);
   if(process.env.CLASSROOM_TEST_BROWSER==='true'){
     const browserTeacher=await teacher('mobile-setup-teacher');
-    const run=spawnSync('python3',['scripts/test-classroom-onboarding.py'],{env:{...process.env,CLASSROOM_TEST_BASE:base,CLASSROOM_TEACHER_COOKIE:browserTeacher.cookie},encoding:'utf8'});
+    const existingTeacher=await teacher('existing-class-teacher');
+    const emptyTeacher=await teacher('empty-class-teacher');
+    const unavailableTeacher=await teacher('unavailable-class-teacher');
+    const makeClass=async(owner,displayName,sectionIds)=>{const result=await request('/api/classroom/classes',{cookie:owner.cookie,method:'POST',body:{commandId:randomUUID(),termId:term.json.data.data.id,subjectId:subject.json.data.data.id,displayName,sectionIds,exceptions:[]}});assert.equal(result.response.status,201,result.text);return result.json.data.data;};
+    await makeClass(existingTeacher,'Existing owned class',['3a']);
+    const emptyClass=await makeClass(emptyTeacher,'Empty saved class',[]);
+    const unavailableClass=await makeClass(unavailableTeacher,'Archived setup class',['3a']);
+    for(const [owner,value] of [[emptyTeacher,emptyClass],[unavailableTeacher,unavailableClass]]){
+      await request(path,{cookie:owner.cookie,method:'PUT',body:{commandId:randomUUID(),expectedRevision:0,step:'WELCOME'}});
+      const chosen=await request(path,{cookie:owner.cookie,method:'PUT',body:{commandId:randomUUID(),expectedRevision:1,step:'CLASS',classId:value.id}});assert.equal(chosen.response.status,200,chosen.text);
+    }
+    await request('/api/classroom/classes/'+unavailableClass.id,{cookie:unavailableTeacher.cookie,method:'PATCH',body:{commandId:randomUUID(),expectedConfigRevision:0,archived:true}});
+    const run=spawnSync('python3',['scripts/test-classroom-onboarding.py'],{env:{...process.env,CLASSROOM_TEST_BASE:base,CLASSROOM_TEACHER_COOKIE:browserTeacher.cookie,CLASSROOM_EXISTING_COOKIE:existingTeacher.cookie,CLASSROOM_EMPTY_COOKIE:emptyTeacher.cookie,CLASSROOM_UNAVAILABLE_COOKIE:unavailableTeacher.cookie,CLASSROOM_PENDING_COOKIE:pending.cookie},encoding:'utf8'});
     assert.equal(run.status,0,run.stdout+'\n'+run.stderr);console.log(run.stdout);
     assert.equal(await db.classOffering.count({where:{primaryTeacherId:browserTeacher.id}}),1);
+    assert.equal(await db.classOffering.count({where:{primaryTeacherId:existingTeacher.id}}),1,'existing-class setup creates no duplicate');
+    assert.equal(await db.classroomSession.count({where:{class:{primaryTeacherId:existingTeacher.id}}}),0,'skipping practice starts no meeting');
+    assert.equal(await db.classroomSession.count({where:{class:{primaryTeacherId:browserTeacher.id}}}),1,'only the explicitly confirmed meeting exists');
     const progress=await db.teacherOnboarding.findUniqueOrThrow({where:{userId:browserTeacher.id}});assert.ok(progress.completedAt);assert.equal(await db.classroomSession.count({where:{class:{primaryTeacherId:browserTeacher.id},state:'FINALIZED'}}),1,'new teacher completes a real first attendance after onboarding');
     assert.equal(await db.classroomAudit.count({where:{actorId:browserTeacher.id,entityType:'TeacherOnboarding',action:'TEACHER_ONBOARDING_COMPLETED'}}),1);
     assert.equal(await db.classroomAudit.count({where:{actorId:browserTeacher.id,entityType:'TeacherOnboarding',after:{path:['step'],equals:'WELCOME'}}}),1,'malformed ack retry does not duplicate welcome progress');

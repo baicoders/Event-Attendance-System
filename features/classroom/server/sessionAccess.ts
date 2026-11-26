@@ -24,9 +24,20 @@ export function requireLifecycleRevision(session:ClassroomSession,expected:numbe
 }
 export type AttendanceCounts=Record<ClassroomAttendanceStatus,number>;
 export function emptyAttendanceCounts():AttendanceCounts{return {UNMARKED:0,PRESENT:0,LATE:0,ABSENT:0,EXCUSED:0};}
+/** Aggregate only returned session IDs; excluded members never contribute to progress. */
+export async function sessionCountsForIds(tx:Prisma.TransactionClient,sessionIds:string[]){
+  const counts=new Map(sessionIds.map(id=>[id,emptyAttendanceCounts()]));
+  if(!sessionIds.length)return counts;
+  const grouped=await tx.classroomAttendance.groupBy({by:['sessionId','status'],where:{sessionId:{in:sessionIds},member:{included:true}},_count:{_all:true}});
+  for(const row of grouped)counts.get(row.sessionId)![row.status]=row._count._all;
+  return counts;
+}
 export async function sessionCounts(tx:Prisma.TransactionClient,sessionId:string){
-  const grouped=await tx.classroomAttendance.groupBy({by:['status'],where:{sessionId,member:{included:true}},_count:{_all:true}});
-  const counts=emptyAttendanceCounts();for(const row of grouped)counts[row.status]=row._count._all;return counts;
+  return (await sessionCountsForIds(tx,[sessionId])).get(sessionId)!;
+}
+export function attendanceProgress(counts:AttendanceCounts){
+  const rosterCount=Object.values(counts).reduce((sum,count)=>sum+count,0);
+  return {counts,rosterCount,markedCount:rosterCount-counts.UNMARKED};
 }
 export function sessionDto(row:ClassroomSession,counts:AttendanceCounts){
   return {...row,scheduledStartAt:row.scheduledStartAt.toISOString(),startedAt:row.startedAt.toISOString(),finalizedAt:row.finalizedAt?.toISOString()??null,canceledAt:row.canceledAt?.toISOString()??null,lateAfter:row.lateAfter.toISOString(),createdAt:row.createdAt.toISOString(),updatedAt:row.updatedAt.toISOString(),originalPolicySnapshot:policySnapshotSchema.parse(row.originalPolicySnapshot),counts};
