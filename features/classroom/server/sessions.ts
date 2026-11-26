@@ -6,8 +6,8 @@ import { classroomRead,type ActorContext,type ClassroomUser } from './access';
 import { lockOwnedClass,classDto,requireAssistanceReason,type ClassRow } from './classAccess';
 import { composeClassRoster,rosterConfig } from './rosters';
 import { fingerprintClassRoster } from '../utils/composeRoster';
-import { buildAttendancePolicy,suggestClassroomStart,validateSessionStart } from '../utils/attendancePolicy';
-import { scheduleSchema } from '../schemas/classSchema';
+import { buildAttendancePolicy,suggestClassroomStart,validateSessionStart,schoolDateRange } from '../utils/attendancePolicy';
+import { gradingPeriodSchema,scheduleSchema } from '../schemas/classSchema';
 import { startSessionSchema,finalizeSessionSchema,cancelSessionSchema,amendPolicySchema,sessionRosterQuerySchema,sessionListQuerySchema } from '../schemas/sessionSchema';
 import { executeClassroomCommand,commandHash } from './commands';
 import { lockOwnedSession,requireActiveSession,requireLifecycleRevision,sessionDto,sessionCounts,sessionCountsForIds,attendanceProgress,emptyAttendanceCounts,rosterMemberDto,attendanceDto } from './sessionAccess';
@@ -62,8 +62,16 @@ export async function getClassroomSession(db:PrismaClient,actor:ActorContext,ses
 export async function listClassroomSessions(db:PrismaClient,actor:ActorContext,classId:string,raw=new URLSearchParams()){
   const input=sessionListQuerySchema.parse(Object.fromEntries(raw));
   return classroomRead(db,actor,async(tx,user)=>{
-    await lockOwnedClass(tx,classId,user,'SHARE');
-    const where:Prisma.ClassroomSessionWhereInput={classId,...(input.state?{state:input.state}:{}),...(input.date?{scheduledStartAt:{gte:new Date(input.date+'T00:00:00+08:00'),lt:new Date(new Date(input.date+'T00:00:00+08:00').getTime()+86400000)}}:{})};
+    const offering=await lockOwnedClass(tx,classId,user,'SHARE');
+    const period=input.gradingPeriodId
+      ?gradingPeriodSchema.array().parse(offering.term.gradingPeriods).find(period=>period.id===input.gradingPeriodId)
+      :undefined;
+    if(input.gradingPeriodId&&!period)throw new AuthError('This grading period is unavailable for the class.',404,'PERIOD_NOT_FOUND');
+    const from=period?.startDate??input.date;
+    const to=period?.endDate??input.date;
+    const where:Prisma.ClassroomSessionWhereInput={
+      classId,...(input.state?{state:input.state}:{}),...(from||to?{scheduledStartAt:schoolDateRange(from,to)}:{}),
+    };
     const rows=await tx.classroomSession.findMany({where,orderBy:[{scheduledStartAt:'desc'},{id:'desc'}],skip:(input.page-1)*input.pageSize,take:input.pageSize});
     const counts=await sessionCountsForIds(tx,rows.map(row=>row.id));
     return {items:rows.map(row=>({...attendanceProgress(counts.get(row.id)!),id:row.id,classId,state:row.state,scheduledStartAt:row.scheduledStartAt.toISOString(),startedAt:row.startedAt.toISOString(),finalizedAt:row.finalizedAt?.toISOString()??null,canceledAt:row.canceledAt?.toISOString()??null,lifecycleRevision:row.lifecycleRevision,snapshotRevision:row.snapshotRevision})),total:await tx.classroomSession.count({where}),page:input.page,pageSize:input.pageSize};
