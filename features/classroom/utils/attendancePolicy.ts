@@ -26,3 +26,10 @@ export function suggestClassroomStart(schedule:ClassSchedule|null,serverNow:Date
   const day=schoolDate(serverNow);const localDay=new Date(day+'T00:00:00Z').getUTCDay()||7;
   return schedule?.days.includes(localDay)?new Date(day+'T'+schedule.startTime+':00+08:00').toISOString():serverNow.toISOString();
 }
+
+export function schoolDateRange(from?:string,to?:string){
+  return {
+    ...(from?{gte:new Date(from+'T00:00:00+08:00')}:{}),
+    ...(to?{lt:new Date(Date.parse(to+'T00:00:00+08:00')+86400000)}:{}),
+  };
+}

@@ -444,6 +444,7 @@ model AcademicTerm {
  createdById String
  revision Int @default(0)
  classes ClassOffering[]
+ gradingPeriods Json @default("[]") @db.JsonB
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  updatedAt DateTime @updatedAt @db.Timestamptz(3)
  @@index([startDate,endDate])

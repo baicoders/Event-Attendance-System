@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import assert from 'node:assert/strict';import { randomUUID } from 'node:crypto';import { spawnSync } from 'node:child_process';import { mkdirSync,writeFileSync } from 'node:fs';
 import { withClassroomTestApp } from './classroom-test-app.mjs';
 await withClassroomTestApp(async({db,request,base})=>{
@@ -24,7 +25,50 @@ await withClassroomTestApp(async({db,request,base})=>{
  for(const cookie of [teacher.cookie,organizer.cookie])assert.equal((await request('/api/admin/classroom/activity',{cookie})).response.status,403);
  const correction=activity.json.data.items.find(row=>row.source==='attendance'&&row.action==='CORRECT');const detailPath='/api/admin/classroom/activity/attendance/'+correction.id;const detail=await request(detailPath,{cookie:admin.cookie});assert.equal(detail.response.status,200,detail.text);assert.equal(detail.json.data.actorId,teacher.id);assert.equal(detail.json.data.after.status,'ABSENT');assert.equal((await request(detailPath,{cookie:teacher.cookie})).response.status,403);
  const teacherDetail=await request('/api/admin/classroom/teachers/'+teacher.id,{cookie:admin.cookie});assert.equal(teacherDetail.response.status,200);assert.equal(teacherDetail.json.data.classCount,1);assert.ok(!Object.hasOwn(teacherDetail.json.data.user,'password'));
- if(process.env.CLASSROOM_TEST_BROWSER==='true'){const artifacts='.superpowers/classroom-tests/reports-'+randomUUID();mkdirSync(artifacts,{recursive:true});const file=artifacts+'/fixture.json';writeFileSync(file,JSON.stringify({base,teacher,admin,other,own,foreign,term,reportVersion:(await request(path+'&classId='+own.classId+'&termId='+term.id,{cookie:teacher.cookie})).json.data.reportVersion,artifacts}));const run=spawnSync('python3',['scripts/test-classroom-report-browser.py'],{env:{...process.env,CLASSROOM_REPORT_FIXTURE:file},encoding:'utf8',timeout:300000});assert.equal(run.status,0,run.stdout+'\n'+run.stderr);console.log(run.stdout);}
+ const classQuery=new URLSearchParams({termId:term.id,classId:own.classId,view:'class'});
+ const classReport=(await request('/api/classroom/reports?'+classQuery,{cookie:teacher.cookie})).json.data;
+ const excelPath='/api/classroom/reports/export?'+classQuery+'&format=XLSX&expectedReportVersion='+classReport.reportVersion+'&q=Student%205&pageSize=1';
+ const xlsx=await fetch(base+excelPath,{headers:{cookie:teacher.cookie}});
+ assert.equal(xlsx.status,200);
+ assert.equal(xlsx.headers.get('x-report-version'),classReport.reportVersion);
+ assert.match(xlsx.headers.get('content-type'),/spreadsheetml/);
+ const workbook=new ExcelJS.Workbook();
+ await workbook.xlsx.load(Buffer.from(await xlsx.arrayBuffer()));
+ assert.deepEqual(workbook.worksheets.map(sheet=>sheet.name),['ATTENDANCES_REPORT']);
+ const attendance=workbook.worksheets[0];
+ assert.equal(attendance.getCell('A3').value,'ATTENDANCE REPORT OF STUDENTS');
+ assert.equal(attendance.pageSetup.orientation,'portrait');
+ const header=attendance.findRow(14);
+ assert.equal(header.getCell(1).value,'NO.');
+ assert.equal(header.getCell(2).value,'USN');
+ assert.equal(header.getCell(5).value,'TOTAL');
+ assert.equal(attendance.getCell('D15').value,own.schoolDate.slice(0,4));
+ assert.equal(attendance.getCell('D16').numFmt,'mm-dd');
+ assert.equal(attendance.getCell('D16').value.toISOString().slice(0,10),own.schoolDate);
+ assert.equal(attendance.getCell('B17').value,'00000000001');
+ assert.equal(attendance.getCell('D17').value,'P');
+ assert.equal(attendance.getCell('E17').value,1);
+ assert.equal(attendance.getCell('A22').value,6);
+ assert.equal(attendance.getCell('A23').value,'*** NOTHING FOLLOWS ***');
+ assert.ok(!JSON.stringify(attendance.getSheetValues()).includes('PRIVATE EXCUSE'));
+ assert.equal((await request(excelPath,{cookie:other.cookie})).response.status,404);
+ assert.equal((await request(excelPath.replace(classReport.reportVersion,'0'.repeat(64)),{cookie:teacher.cookie})).response.status,409);
+ const classCsv=await request('/api/classroom/reports/export?termId='+term.id+'&classId='+own.classId+'&expectedReportVersion='+classReport.reportVersion,{cookie:teacher.cookie});
+ assert.equal(classCsv.response.status,200);
+ if(process.env.CLASSROOM_TEST_BROWSER==='true'){
+  const endpoint='/api/classroom/classes/'+own.classId;
+  const preview=(await request(endpoint+'/start-preview',{cookie:teacher.cookie})).json.data;
+  for(let day=2;day<=13;day++){
+   const started=await request(endpoint+'/sessions',{cookie:teacher.cookie,method:'POST',body:{commandId:randomUUID(),
+    scheduledStartAt:new Date(Date.now()-day*86400000).toISOString(),expectedConfigRevision:preview.configRevision,
+    expectedRosterRevision:preview.rosterRevision,expectedRosterFingerprint:preview.rosterFingerprint}});
+   assert.equal(started.response.status,201,started.text);
+   const session=started.json.data.data;
+   const finalized=await request('/api/classroom/sessions/'+session.id+'/finalize',{cookie:teacher.cookie,method:'POST',
+    body:{commandId:randomUUID(),expectedLifecycleRevision:session.lifecycleRevision,expectedSnapshotRevision:session.snapshotRevision}});
+   assert.equal(finalized.response.status,200,finalized.text);
+  }
+  const artifacts='.superpowers/classroom-tests/reports-'+randomUUID();mkdirSync(artifacts,{recursive:true});const file=artifacts+'/fixture.json';writeFileSync(file,JSON.stringify({base,teacher,admin,other,own,foreign,term,reportVersion:(await request(path+'&classId='+own.classId+'&termId='+term.id,{cookie:teacher.cookie})).json.data.reportVersion,artifacts}));const run=spawnSync('python3',['scripts/test-classroom-report-browser.py'],{env:{...process.env,CLASSROOM_REPORT_FIXTURE:file},encoding:'utf8',timeout:300000});assert.equal(run.status,0,run.stdout+'\n'+run.stderr);console.log(run.stdout);}
  await db.classroomMembership.update({where:{userId:teacher.id},data:{status:'SUSPENDED'}});assert.equal((await request(path,{cookie:teacher.cookie})).response.status,403);assert.equal((await request('/api/classroom/reports/export?'+params,{cookie:teacher.cookie})).response.status,403);const revokedPrint=await request('/class/reports/print?'+params,{cookie:teacher.cookie});assert.ok(!revokedPrint.text.includes('Ñ Name, original'));
  console.log('PASS canonical historical JSON/page/CSV/print,75% formula, leading-zero/formula protection, exact reportVersion, changed exports, private student-term boundaries, monitoring/detail/admin attribution and suspension.');
 });

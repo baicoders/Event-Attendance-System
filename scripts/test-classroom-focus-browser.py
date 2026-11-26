@@ -1,5 +1,6 @@
 """Focused attendance exercises the production API with an isolated fixture."""
 import json,os,shutil,re,sys
+from contextlib import suppress
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
 expect.set_options(timeout=30000)
@@ -25,14 +26,15 @@ with sync_playwright() as p:
  try:
   meeting=begin(page,35);sid=meeting.rsplit('/',1)[1];first_id=classes['35']['students'][0]['id'];path=base+'/api/classroom/sessions/'+sid+'/attendance/'+first_id;held=[]
   def delay(route):held.append((route,route.fetch()))
-  page.route(path,delay);choose(page,'Present');expect(current(page)).to_have_attribute('data-focused-student',first_id);expect(current(page).get_by_role('button',name=re.compile('^Present —'))).to_be_disabled()
+  page.get_by_label('Find an unmarked student').focus();page.keyboard.press('p');expect(current(page)).to_have_attribute('data-focused-student',first_id);page.get_by_label('Find an unmarked student').clear()
+  page.route(path,delay);current(page).get_by_role('group',name='Attendance marks').focus();page.keyboard.down('p');page.keyboard.down('p');page.keyboard.up('p');expect(current(page)).to_have_attribute('data-focused-student',first_id);expect(current(page).get_by_role('button',name=re.compile('^Present —'))).to_be_disabled()
   for _ in range(200):
    if held:break
    page.wait_for_timeout(10)
-  assert held;held[0][0].fulfill(response=held[0][1]);page.unroute(path,delay);expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][1]['id']);expect(page.get_by_role('status',name='Attendance save status')).to_contain_text('Student N35_000');fits(page)
+  assert held;held[0][0].fulfill(response=held[0][1]);page.unroute(path,delay);expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][1]['id']);expect(page.get_by_role('status',name='Attendance save status')).to_contain_text('Student N35_000');assert len(held)==1;fits(page)
   # Review uses the existing reasoned correction sheets with authoritative revision.
   button(page,'Review mark').click();expect(page.get_by_role('heading',name='Review last mark')).to_be_visible();button(page,'Late').click();page.get_by_label('Reason for correction',exact=True).fill('Arrived after the grace period');button(page,'Save Late').click();expect(page.get_by_role('status',name='Attendance save status')).to_contain_text('Late')
-  choose(page,'Absent');expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][2]['id']);choose(page,'Late');expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][3]['id']);choose(page,'Excuse');page.get_by_label('Excuse note (optional)',exact=True).fill('Approved letter');button(page,'Save Excused').click();expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][4]['id'])
+  current(page).get_by_role('group',name='Attendance marks').focus();page.keyboard.press('a');expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][2]['id']);choose(page,'Late');expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][3]['id']);current(page).get_by_role('group',name='Attendance marks').focus();page.keyboard.press('e');page.get_by_label('Excuse note (optional)',exact=True).fill('Approved letter');button(page,'Save Excused').click();expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][4]['id'])
   # Committed response lost, reload: receipt settles the original command key.
   lost_id=classes['35']['students'][4]['id'];lost_path=base+'/api/classroom/sessions/'+sid+'/attendance/'+lost_id;keys=[]
   page.on('request',lambda req:keys.append(json.loads(req.post_data)['commandId']) if req.url==lost_path and req.method=='PUT' else None)
@@ -66,7 +68,7 @@ with sync_playwright() as p:
   choose(page,'Present');expect(current(page)).to_have_attribute('data-focused-student',classes['35']['students'][9]['id'])
   page.get_by_label('Find an unmarked student').fill('no-such-name');expect(page.get_by_text('No unmarked search matches',exact=True)).to_be_visible();button(page,'Clear search').click();expect(current(page)).to_have_count(1)
   # Preserve roster preferences across Focus and reload.
-  button(page,'Roster').click();choose_attendance_filter(page, 'ABSENT');expect(page.locator('[data-roster-student]')).to_have_count(1);button(page,'Focus on unmarked').click();expect(current(page)).to_have_count(1);page.reload();expect(current(page)).to_have_count(1);button(page,'Roster').click();expect(page.get_by_role('combobox',name='Attendance filter',exact=True)).to_contain_text('Absent');button(page,'Focus on unmarked').click()
+  button(page,'Roster').click();choose_attendance_filter(page, 'ABSENT');expect(page.locator('[data-roster-student]')).to_have_count(1);page.get_by_role('group',name=re.compile('Attendance marks for')).focus();page.keyboard.press('l');expect(page.get_by_label('Reason for correction',exact=True)).to_be_visible();page.keyboard.press('Escape');expect(page.get_by_role('dialog')).to_have_count(0);button(page,'Focus on unmarked').click();expect(current(page)).to_have_count(1);page.reload();expect(current(page)).to_have_count(1);button(page,'Roster').click();expect(page.get_by_role('combobox',name='Attendance filter',exact=True)).to_contain_text('Absent');button(page,'Focus on unmarked').click()
   # Camera mode is gated while saves are uncertain; switching modes retains session.
   button(page,'Scan QR').click();button(page,'Use manual attendance').click();expect(current(page)).to_have_count(1)
   for width in [375,768,1440,1920]:
@@ -83,6 +85,7 @@ with sync_playwright() as p:
    button(page,'Review and finalize attendance').click();button(page,'Finalize and mark remaining Absent').click();expect(page.get_by_role('region',name='Session summary')).to_contain_text('Finalized');expect(page.get_by_label('Attendance filter')).to_be_visible()
   assert not errors,errors
  except Exception:
-  page.screenshot(path=str(scratch/'focus-failed.png'),full_page=True);raise
+  with suppress(Exception):page.screenshot(path=str(scratch/'focus-failed.png'),full_page=True,timeout=3000)
+  raise
  finally:browser.close()
 print('PASS focused all outcomes/review, delayed/lost/malformed responses, original-key reload recovery, confirmed-save read failure, concurrent mark, search/view preservation, camera/manual,375/768/1440/1920,200% zoom,reduced motion,100/101/220 exact completion and deliberate finalization.')

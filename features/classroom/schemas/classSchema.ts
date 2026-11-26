@@ -12,5 +12,12 @@ export const classPatchSchema=z.object({commandId:commandIdSchema,expectedConfig
 export const ownerSchema=z.object({commandId:commandIdSchema,expectedConfigRevision:z.number().int().nonnegative(),teacherId:entityId,reason}).strict();
 export const catalogQuerySchema=z.object({q:z.string().trim().max(100).default(''),page:z.coerce.number().int().min(1).max(100000).default(1),pageSize:z.coerce.number().int().min(1).max(100).default(100),includeArchived:z.enum(['true','false']).default('false').transform(value=>value==='true')}).strict();
 export const classQuerySchema=catalogQuerySchema.extend({termId:entityId.optional(),teacherId:entityId.optional(),attendanceState:z.enum(['ACTIVE','READY']).optional()}).strict();
-export const termPatchSchema=z.object({commandId:commandIdSchema,expectedRevision:z.number().int().nonnegative(),name:z.string().trim().min(1).max(100).optional(),startDate:schoolDate.optional(),endDate:schoolDate.optional(),archived:z.boolean().optional(),reason}).strict().refine(value=>['name','startDate','endDate','archived'].some(field=>Object.hasOwn(value,field)),'Choose a catalog field to change.');
+export const gradingPeriodFields = z.object({
+  name: z.string().trim().min(1).max(100),
+  startDate: schoolDate,
+  endDate: schoolDate,
+});
+export const gradingPeriodSchema = gradingPeriodFields.extend({ id: z.uuid() }).strict();
+export const gradingPeriodDraftSchema = gradingPeriodFields.extend({ id: z.uuid().optional() }).strict();
+export const termPatchSchema=z.object({commandId:commandIdSchema,expectedRevision:z.number().int().nonnegative(),gradingPeriods:z.array(gradingPeriodDraftSchema).max(100).optional(),name:z.string().trim().min(1).max(100).optional(),startDate:schoolDate.optional(),endDate:schoolDate.optional(),archived:z.boolean().optional(),reason}).strict().refine(value=>['name','startDate','endDate','archived','gradingPeriods'].some(field=>Object.hasOwn(value,field)),'Choose a catalog field to change.');
 export const subjectPatchSchema=z.object({commandId:commandIdSchema,expectedRevision:z.number().int().nonnegative(),code:z.string().trim().max(40).nullable().optional(),title:z.string().trim().min(1).max(160).optional(),archived:z.boolean().optional(),reason}).strict().refine(value=>['code','title','archived'].some(field=>Object.hasOwn(value,field)),'Choose a catalog field to change.');

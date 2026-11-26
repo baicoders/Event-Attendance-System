@@ -1,12 +1,15 @@
 import 'server-only';
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { Prisma,type PrismaClient } from '@prisma/client';
 import { AuthError } from '@/globals/utils/authError';
-import { catalogQuerySchema,termSchema,subjectSchema,termPatchSchema,subjectPatchSchema } from '../schemas/classSchema';
+import { catalogQuerySchema,termSchema,subjectSchema,termPatchSchema,subjectPatchSchema,gradingPeriodSchema,gradingPeriodDraftSchema } from '../schemas/classSchema';
 import { executeClassroomCommand,commandHash } from './commands';
 import { classroomRead,type ActorContext } from './access';
 const collapse=(value:string)=>value.normalize('NFC').trim().replace(/\s+/gu,' ');
 export const normalizeCatalogText=(value:string)=>collapse(value).toLowerCase();
-const termDto=(term:Prisma.AcademicTermGetPayload<object>)=>({id:term.id,name:term.name,startDate:term.startDate.toISOString().slice(0,10),endDate:term.endDate.toISOString().slice(0,10),timeZone:term.timeZone,revision:term.revision,archivedAt:term.archivedAt?.toISOString()??null});
+const gradingPeriodsSchema = z.array(gradingPeriodSchema);
+const termDto=(term:Prisma.AcademicTermGetPayload<object>)=>({id:term.id,name:term.name,startDate:term.startDate.toISOString().slice(0,10),endDate:term.endDate.toISOString().slice(0,10),timeZone:term.timeZone,gradingPeriods:gradingPeriodsSchema.parse(term.gradingPeriods),revision:term.revision,archivedAt:term.archivedAt?.toISOString()??null});
 const subjectDto=(subject:Prisma.SubjectGetPayload<object>)=>({id:subject.id,code:subject.code,title:subject.title,revision:subject.revision,archivedAt:subject.archivedAt?.toISOString()??null});
 export async function createAcademicTerm(db:PrismaClient,actor:ActorContext,raw:unknown){
  const input=termSchema.parse(raw);const name=collapse(input.name);const normalizedKey=[normalizeCatalogText(name),input.startDate,input.endDate].join('|');
@@ -44,6 +47,31 @@ export async function listSections(db:PrismaClient,actor:ActorContext,raw=new UR
  },{roster:true});
 }
 
+function updateGradingPeriods(
+ drafts: z.infer<typeof gradingPeriodDraftSchema>[],
+ current: z.infer<typeof gradingPeriodsSchema>,
+ startDate: string,
+ endDate: string,
+) {
+ const names = new Set<string>();
+ const availableIds = new Set(current.map(period => period.id));
+ const periods = drafts.map(draft => {
+  const name = collapse(draft.name);
+  const key = normalizeCatalogText(name);
+  if (names.has(key)) throw new AuthError('Grading period names must be unique within the term.', 400, 'DUPLICATE_PERIOD_NAME');
+  names.add(key);
+  if (draft.id && !availableIds.delete(draft.id)) throw new AuthError('A grading period ID is invalid for this term.', 400, 'INVALID_PERIOD_ID');
+  if (draft.startDate < startDate || draft.endDate > endDate || draft.startDate > draft.endDate) {
+   throw new AuthError('Each grading period must have ordered dates within the term.', 400, 'INVALID_PERIOD_RANGE');
+  }
+  return { ...draft, id: draft.id ?? randomUUID(), name };
+ }).sort((a, b) => a.startDate.localeCompare(b.startDate));
+ if (periods.some((period, index) => index > 0 && period.startDate <= periods[index - 1].endDate)) {
+  throw new AuthError('Grading periods cannot overlap.', 400, 'OVERLAPPING_PERIODS');
+ }
+ return periods;
+}
+
 export async function updateAcademicTerm(db:PrismaClient,actor:ActorContext,id:string,raw:unknown){
  const input=termPatchSchema.parse(raw);
  return executeClassroomCommand(db,actor,'ADMIN',{commandId:input.commandId,operation:'UPDATE_ACADEMIC_TERM',resourceId:id,payload:input},async(tx,user)=>{
@@ -54,9 +82,10 @@ export async function updateAcademicTerm(db:PrismaClient,actor:ActorContext,id:s
   const name=collapse(next.name);const normalizedKey=[normalizeCatalogText(name),next.startDate,next.endDate].join('|');
   const duplicate=await tx.academicTerm.findFirst({where:{normalizedKey,id:{not:id}}});if(duplicate)throw new AuthError('This term already exists.',409,'DUPLICATE_TERM',{existingId:duplicate.id});
   const archived=input.archived??!!current.archivedAt;const before=termDto(current);
-  const changed=name!==current.name||normalizedKey!==current.normalizedKey||archived!==!!current.archivedAt;
+  const gradingPeriods = updateGradingPeriods(input.gradingPeriods ?? before.gradingPeriods, before.gradingPeriods, next.startDate, next.endDate);
+  const changed=name!==current.name||normalizedKey!==current.normalizedKey||archived!==!!current.archivedAt||commandHash(gradingPeriods)!==commandHash(before.gradingPeriods);
   if(!changed)return {...before,changed:false};
-  const updated=await tx.academicTerm.update({where:{id},data:{name,normalizedKey,startDate:new Date(next.startDate+'T00:00:00Z'),endDate:new Date(next.endDate+'T00:00:00Z'),archivedAt:archived?(current.archivedAt??new Date()):null,revision:{increment:1}}});const after=termDto(updated);
+  const updated=await tx.academicTerm.update({where:{id},data:{name,normalizedKey,gradingPeriods,startDate:new Date(next.startDate+'T00:00:00Z'),endDate:new Date(next.endDate+'T00:00:00Z'),archivedAt:archived?(current.archivedAt??new Date()):null,revision:{increment:1}}});const after=termDto(updated);
   await tx.classroomAudit.create({data:{action:'TERM_UPDATED',entityType:'AcademicTerm',entityId:id,actorId:user.id,actorName:user.name,commandId:input.commandId,reason:input.reason,before,after}});return {...after,changed:true};
  });
 }
