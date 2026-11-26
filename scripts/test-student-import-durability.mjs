@@ -101,7 +101,7 @@ try {
   assert.deepEqual(await snapshots(restored), before, "whole-database dump restores all pre-feature data");
   assert.deepEqual((await restored.query('SELECT to_jsonb(t) AS data FROM "StudentImportBatch" t ORDER BY id')).rows.map((r) => r.data), originalReceipts, "whole-database backup preserves every receipt field/result/hash/timestamp");
   assert.deepEqual(await indexEvidence(restored), indexes);
-  console.log("Real PostgreSQL17 whole-database custom dump/isolated restore preserves exact receipts, actor-command uniqueness, JSONB, hashes and indexes.");
+  console.log("Real PostgreSQL whole-database custom dump/isolated restore preserves exact receipts, actor-command uniqueness, JSONB, hashes and indexes.");
 } finally {
   await restored?.end(); if (restoredName) await drop(restoredName);
   await target.end(); await drop(name); await fresh?.cleanup(); await admin.end(); rmSync(backupDir, { recursive: true, force: true });

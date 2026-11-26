@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";

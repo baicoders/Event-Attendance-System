@@ -1,0 +1,44 @@
+{
+  "runId": "66378c08c9c24b5c",
+  "startedAt": "2026-11-02T13:33:28.177Z",
+  "baseline": "3135d3204c71c960fd6dfb2bef765a8a87a1f171",
+  "status": "passed",
+  "steps": [
+    {
+      "name": "empty database full migration"
+    },
+    {
+      "name": "baseline backup restored with identical Events/student identities"
+    },
+    {
+      "name": "failed copied M2 rolls back registry/schema/profile changes"
+    },
+    {
+      "name": "concurrent index invalid-artifact recovery and full M1\u2013M5 resume"
+    },
+    {
+      "name": "registry dry run, interrupted transaction, safe historical quarantine and idempotent resume"
+    },
+    {
+      "name": "real nonowner/no-superuser runtime core workflow and immutable/DDL denials",
+      "rate": 50
+    },
+    {
+      "name": "current-schema backup/restore preserves all public rows, audits, receipts and report version"
+    }
+  ],
+  "externalGates": {
+    "productionAccess": false,
+    "actualDevices": false,
+    "teacherTrials": false,
+    "hostedTimezoneAudit": false
+  },
+  "server": "14.24 (Ubuntu 14.24-0ubuntu0.22.04.1)",
+  "node": "v22.23.4",
+  "finishedAt": "2026-11-02T13:36:41.896Z",
+  "environmentLimitations": [
+    "Disposable local PostgreSQL; no production access",
+    "fsync, synchronous_commit and full_page_writes disabled: no crash durability or hosted latency claim",
+    "Physical devices, teacher trials, hosted timezone history and release authorization remain outstanding"
+  ]
+}

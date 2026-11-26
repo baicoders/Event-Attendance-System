@@ -64,6 +64,7 @@ export const PUBLIC_USER_SELECT = {
   rejectionReason: true,
   mustChangePassword: true,
   credentialVersion: true,
+  accountState: true,
 } as const;
 
 /**
@@ -87,7 +88,7 @@ export async function applyOwnPasswordChange(
       id: args.userId,
       credentialVersion: args.expectedCredentialVersion,
       password: args.verifiedPasswordHash,
-      status: "ACTIVE",
+      accountState: "ENABLED",
     },
     data: {
       password: args.newPasswordHash,

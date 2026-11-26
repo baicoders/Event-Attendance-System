@@ -5,7 +5,7 @@ import {
   takeRosterSharedLock,
 } from "@/globals/utils/pgLocks";
 import { isRetryableTransactionError } from "@/globals/utils/prismaError";
-import { resolveStudentIdentity, StudentIdentityError } from "@/globals/utils/studentIdentity";
+import { resolveStudentIdentity, findStudentByCanonicalId, StudentIdentityError } from "@/globals/utils/studentIdentity";
 import { appendAttendanceChange } from "./attendanceChange";
 
 export type AttendanceMode = "TIME_IN" | "TIME_OUT";
@@ -17,7 +17,7 @@ export type RecordAttendanceInput = {
   expectedMode?: AttendanceMode;
 };
 
-type Actor = { id: string; role: "ADMIN" | "ORGANIZER"; credentialVersion: number };
+type Actor = { id: string; role: "ADMIN" | "ORGANIZER" | "MEMBER"; credentialVersion: number };
 
 export class RecordingError extends Error {
   constructor(message: string, public status: number, public code: string) {
@@ -61,8 +61,8 @@ export async function recordAttendance(
     try {
       return await db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} FOR SHARE`;
-        const freshActor = await tx.user.findUnique({ where: { id: actor.id }, select: { id: true, name: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
-        if (!freshActor || freshActor.status !== "ACTIVE" || freshActor.mustChangePassword || freshActor.credentialVersion !== actor.credentialVersion) {
+        const freshActor = await tx.user.findUnique({ where: { id: actor.id }, select: { id: true, name: true, role: true, status: true, mustChangePassword: true, accountState: true, credentialVersion: true } });
+        if (!freshActor || freshActor.status !== "ACTIVE" || freshActor.accountState !== "ENABLED" || (freshActor.role !== "ADMIN" && freshActor.role !== "ORGANIZER") || freshActor.mustChangePassword || freshActor.credentialVersion !== actor.credentialVersion) {
           throw new RecordingError("Unauthorized", 401, "UNAUTHORIZED");
         }
         await takeRosterSharedLock(tx);
@@ -85,7 +85,7 @@ export async function recordAttendance(
         }
 
         let studentId: string | null;
-        try { studentId = await resolveStudentIdentity(tx, input.studentId); }
+        try { studentId = input.method === "MANUAL" ? (await findStudentByCanonicalId(tx, input.studentId))?.id ?? null : await resolveStudentIdentity(tx, input.studentId); }
         catch (error) { if (error instanceof StudentIdentityError) throw new RecordingError(error.message, error.status, error.code); throw error; }
         if (!studentId) throw new RecordingError("Student is not included in the event.", 404, "STUDENT_UNAVAILABLE");
         const student = await tx.student.findFirst({

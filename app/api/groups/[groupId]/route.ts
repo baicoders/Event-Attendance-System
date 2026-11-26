@@ -1,3 +1,4 @@
+import { guardEventsActor } from "@/globals/utils/guardedActor";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
@@ -38,10 +39,14 @@ export async function PATCH(
       err("Manage this group on the Custom Groups page.", "CUSTOM_GROUP"), { status: 409 },
     );
 
-    const group = await prisma.group.update({
+    const group = await prisma.$transaction(async tx => {
+      await guardEventsActor(tx, user, true);
+      await takeRosterExclusiveLock(tx);
+      return tx.group.update({
       where: { id: groupId },
       data: { name },
       select: { id: true, name: true, slug: true, category: true },
+      });
     });
 
     return NextResponse.json(ok(group), { status: 200 });
@@ -76,6 +81,7 @@ export async function DELETE(
 
     return await prisma.$transaction(async (tx) => {
       // Wait for preceding roster writers before reading any deletion guards.
+      await guardEventsActor(tx, user, true);
       await takeRosterExclusiveLock(tx);
       // Freeze both identities in the same order used by import/group writers.
       const ordered = [groupId, reassignToGroupId].filter((id): id is string => !!id).sort();
@@ -164,6 +170,9 @@ export async function DELETE(
           );
         }
       }
+
+      const classReferences=await tx.classSection.count({where:{sectionId:groupId}});
+      if(classReferences)return NextResponse.json(err('This section is selected by classroom classes. Review those class rosters before deleting it.','GROUP_HAS_CLASSES'),{status:409});
 
       const studentIds = group.students.map((student) => ({ id: student.id }));
 

@@ -1,0 +1,426 @@
+{
+  "scope": "T11 development verification; no production release authorization",
+  "base": "3135d3204c71c960fd6dfb2bef765a8a87a1f171",
+  "environment": {
+    "node": "22.23.4",
+    "migrationDatabase": "PostgreSQL 14.24 disposable local cluster",
+    "tlsFixture": "pinned PostgreSQL 17 Docker fixture",
+    "next": "15.5.20",
+    "prisma": "7.10.0"
+  },
+  "passingGroups": [
+    {
+      "name": "classroom-api",
+      "command": "pnpm test:classroom:api",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 52126,
+      "evidence": ".superpowers/classroom-regression/5cfa2759-74ea-4153-9ba1-190a60562530/classroom-api.log",
+      "runStartedAt": "2026-11-02T13:48:07.561Z"
+    },
+    {
+      "name": "classroom-students",
+      "command": "pnpm test:classroom:students",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 70337,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-students.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "classroom-roster-api",
+      "command": "node --import tsx scripts/test-classroom-rosters-api.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 41120,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-roster-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "classroom-onboarding-api",
+      "command": "node --import tsx scripts/test-classroom-onboarding-api.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 68071,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-onboarding-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "classroom-session-api",
+      "command": "node --import tsx scripts/test-classroom-sessions-api.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 44194,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-session-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "classroom-attendance-api",
+      "command": "node --import tsx scripts/test-classroom-attendance-api.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 34155,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-attendance-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "classroom-mobile",
+      "command": "pnpm test:classroom:mobile",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 103818,
+      "evidence": ".superpowers/classroom-regression/5cfa2759-74ea-4153-9ba1-190a60562530/classroom-mobile.log",
+      "runStartedAt": "2026-11-02T13:48:07.561Z"
+    },
+    {
+      "name": "classroom-report-api",
+      "command": "node --import tsx scripts/test-classroom-reports-api.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 41914,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-report-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "classroom-workspaces",
+      "command": "node --import tsx scripts/test-classroom-workspaces.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 44081,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-workspaces.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "events-operator",
+      "command": "pnpm test:operator",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 17488,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/events-operator.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "events-operator-api",
+      "command": "pnpm test:operator-api",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 110529,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/events-operator-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "events-progress",
+      "command": "pnpm test:progress",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 45825,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/events-progress.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "events-progress-api",
+      "command": "pnpm test:progress-api",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 26528,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/events-progress-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "account-recovery",
+      "command": "pnpm test:account-recovery",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 28585,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/account-recovery.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "student-import",
+      "command": "pnpm test:student-import",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 94443,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/student-import.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "student-import-durability",
+      "command": "pnpm test:student-import-durability",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 20767,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/student-import-durability.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "duplicate-event",
+      "command": "pnpm test:duplicate-event",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 48433,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/duplicate-event.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "backup",
+      "command": "pnpm test:backup",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 89002,
+      "evidence": ".superpowers/classroom-regression/eb4fc370-2e2e-472b-9c34-46ae63a45686/backup.log",
+      "runStartedAt": "2026-11-02T14:05:56.574Z"
+    },
+    {
+      "name": "db-config",
+      "command": "pnpm test:db-config",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 4219,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/db-config.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "db-tls",
+      "command": "pnpm test:db-tls",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 302750,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/db-tls.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "uswag",
+      "command": "pnpm test:uswag",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 255479,
+      "evidence": ".superpowers/classroom-regression/eb4fc370-2e2e-472b-9c34-46ae63a45686/uswag.log",
+      "runStartedAt": "2026-11-02T14:05:56.574Z"
+    },
+    {
+      "name": "events-explicit-units",
+      "command": "node --conditions=react-server --import dotenv/config --import tsx --test features/attendance/server/correctAttendance.test.ts globals/utils/student*.test.ts features/students/utils/qr*.test.ts globals/utils/groupDelete.test.ts globals/utils/eventReport.test.ts features/reports/utils/*.test.ts && node --import dotenv/config --import tsx --test features/students/components/StudentQRCard.test.ts features/reports/components/print/AttendanceSheet.test.ts",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 28449,
+      "evidence": ".superpowers/classroom-regression/eb4fc370-2e2e-472b-9c34-46ae63a45686/events-explicit-units.log",
+      "runStartedAt": "2026-11-02T14:05:56.574Z"
+    },
+    {
+      "name": "student-identifiers-api",
+      "command": "node --import tsx scripts/test-student-identifiers-api.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 24112,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/student-identifiers-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "student-detail",
+      "command": "node --import tsx scripts/test-student-detail.mjs --browser",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 52531,
+      "evidence": ".superpowers/classroom-regression/d272fe71-c4e8-4544-ad85-24fb468049e6/student-detail.log",
+      "runStartedAt": "2026-11-02T14:16:05.848Z"
+    },
+    {
+      "name": "student-bulk",
+      "command": "node --import tsx scripts/test-student-bulk.mjs --browser",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 28673,
+      "evidence": ".superpowers/classroom-regression/97cf37dd-2aab-431a-893a-143504b2b584/student-bulk.log",
+      "runStartedAt": "2026-11-02T14:19:02.895Z"
+    },
+    {
+      "name": "custom-groups",
+      "command": "node --import tsx scripts/test-custom-groups.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 27619,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/custom-groups.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "attendance-corrections",
+      "command": "node --import tsx scripts/test-attendance-corrections.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 11773,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/attendance-corrections.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "events-reports",
+      "command": "pnpm test:events:reports",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 89100,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/events-reports.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "events-https-e2e",
+      "command": "pnpm test:e2e:attendance",
+      "exitCode": 0,
+      "signal": null,
+      "milliseconds": 240090,
+      "evidence": ".superpowers/classroom-regression/d272fe71-c4e8-4544-ad85-24fb468049e6/events-https-e2e.log",
+      "runStartedAt": "2026-11-02T14:16:05.848Z"
+    }
+  ],
+  "retainedEarlierFailures": [
+    {
+      "name": "classroom-api",
+      "command": "pnpm test:classroom:api",
+      "exitCode": 1,
+      "signal": null,
+      "milliseconds": 31406,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-api.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "classroom-mobile",
+      "command": "pnpm test:classroom:mobile",
+      "exitCode": 1,
+      "signal": null,
+      "milliseconds": 47747,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/classroom-mobile.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "backup",
+      "command": "pnpm test:backup",
+      "exitCode": 1,
+      "signal": null,
+      "milliseconds": 110683,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/backup.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "uswag",
+      "command": "pnpm test:uswag",
+      "exitCode": 1,
+      "signal": null,
+      "milliseconds": 143772,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/uswag.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "events-explicit-units",
+      "command": "node --conditions=react-server --import dotenv/config --import tsx --test features/attendance/server/correctAttendance.test.ts globals/utils/student*.test.ts features/students/components/StudentQRCard.test.ts features/students/utils/qr*.test.ts globals/utils/groupDelete.test.ts globals/utils/eventReport.test.ts features/reports/utils/*.test.ts features/reports/components/print/AttendanceSheet.test.ts",
+      "exitCode": 1,
+      "signal": null,
+      "milliseconds": 21184,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/events-explicit-units.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "events-https-e2e",
+      "command": "pnpm test:e2e:attendance",
+      "exitCode": 1,
+      "signal": null,
+      "milliseconds": 228887,
+      "evidence": ".superpowers/classroom-regression/cc38eee6-54ce-4314-8df9-8cdb8462e20d/events-https-e2e.log",
+      "runStartedAt": "2026-11-02T13:37:54.282Z"
+    },
+    {
+      "name": "classroom-api",
+      "command": "pnpm test:classroom:api",
+      "exitCode": 1,
+      "signal": null,
+      "milliseconds": 80076,
+      "evidence": ".superpowers/classroom-regression/6a3eb539-bcf9-40b3-8288-b423fa9071c2/classroom-api.log",
+      "runStartedAt": "2026-11-02T13:42:11.146Z"
+    },
+    {
+      "name": "student-bulk",
+      "command": "node --import tsx scripts/test-student-bulk.mjs --browser",
+      "exitCode": 1,
+      "signal": null,
+      "milliseconds": 27977,
+      "evidence": ".superpowers/classroom-regression/d272fe71-c4e8-4544-ad85-24fb468049e6/student-bulk.log",
+      "runStartedAt": "2026-11-02T14:16:05.848Z"
+    }
+  ],
+  "additionalVerification": [
+    {
+      "command": "pnpm test:classroom:unit",
+      "passed": 64,
+      "failed": 0
+    },
+    {
+      "command": "pnpm test:classroom:db",
+      "passed": 84,
+      "failed": 0
+    },
+    {
+      "command": "pnpm test:operator after shared camera adapter fix",
+      "passed": 32,
+      "failed": 0
+    },
+    {
+      "command": "pnpm build (final camera adapter artifact)",
+      "exitCode": 0
+    },
+    {
+      "command": "current and archived cd54135 flag-off/history smoke",
+      "exitCode": 0
+    },
+    {
+      "command": "migration/runtime-role/backup rehearsal",
+      "record": "classroom-migration-rehearsal.json",
+      "exitCode": 0
+    }
+  ],
+  "knownLimitations": [
+    "Full repository lint has five errors in unchanged legacy files; changed-file lint has zero errors.",
+    "Local database durability settings were disabled; no crash-durability or hosted performance claim.",
+    "Earlier failed runs are retained; this record combines explicit passing reruns, not one all-green aggregate invocation.",
+    "TLS aggregate wall duration includes an intentional pause; child TLS test reports 11/11 in about 58 seconds."
+  ],
+  "releaseGates": [
+    "Actual iOS Safari and Android Chrome over deployed school HTTPS and mobile networks",
+    "At least three unfamiliar-teacher usability trials",
+    "Actual hosted timezone/history audit, pooler/topology, latency/concurrency and backup/restore verification",
+    "School field/privacy/retention policy and pilot operator signoff",
+    "Separate production migration/deployment authorization after all external gates"
+  ],
+  "preReviewImplementationCommit": "0d1dea1c4307047194b3d99ffe34d2131094fee0",
+  "finalReview": {
+    "reviewedHead": "dfed5d23f254450bf25e0c3d726a4bfdc0111eda",
+    "critical": 0,
+    "important": 2,
+    "minor": 0,
+    "acceptedAndFixed": 2,
+    "fixPasses": 1,
+    "reReviewPerformed": false,
+    "record": "classroom-review.md",
+    "before": {
+      "survivingRowShiftPx": 27,
+      "confirmationVisibleDuringDelayedRead": false,
+      "confirmationVisibleAfterRemoval": false
+    },
+    "after": {
+      "survivingRowShiftPx": 0,
+      "confirmationVisibleDuringDelayedRead": true,
+      "confirmationVisibleAfterRemoval": true,
+      "teacherScrollPreserved": true
+    },
+    "postFixPassing": [
+      "pnpm build including type check",
+      "pnpm test:classroom:unit (64/64)",
+      "focused delayed-filter production mobile test",
+      "pnpm test:classroom:mobile (full suite)",
+      "Class onboarding API +375px first-attendance browser",
+      "Class reports API +375px/CSV/print/PDF/admin browser",
+      "scoped lint and git diff --check"
+    ],
+    "productionSourceChanges": [
+      "features/classroom/components/ManualRoster.tsx",
+      "features/classroom/components/SessionAttendancePage.tsx"
+    ]
+  }
+}

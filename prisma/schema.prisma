@@ -50,6 +50,14 @@ model Student {
   yearLevel   YearLevel?
   schoolLevel SchoolLevel?
 
+  profileRevision Int @default(0)
+  archivedAt DateTime? @db.Timestamptz(3)
+  rosterExceptions ClassRosterException[]
+  classroomMemberships SessionRosterMember[]
+  qrCodes StudentQrCode[]
+  profileChanges StudentProfileChange[]
+  verifications StudentVerification[]
+
   // Relations: Students can belong to multiple groups (House, Strand, etc.)
   groups  Group[]
   customMemberships CustomGroupMembership[]
@@ -62,6 +70,7 @@ model Student {
   // Roster sort modes, so the common orderings don't need a temp B-tree.
   // Group-membership filtering goes through the Group relation, so it is not
   // indexed here; that belongs on the join table if it ever needs tuning.
+  @@index([archivedAt, id])
   @@index([updatedAt, id])
   @@index([lastName, firstName, id])
   @@index([schoolLevel, yearLevel, lastName, firstName, id])
@@ -162,12 +171,19 @@ model User {
   reviewedEvents  Event[]    @relation("EventReviewer")
   createdRecords  Record[]   @relation("RecordCreator")
   modifiedRecords Record[]   @relation("RecordModifier")
+  accountState    AccountState @default(ENABLED)
+  classroomMembership ClassroomMembership?
+  teacherOnboarding TeacherOnboarding?
+  primaryClasses ClassOffering[] @relation("PrimaryClassTeacher")
+
+  @@index([accountState])
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 }
 
 model Group {
+  classroomSections ClassSection[]
   id       String        @id @default(cuid())
   name     String
   slug     String        @unique
@@ -202,6 +218,7 @@ model CustomGroupMembership {
 }
 
 enum UserRole {
+  MEMBER
   ORGANIZER
   ADMIN
 }
@@ -258,4 +275,344 @@ enum EventCategory {
   PROGRAM
   SECTION
   YEAR
+}
+
+// Independent of legacy User.status, which continues to govern Events approval.
+enum AccountState {
+  ENABLED
+  DISABLED
+}
+
+enum ClassroomMembershipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+  REVOKED
+}
+
+model ClassroomMembership {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  status ClassroomMembershipStatus @default(PENDING)
+  departmentOrDesignation String @db.VarChar(160)
+  staffReference String? @db.VarChar(100)
+  applicationText String @default("") @db.VarChar(1000)
+  appliedAt DateTime @default(now()) @db.Timestamptz(3)
+  reviewedAt DateTime? @db.Timestamptz(3)
+  reviewerId String?
+  reviewerName String?
+  decisionReason String? @db.VarChar(1000)
+  revision Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  @@index([status, appliedAt, userId])
+}
+
+model TeacherOnboarding {
+  classId String?
+  class ClassOffering? @relation(fields:[classId],references:[id],onDelete:Restrict)
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  flowVersion Int @default(1)
+  step String @default("WELCOME") @db.VarChar(40)
+  draft Json @default("{}") @db.JsonB
+  completedAt DateTime? @db.Timestamptz(3)
+  revision Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// Scalar attribution is deliberately retained if an account is later retired.
+model ClassroomAudit {
+  id BigInt @id @default(autoincrement())
+  action String @db.VarChar(80)
+  entityType String @db.VarChar(80)
+  entityId String
+  classId String?
+  sessionId String?
+  studentId String?
+  actorId String
+  actorName String
+  before Json? @db.JsonB
+  after Json? @db.JsonB
+  reason String? @db.VarChar(1000)
+  commandId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([classId, id])
+  @@index([sessionId, id])
+  @@index([studentId, id])
+  @@index([actorId, createdAt, id])
+  @@index([action, createdAt, id])
+  @@index([createdAt, id])
+  @@index([entityId, createdAt, id])
+}
+
+model ClassroomCommandReceipt {
+  actorId String
+  commandId String @db.Uuid
+  operation String @db.VarChar(80)
+  resourceId String
+  requestHash String @db.VarChar(64)
+  result Json @db.JsonB
+  httpStatus Int @default(200)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@id([actorId, commandId])
+  @@index([resourceId, createdAt])
+}
+
+// Shared fixed-window request limits. Retention cleanup may delete expired rows.
+model RequestRateLimit {
+  key String @id @db.VarChar(64)
+  hits Int
+  resetAt DateTime @db.Timestamptz(3)
+  @@index([resetAt])
+}
+
+// Raw QR codes remain permanently reserved across every identifier namespace.
+enum StudentQrState {
+  RESOLVABLE
+  RETIRED
+  QUARANTINED
+}
+model StudentQrCode {
+  code String @id @db.VarChar(128)
+  reservedOwnerId String?
+  studentId String?
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  state StudentQrState @default(RESOLVABLE)
+  originalKind String
+  candidateEvidence Json? @db.JsonB
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  retiredAt DateTime? @db.Timestamptz(3)
+  @@index([studentId, state])
+}
+model StudentProfileChange {
+  id BigInt @id @default(autoincrement())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  fromRevision Int?
+  toRevision Int
+  before Json? @db.JsonB
+  after Json @db.JsonB
+  actorId String?
+  actorName String
+  source String
+  reason String?
+  commandId String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([studentId, toRevision])
+  @@index([studentId, id])
+  @@index([actorId, createdAt, id])
+  @@index([createdAt, id])
+}
+model StudentVerification {
+  id BigInt @id @default(autoincrement())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  profileRevision Int
+  verifiedContentHash String @db.VarChar(64)
+  state String
+  note String?
+  actorId String
+  actorName String
+  commandId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([studentId, profileRevision, id])
+  @@index([createdAt, id])
+  @@index([actorId, createdAt, id])
+}
+// Transaction-local staging, emptied by a deferred trigger before COMMIT.
+// Captures one original snapshot for raw SQL + implicit membership writes.
+model StudentProfilePending {
+  transactionId BigInt
+  studentId String
+  before Json? @db.JsonB
+  metadata Json @db.JsonB
+  flushed Boolean @default(false)
+  @@id([transactionId, studentId])
+}
+
+model AcademicTerm {
+ id String @id @default(cuid())
+ name String @db.VarChar(100)
+ normalizedKey String @unique @db.VarChar(260)
+ startDate DateTime @db.Date
+ endDate DateTime @db.Date
+ timeZone String @default("Asia/Manila")
+ archivedAt DateTime? @db.Timestamptz(3)
+ createdById String
+ revision Int @default(0)
+ classes ClassOffering[]
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@index([startDate,endDate])
+}
+model Subject {
+ id String @id @default(cuid())
+ code String? @db.VarChar(40)
+ normalizedCode String? @unique @db.VarChar(80)
+ title String @db.VarChar(160)
+ normalizedTitle String @db.VarChar(320)
+ archivedAt DateTime? @db.Timestamptz(3)
+ createdById String
+ revision Int @default(0)
+ classes ClassOffering[]
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@index([normalizedTitle])
+}
+model ClassOffering {
+ id String @id @default(cuid())
+ termId String
+ term AcademicTerm @relation(fields:[termId],references:[id],onDelete:Restrict)
+ subjectId String
+ subject Subject @relation(fields:[subjectId],references:[id],onDelete:Restrict)
+ primaryTeacherId String
+ primaryTeacher User @relation("PrimaryClassTeacher",fields:[primaryTeacherId],references:[id],onDelete:Restrict)
+ displayName String @db.VarChar(160)
+ schedule Json? @db.JsonB
+ graceMinutes Int @default(15)
+ configRevision Int @default(0)
+ rosterRevision Int @default(0)
+ archivedAt DateTime? @db.Timestamptz(3)
+ sections ClassSection[]
+ rosterExceptions ClassRosterException[]
+ onboarding TeacherOnboarding[]
+ sessions ClassroomSession[]
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@index([primaryTeacherId,termId,archivedAt,id])
+ @@index([termId,subjectId])
+}
+model ClassSection {
+ classId String
+ class ClassOffering @relation(fields:[classId],references:[id],onDelete:Restrict)
+ sectionId String
+ section Group @relation(fields:[sectionId],references:[id],onDelete:Restrict)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@id([classId,sectionId])
+ @@index([sectionId,classId])
+}
+enum RosterExceptionKind {
+ INCLUDE
+ EXCLUDE
+}
+model ClassRosterException {
+ classId String
+ class ClassOffering @relation(fields:[classId],references:[id],onDelete:Restrict)
+ studentId String
+ student Student @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ kind RosterExceptionKind
+ reason String @db.VarChar(1000)
+ createdById String
+ updatedById String
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@id([classId,studentId])
+ @@index([studentId,classId])
+}
+
+
+enum ClassroomSessionState {
+ ACTIVE
+ FINALIZED
+ CANCELED
+}
+enum ClassroomAttendanceStatus {
+ UNMARKED
+ PRESENT
+ LATE
+ ABSENT
+ EXCUSED
+}
+enum ClassroomAttendanceMethod {
+ SCANNED
+ MANUAL
+ FINALIZATION
+}
+model ClassroomSession {
+ id String @id @default(cuid())
+ classId String
+ class ClassOffering @relation(fields:[classId],references:[id],onDelete:Restrict)
+ state ClassroomSessionState @default(ACTIVE)
+ scheduledStartAt DateTime @db.Timestamptz(3)
+ startedAt DateTime @default(now()) @db.Timestamptz(3)
+ finalizedAt DateTime? @db.Timestamptz(3)
+ canceledAt DateTime? @db.Timestamptz(3)
+ timeZone String @default("Asia/Manila")
+ graceMinutes Int
+ lateAfter DateTime @db.Timestamptz(3)
+ originalPolicySnapshot Json @db.JsonB
+ classSnapshot Json @db.JsonB
+ rosterConfigSnapshot Json @db.JsonB
+ lifecycleRevision Int @default(0)
+ snapshotRevision Int @default(0)
+ startedById String
+ startedByName String
+ finalizedById String?
+ finalizedByName String?
+ canceledById String?
+ canceledByName String?
+ cancellationReason String? @db.VarChar(1000)
+ members SessionRosterMember[]
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@index([classId,scheduledStartAt,id])
+ @@index([state,startedAt])
+}
+model SessionRosterMember {
+ sessionId String
+ session ClassroomSession @relation(fields:[sessionId],references:[id],onDelete:Restrict)
+ studentId String
+ student Student @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ studentSnapshot Json @db.JsonB
+ originSnapshot Json @db.JsonB
+ originalMember Boolean @default(true)
+ admittedAt DateTime @default(now()) @db.Timestamptz(3)
+ included Boolean @default(true)
+ removedAt DateTime? @db.Timestamptz(3)
+ removalReason String? @db.VarChar(1000)
+ membershipRevision Int @default(0)
+ attendance ClassroomAttendance?
+ changes ClassroomAttendanceChange[]
+ @@id([sessionId,studentId])
+ @@index([studentId,sessionId])
+ @@index([sessionId,included,studentId])
+}
+model ClassroomAttendance {
+ sessionId String
+ studentId String
+ member SessionRosterMember @relation(fields:[sessionId,studentId],references:[sessionId,studentId],onDelete:Restrict)
+ status ClassroomAttendanceStatus @default(UNMARKED)
+ method ClassroomAttendanceMethod?
+ markedAt DateTime? @db.Timestamptz(3)
+ recordedById String?
+ recordedByName String?
+ lastModifiedById String?
+ lastModifiedByName String?
+ excuseNote String? @db.VarChar(1000)
+ revision Int @default(0)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@id([sessionId,studentId])
+ @@index([sessionId,status,studentId])
+}
+model ClassroomAttendanceChange {
+ id BigInt @id @default(autoincrement())
+ sessionId String
+ studentId String
+ member SessionRosterMember @relation(fields:[sessionId,studentId],references:[sessionId,studentId],onDelete:Restrict)
+ action String @db.VarChar(40)
+ before Json @db.JsonB
+ after Json @db.JsonB
+ actorId String
+ actorName String
+ reason String? @db.VarChar(1000)
+ commandId String @db.Uuid
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@index([sessionId,id])
+ @@index([studentId,sessionId,id])
+ @@index([actorId,createdAt,id])
+  @@index([createdAt, id])
 }

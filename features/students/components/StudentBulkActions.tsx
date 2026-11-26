@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@/globals/contexts/AuthContext";
 import { BULK_EXPORT_LIMIT, BULK_MUTATION_LIMIT } from "@/globals/schemas/studentBulk";
 
 type Props = {
@@ -23,6 +24,8 @@ export default function StudentBulkActions({
   onChangeHouse,
   isExporting = false,
 }: Props) {
+  const { user } = useAuth();
+  const canMutate = user?.role === "ADMIN";
   if (selectedCount === 0) return null;
 
   const tooManyForMutation = selectedCount > BULK_MUTATION_LIMIT;
@@ -45,7 +48,7 @@ export default function StudentBulkActions({
         <span className="sr-only">{selectedCount} students selected</span>
       </div>
 
-      {tooManyForMutation ? (
+      {canMutate && tooManyForMutation ? (
         <p role="alert" className="text-xs text-amber-800">
           Selection exceeds {BULK_MUTATION_LIMIT} students for group changes. Choose a
           smaller selection to enable Change section/house. Export remains available
@@ -82,6 +85,7 @@ export default function StudentBulkActions({
         >
           {isExporting ? "Preparing…" : "Export selected"}
         </button>
+        {canMutate ? <>
         <button
           type="button"
           onClick={onChangeSection}
@@ -98,6 +102,7 @@ export default function StudentBulkActions({
         >
           Change house
         </button>
+        </> : null}
       </div>
     </div>
   );

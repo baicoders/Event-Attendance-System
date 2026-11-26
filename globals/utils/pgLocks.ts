@@ -106,3 +106,11 @@ export async function lockEventRow(
     await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
   }
 }
+
+/** Independent Classroom result pairs never share Events attendance keys. */
+export function classroomAttendancePairKey(sessionId:string,studentId:string):bigint {
+  return key64('eas','classroom-attendance',sessionId,studentId);
+}
+export async function takeClassroomAttendancePairLock(tx:AdvisoryTx,sessionId:string,studentId:string):Promise<void>{
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${classroomAttendancePairKey(sessionId,studentId)})`;
+}

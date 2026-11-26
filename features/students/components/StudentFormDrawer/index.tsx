@@ -20,6 +20,7 @@ import {
 } from "@/globals/schemas/studentSchema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useConfirm } from "@/globals/contexts/ConfirmModalContext";
+import type { IdentifierDisposition } from '../../server/qrReservations';
 
 const FIELDS_TO_VALIDATE: Record<Step, (keyof StudentFormValues)[]> = {
   personal: ["usn", "lrn", "firstName", "lastName", "middleName"],
@@ -32,7 +33,7 @@ interface Props {
   isOpen: boolean;
   onViewQR: () => void;
   onClose: () => void;
-  onSubmit: (validatedFormData: StudentFormValues) => Promise<void> | void;
+  onSubmit: (validatedFormData: StudentFormValues, identifierDisposition?: IdentifierDisposition) => Promise<void> | void;
   saveError?: string | null;
   onReloadCurrent?: () => void;
 }
@@ -52,6 +53,7 @@ export default function StudentFormDrawer({
   const [isSaving, setIsSaving] = useState(false);
   const confirm = useConfirm();
   const isEdit = !!student;
+  const [disposition, setDisposition] = useState<IdentifierDisposition | ''>('');
 
   const methods = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -71,6 +73,8 @@ export default function StudentFormDrawer({
     },
   });
   const { reset, trigger, formState } = methods;
+  const identifiers = [methods.watch('usn'), methods.watch('lrn')];
+  const removedIdentifiers = student ? [student.usn, student.lrn].filter((code): code is string => !!code && !identifiers.includes(code)) : [];
 
   useEffect(() => {
     if (!student) return;
@@ -102,8 +106,12 @@ export default function StudentFormDrawer({
 
   const handleSave = methods.handleSubmit(async values => {
     if (isSaving) return;
+    if (removedIdentifiers.length && !disposition) {
+      methods.setError('root', { message: 'Choose what happens to existing printed QR codes.' });
+      return;
+    }
     setIsSaving(true);
-    try { await onSubmit(values); }
+    try { await onSubmit(values, disposition || undefined); }
     catch { /* The host reports the error and the form retains its values. */ }
     finally { setIsSaving(false); }
   });
@@ -148,6 +156,13 @@ export default function StudentFormDrawer({
                 {saveError}
                 {onReloadCurrent && <button type="button" className="mt-2 block underline" onClick={onReloadCurrent}>Reload current version</button>}
               </div>}
+              {removedIdentifiers.length > 0 ? <div className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+                <p>Changing {removedIdentifiers.join(', ')} affects already-printed QR codes. Reserved values can never identify someone else.</p>
+                <label className="block font-medium">Existing printed cards<select aria-label="Existing printed cards" className="mt-2 min-h-12 w-full rounded border bg-white p-2" value={disposition} disabled={isSaving} onChange={event => setDisposition(event.target.value as IdentifierDisposition | '')}>
+                  <option value="">Choose an action</option><option value="KEEP_ALIAS_CONFIRMED">Confirmed same student — keep cards working</option><option value="REPRINT_REQUIRED">Retire old codes and reprint cards</option>
+                </select></label><p>Only keep cards if you confirmed they belong to this student. Otherwise retire the codes and reprint.</p>
+                {formState.errors.root?.message ? <p role="alert">{formState.errors.root.message}</p> : null}
+              </div> : null}
               {step === "personal" && <PersonalInfoSection isEdit={isEdit} />}
               {step === "academic" && <AcademicSection />}
               {step === "groups" && <GroupsSection />}

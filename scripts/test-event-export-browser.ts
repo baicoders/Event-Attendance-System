@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Local Chrome smoke check for #74 after scripts/test-event-export.ts. */
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
@@ -23,14 +24,14 @@ function assertDisposablePostgresDatabase() {
 
 async function main() {
   assertDisposablePostgresDatabase();
-  const base = "http://127.0.0.1:3112";
+  const base = process.env.EXPORT_TEST_BASE_URL ?? "http://127.0.0.1:3112";
   const owner = await prisma.user.findFirst({ where: { name: "Owner" }, orderBy: { createdAt: "desc" } });
   const event = await prisma.event.findFirst({ where: { title: "Export, fixture" }, orderBy: { createdAt: "desc" } });
   assert.ok(owner && event);
   const login = await fetch(`${base}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: owner.email, password: "password123" }) });
   assert.equal(login.status, 200);
   const [name, value] = login.headers.get("set-cookie")!.split(";")[0].split("=");
-  const targets = await (await fetch("http://127.0.0.1:9223/json/list")).json() as { type: string; webSocketDebuggerUrl: string }[];
+  const targets = await (await fetch((process.env.EXPORT_TEST_CDP_URL ?? "http://127.0.0.1:9223") + "/json/list")).json() as { type: string; webSocketDebuggerUrl: string }[];
   const target = targets.find((item) => item.type === "page");
   assert.ok(target);
   const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -90,7 +91,7 @@ async function main() {
     const stress = await prisma.event.create({ data: { title: "Long group print fixture", category: "ALL", status: "APPROVED", start: event.start, end: event.end, createdById: owner.id } });
     for (let index = 0; index < 80; index++) {
       const group = await prisma.group.create({ data: { name: `Very long section name for group ${index + 1}`, slug: `issue74-print-${Date.now()}-${index}`, category: "SECTION" } });
-      await prisma.student.create({ data: { id: String(10000000000 + index), firstName: "Print", lastName: `Student ${index}`, schoolLevel: "COLLEGE", yearLevel: "YEAR_1", groups: { connect: [{ id: group.id }] } } });
+      await prisma.student.create({ data: { id: String(10000000000 + index), usn: String(10000000000 + index), firstName: "Print", lastName: `Student ${index}`, schoolLevel: "COLLEGE", yearLevel: "YEAR_1", groups: { connect: [{ id: group.id }] } } });
     }
     await send("Page.navigate", { url: `${base}/reports/events/${stress.id}/print?view=summary&groupBy=SECTION` });
     await waitFor("document.body.innerText.includes('Long group print fixture') && document.body.innerText.includes('TOTAL')");

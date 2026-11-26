@@ -34,6 +34,7 @@ async function assertFreshAdmin(
     select: {
       role: true,
       status: true,
+      accountState: true,
       mustChangePassword: true,
       credentialVersion: true,
     },
@@ -55,7 +56,7 @@ async function assertFreshAdmin(
     throw new AuthError("Forbidden", 403, "FORBIDDEN");
   }
 
-  if (freshAdmin.status !== "ACTIVE") {
+  if (freshAdmin.status !== "ACTIVE" || freshAdmin.accountState !== "ENABLED") {
     throw new AuthError("Account not active", 403, "INACTIVE_USER");
   }
 
@@ -85,6 +86,7 @@ export async function PATCH(
         id: true,
         role: true,
         status: true,
+      accountState: true,
       },
     });
 
@@ -113,6 +115,7 @@ export async function PATCH(
             id: true,
             role: true,
             status: true,
+      accountState: true,
           },
         });
 
@@ -130,6 +133,7 @@ export async function PATCH(
             name: true,
             email: true,
             status: true,
+      accountState: true,
             rejectionReason: true,
           },
         });
@@ -165,6 +169,7 @@ export async function PATCH(
           id: true,
           role: true,
           status: true,
+      accountState: true,
         },
       });
 
@@ -182,6 +187,7 @@ export async function PATCH(
           name: true,
           email: true,
           status: true,
+      accountState: true,
           rejectionReason: true,
         },
       });

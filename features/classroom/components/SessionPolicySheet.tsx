@@ -1,0 +1,10 @@
+'use client';
+import { Save } from 'lucide-react';
+import { useState } from 'react';
+import { Textarea } from '@/globals/components/shad-cn/textarea';
+import { Button } from '@/globals/components/shad-cn/button';
+import FormInput from '@/globals/components/shared/FormInput';
+import type { ClassroomSession } from '../types/attendance';
+import { manilaDateTimeInput,manilaInputInstant } from '../utils/manualRosterState';
+import AttendanceActionSheet from './AttendanceActionSheet';
+export default function SessionPolicySheet({session,busy,error,onClose,onSave}:{session:ClassroomSession;busy:boolean;error:string;onClose:()=>void;onSave:(payload:Record<string,unknown>)=>void}){const [start,setStart]=useState(manilaDateTimeInput(session.scheduledStartAt));const [grace,setGrace]=useState(session.graceMinutes);const [reason,setReason]=useState('');const [localError,setError]=useState('');return <AttendanceActionSheet open title="Correct this meeting’s late policy" description="Existing results are retained. This policy applies to future scans in this active session; original settings remain audited." onClose={onClose}><FormInput label="Meeting start (Asia/Manila)" type="datetime-local" value={start} onChange={event=>setStart(event.target.value)}/><FormInput label="Grace minutes" type="number" min={0} max={180} value={grace} onChange={event=>setGrace(Number(event.target.value))}/><label className="block text-sm font-medium">Reason<Textarea className="mt-2 min-h-24 w-full rounded-xl border p-3" maxLength={1000} value={reason} onChange={event=>setReason(event.target.value)}/></label>{error||localError?<p role="alert" className="text-sm text-rose-800">{localError||error}</p>:null}<Button className="min-h-12 w-full" disabled={busy||reason.trim().length<3||!Number.isInteger(grace)||grace<0||grace>180} onClick={()=>{try{onSave({startAt:manilaInputInstant(start),graceMinutes:grace,expectedLifecycleRevision:session.lifecycleRevision,reason:reason.trim()});}catch(error){setError((error as Error).message);}}}><Save aria-hidden className="size-4 shrink-0"/>Save session policy</Button></AttendanceActionSheet>;}

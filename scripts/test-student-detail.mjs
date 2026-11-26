@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Disposable production API/browser fixture. Run after build. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -236,9 +237,9 @@ async function browserCheck(cookie) {
     const lrnOnly=await db.student.findUniqueOrThrow({where:{lrn:"000000123460"}});
     for(const [code,canonicalId] of [["00000123460",issueStudentId],["000000123460",lrnOnly.id]]) {
       await evaluate(`(()=>{const input=document.querySelector("#manual-attendance-search");input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,${JSON.stringify(code)});input.dispatchEvent(new Event("input",{bubbles:true}));})()`);
-      await until(`[...document.querySelectorAll("button")].some(button=>button.getAttribute("aria-label")?.endsWith(${JSON.stringify(", "+canonicalId)})&&button.textContent?.startsWith("Record time in")&&!button.disabled)`);
-      await evaluate(`[...document.querySelectorAll("button")].find(button=>button.getAttribute("aria-label")?.endsWith(${JSON.stringify(", "+canonicalId)})&&button.textContent?.startsWith("Record time in")).click()`);
-      await until(`(()=>{const result=document.querySelector('[aria-label="Manual attendance"] div[aria-live="polite"]');return result?.textContent?.includes("Time-in recorded")&&result.textContent.includes(${JSON.stringify(canonicalId)});})()`);
+      await until(`[...document.querySelectorAll("button")].some(button=>button.getAttribute("aria-label")?.endsWith(${JSON.stringify(", "+code)})&&button.textContent?.startsWith("Record time in")&&!button.disabled)`);
+      await evaluate(`[...document.querySelectorAll("button")].find(button=>button.getAttribute("aria-label")?.endsWith(${JSON.stringify(", "+code)})&&button.textContent?.startsWith("Record time in")).click()`);
+      await until(`(()=>{const result=document.querySelector('[aria-label="Manual attendance"] div[aria-live="polite"]');return result?.textContent?.includes("Time-in recorded")&&result.textContent.includes(${JSON.stringify(code)});})()`);
       const recorded=await db.record.findUniqueOrThrow({where:{eventId_studentId:{eventId:attendanceEvent.id,studentId:canonicalId}}});
       assert.equal(recorded.method,"MANUAL");assert.ok(recorded.timein);
     }
@@ -321,10 +322,10 @@ try {
   const legacy = await request("/api/students", cookie, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, firstName: "Annie" }) });
   assert.equal(legacy.status, 409, "creation cannot silently overwrite an existing student");
   assert.equal((await request(path,cookie)).body.data.editVersion,beforeLegacy.body.data.editVersion);
-  await db.student.delete({ where: { id: form.id } });
-  assert.equal((await patch(newVersion, form)).status, 404);
-  assert.equal(await db.student.count(), 5);
-  console.log("Student detail API fixture passed: auth, ID and field validation, no-op, edit-only save, legacy-write conflict, group review, encoded ID, and deletion.");
+  await assert.rejects(db.student.delete({ where: { id: form.id } }), /Foreign key constraint/);
+  assert.equal((await request("/api/students/missing-student",cookie,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedVersion:newVersion,student:{firstName:"Missing"}})})).status,404);
+  assert.equal(await db.student.count(), 6);
+  console.log("Student detail API fixture passed: auth, ID and field validation, no-op, edit-only save, legacy-write conflict, group review, encoded ID, immutable-history deletion guard, and missing records.");
 } finally {
   if (server?.pid) { try { process.kill(-server.pid, "SIGTERM"); } catch {} }
   if (chrome?.pid) { try { process.kill(-chrome.pid, "SIGTERM"); } catch {} }

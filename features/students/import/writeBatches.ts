@@ -62,7 +62,7 @@ export async function writeImportBatches(tx: Prisma.TransactionClient, review: I
     }
     const membershipRows = batch.filter(item => item.row.status === 'CREATE' || item.row.changes.some(change => change.field in IMPORT_GROUP_FIELDS));
     const replaceIds = membershipRows.filter(item => item.row.status === 'UPDATE').map(item => item.row.student.id);
-    if (replaceIds.length) await tx.$executeRaw(Prisma.sql`DELETE FROM "_GroupToStudent" WHERE "B" IN (${Prisma.join(replaceIds)})`);
+    if (replaceIds.length) await tx.$executeRaw(Prisma.sql`DELETE FROM "_GroupToStudent" m USING "Group" g WHERE m."A"=g.id AND g.category::text IN ('SECTION','HOUSE','PROGRAM','DEPARTMENT','STRAND') AND m."B" IN (${Prisma.join(replaceIds)})`);
     const memberships = membershipRows.flatMap(({ row }) => row.groupIds.map(groupId => ({ groupId, studentId: row.student.id })));
     if (memberships.length) await tx.$executeRaw(Prisma.sql`
       INSERT INTO "_GroupToStudent" ("A", "B")

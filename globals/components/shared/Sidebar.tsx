@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { deepestNavigationRoute } from "@/globals/utils/navigation";
+import { useAccountBackgroundPathname } from "@/features/auth/hooks/useAccountBackgroundPathname";
 import {
   BarChart3,
   CalendarDays,
@@ -13,10 +14,12 @@ import {
   QrCode,
   Settings,
   Users,
+  UserRound,
   Network,
   type LucideIcon,
 } from "lucide-react";
 
+import WorkspaceSwitcher from "@/features/auth/components/WorkspaceSwitcher";
 import { useAuth } from "@/globals/contexts/AuthContext";
 import { useSidebar } from "@/globals/contexts/SidebarContext";
 import { useLogout } from "@/globals/hooks/useLogout";
@@ -28,7 +31,7 @@ const darkFocusRing = cn(
   "focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
 );
 
-type NavigationItem = {
+export type NavigationItem = {
   text: string;
   icon: LucideIcon;
   route: string;
@@ -59,7 +62,7 @@ const NavigationLink = ({ item, isExpanded, current }: NavigationLinkProps) => {
     <Link
       href={item.route}
       className={cn(
-        "group flex w-full items-center rounded-xl px-3 py-2.5 transition-all duration-200",
+        "group flex min-h-12 w-full items-center rounded-xl px-3 py-2.5 transition-all duration-200",
         darkFocusRing,
         isExpanded ? "gap-3" : "justify-center",
         current
@@ -80,19 +83,18 @@ const NavigationLink = ({ item, isExpanded, current }: NavigationLinkProps) => {
 
 /** Desktop-only fixed nav rail (`lg:` and up). Mobile uses `MobileTopBar` +
  * `MobileBottomNav` instead — see docs/design-system.md responsive guidance. */
-const Sidebar = () => {
+const Sidebar = ({ items = navigationItems, workspace = "EVENTS" }: { items?: NavigationItem[]; workspace?: "EVENTS" | "CLASS" }) => {
   const { toggleExpanded, isExpanded } = useSidebar();
   const { user } = useAuth();
   const handleLogout = useLogout();
-  const pathname = usePathname();
+  const pathname = useAccountBackgroundPathname();
 
   const currentRoute = (route: string): "page" | "location" | undefined => {
-    if (pathname === route) return "page";
-    if (pathname.startsWith(`${route}/`)) return "location";
-    return undefined;
+    if (deepestNavigationRoute(pathname, items.map(item => item.route)) !== route) return undefined;
+    return pathname === route ? "page" : "location";
   };
 
-  const initials = (user?.name ?? "Organizer")
+  const initials = (user?.name ?? (workspace === "CLASS" ? "Teacher" : "Organizer"))
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -132,7 +134,7 @@ const Sidebar = () => {
                   <p className="text-xs font-semibold tracking-[0.18em] text-white/90">
                     ACLC
                   </p>
-                  <p className="text-[11px] text-slate-300">Attendance</p>
+                  <p className="text-[11px] text-slate-300">{workspace === "CLASS" ? "Class" : "Events"} Attendance</p>
                 </div>
               </div>
 
@@ -140,7 +142,7 @@ const Sidebar = () => {
                 type="button"
                 onClick={toggleExpanded}
                 className={cn(
-                  "rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
+                  "flex size-12 shrink-0 items-center justify-center rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
                   darkFocusRing
                 )}
                 aria-label="Collapse sidebar"
@@ -154,7 +156,7 @@ const Sidebar = () => {
                 type="button"
                 onClick={toggleExpanded}
                 className={cn(
-                  "rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
+                  "flex size-12 shrink-0 items-center justify-center rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white",
                   darkFocusRing
                 )}
                 aria-label="Expand sidebar"
@@ -167,7 +169,7 @@ const Sidebar = () => {
         </div>
 
         <nav aria-label="Primary" className="mt-4 flex-1 space-y-1.5">
-          {navigationItems.map((item) => (
+          {items.map((item) => (
             <NavigationLink
               key={item.route}
               item={item}
@@ -178,13 +180,15 @@ const Sidebar = () => {
         </nav>
 
         <div className="space-y-2 border-t border-white/10 pt-3">
+          {workspace === "CLASS" ? <Link href="/account/settings" scroll={false} aria-label="Account settings" className={cn("flex min-h-12 items-center rounded-xl px-3 text-sm text-slate-200 hover:bg-white/10", darkFocusRing, isExpanded ? "gap-3" : "justify-center")}><UserRound aria-hidden className="size-5 shrink-0" />{isExpanded ? 'Account settings' : null}</Link> : null}
+          {isExpanded ? <WorkspaceSwitcher appearance="dark" /> : null}
           {isExpanded ? (
             <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
               <p className="truncate text-sm font-semibold text-white">
-                {user?.name ?? "Organizer"}
+                {user?.name ?? (workspace === "CLASS" ? "Teacher" : "Organizer")}
               </p>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-300">
-                {user?.role ?? "ORGANIZER"}
+                {workspace === "CLASS" ? (user?.role === "ADMIN" ? "Administrator" : "Teacher") : user?.role ?? "ORGANIZER"}
               </p>
             </div>
           ) : (
@@ -196,7 +200,7 @@ const Sidebar = () => {
                 {initials || "O"}
               </div>
               <span className="sr-only">
-                {user?.name ?? "Organizer"}, {user?.role ?? "ORGANIZER"}
+                {user?.name ?? (workspace === "CLASS" ? "Teacher" : "Organizer")}, {workspace === "CLASS" ? (user?.role === "ADMIN" ? "Administrator" : "Teacher") : user?.role ?? "ORGANIZER"}
               </span>
             </div>
           )}
@@ -205,7 +209,7 @@ const Sidebar = () => {
             type="button"
             onClick={handleLogout}
             className={cn(
-              "flex w-full items-center rounded-xl bg-red-600 px-3 py-2.5 text-white transition-colors hover:bg-red-700",
+              "flex min-h-12 w-full items-center rounded-xl bg-red-600 px-3 py-2.5 text-white transition-colors hover:bg-red-700",
               darkFocusRing,
               isExpanded ? "gap-3" : "justify-center"
             )}

@@ -81,7 +81,7 @@ export async function loadAuthorizedEventReportSnapshot(
   maxStudents?: number,
 ): Promise<EventReportSnapshot | null> {
   return prisma.$transaction(async (tx) => {
-    const currentUser = await tx.user.findUnique({ where: { id: user.id }, select: { id: true, role: true, status: true, mustChangePassword: true, credentialVersion: true } });
+    const currentUser = await tx.user.findUnique({ where: { id: user.id }, select: { id: true, role: true, status: true, mustChangePassword: true, accountState: true, credentialVersion: true } });
     if (!currentUser) throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
     if (currentUser.credentialVersion !== user.credentialVersion) throw new AuthError("Unauthorized", 401, "UNAUTHORIZED");
     const viewer = { ...user, ...currentUser };

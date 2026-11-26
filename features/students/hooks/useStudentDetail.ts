@@ -7,6 +7,7 @@ import { ApiError, fetchApi } from "@/globals/utils/api";
 import { queryKeys } from "@/globals/utils/queryKeys";
 import type { StudentFormValues } from "@/globals/schemas/studentSchema";
 import type { StudentDetail, StudentDetailDTO } from "@/globals/types/students";
+import type { IdentifierDisposition } from '../server/qrReservations';
 
 const transform = (data: StudentDetailDTO): StudentDetail => ({
   ...data, createdAt: new Date(data.createdAt), updatedAt: new Date(data.updatedAt),
@@ -43,10 +44,10 @@ export function useEditStudentDetail(studentId: string) {
   const principalRef = useRef(user?.id ?? "");
   principalRef.current = user?.status === "ACTIVE" ? user.id : "";
   return useMutation({
-    mutationFn: async ({ expectedVersion, student }: { principalId: string; expectedVersion: string; student: StudentFormValues }) =>
+    mutationFn: async ({ expectedVersion, student, identifierDisposition }: { principalId: string; expectedVersion: string; student: StudentFormValues; identifierDisposition?: IdentifierDisposition }) =>
       transform(await fetchApi<StudentDetailDTO>(`/api/students/${encodeURIComponent(studentId)}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, cache: "no-store",
-        body: JSON.stringify({ expectedVersion, student: { ...student, id: studentId } }),
+        body: JSON.stringify({ expectedVersion, identifierDisposition, student: { ...student, id: studentId } }),
       })),
     onSuccess: (saved, variables) => {
       if (principalRef.current === variables.principalId) {

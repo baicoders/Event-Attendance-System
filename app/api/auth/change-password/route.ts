@@ -1,3 +1,4 @@
+import { readLimitedJson } from "@/globals/utils/requestBody";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/globals/libs/prisma";
@@ -5,7 +6,7 @@ import { err, ok } from "@/globals/utils/api";
 import { respondWithError } from "@/globals/utils/httpError";
 import {
   AuthError,
-  requireAuth,
+  requireIdentity,
   setAuthSession,
 } from "@/globals/utils/auth";
 import { hashPassword, verifyPassword } from "@/globals/utils/password";
@@ -17,19 +18,19 @@ import { rateLimit } from "@/globals/utils/rateLimit";
  * POST /api/auth/change-password
  *
  * The one route a forced-change session may call besides session-read and
- * logout. `requireAuth({ allowForcedPasswordChange: true })` is a deliberate
+ * logout. `requireIdentity({ allowForcedPasswordChange: true })` is a deliberate
  * server-only opt-in — never accept it from HTTP parameters.
  */
 export async function POST(req: Request) {
   try {
-    const session = await requireAuth({ allowForcedPasswordChange: true });
+    const session = await requireIdentity({ allowForcedPasswordChange: true });
     const { currentPassword, newPassword } = changePasswordSchema.parse(
-      await req.json(),
+      await readLimitedJson(req),
     );
 
     // Keyed by user, not by client address - the LAN deployment collapses
     // every device onto one X-Forwarded-For hop.
-    if (!rateLimit(`changePassword:${session.id}`, 10, 5 * 60_000)) {
+    if (!await rateLimit(`changePassword:${session.id}`, 10, 5 * 60_000)) {
       return NextResponse.json(
         err("Too many attempts. Try again in a few minutes."),
         { status: 429, headers: { "Cache-Control": "no-store" } },
@@ -102,11 +103,12 @@ export async function POST(req: Request) {
       id: updated.id as string,
       name: updated.name as string,
       email: updated.email as string,
-      role: updated.role as "ADMIN" | "ORGANIZER",
+      role: updated.role as "ADMIN" | "ORGANIZER" | "MEMBER",
       status: updated.status as "PENDING" | "ACTIVE" | "REJECTED",
       rejectionReason: (updated.rejectionReason as string | null) ?? null,
       mustChangePassword: updated.mustChangePassword as boolean,
       credentialVersion: updated.credentialVersion as number,
+      accountState: updated.accountState as "ENABLED" | "DISABLED",
     });
 
     return NextResponse.json(ok(updated), {

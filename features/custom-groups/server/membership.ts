@@ -12,8 +12,8 @@ type Actor = { id: string; credentialVersion: number };
 async function guardedWrite<T>(db: PrismaClient, actor: Actor, write: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return db.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} FOR SHARE`;
-    const current = await tx.user.findUnique({where:{id:actor.id},select:{role:true,status:true,mustChangePassword:true,credentialVersion:true}});
-    if (!current || current.status !== 'ACTIVE' || current.mustChangePassword || current.credentialVersion !== actor.credentialVersion)
+    const current = await tx.user.findUnique({where:{id:actor.id},select:{role:true,status:true,mustChangePassword:true,accountState:true,credentialVersion:true}});
+    if (!current || current.status !== 'ACTIVE' || current.accountState !== 'ENABLED' || current.mustChangePassword || current.credentialVersion !== actor.credentialVersion)
       throw new CustomGroupError('Unauthorized',401,'UNAUTHORIZED');
     if (current.role !== 'ADMIN') throw new CustomGroupError('Forbidden',403,'FORBIDDEN');
     await takeRosterExclusiveLock(tx);

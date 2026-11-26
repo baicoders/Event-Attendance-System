@@ -1,0 +1,27 @@
+'use client';
+import HelpButton from './help/HelpButton';
+import { AttendanceStatusIcon } from './ui';
+import { RefreshCw, Users } from 'lucide-react';
+import { Button } from '@/globals/components/shad-cn/button';
+import FormInput from '@/globals/components/shared/FormInput';
+import StatusBadge from '@/globals/components/shared/StatusBadge';
+import type { AttendanceCounts, FinalAttendanceStatus, SessionMember } from '../types/attendance';
+
+const actions=[['PRESENT','Present','border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'],['ABSENT','Absent','border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100'],['LATE','Late','border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100'],['EXCUSED','Excuse','border-indigo-200 bg-indigo-50 text-indigo-900 hover:bg-indigo-100']] as const;
+export default function FocusedAttendance({member,counts,loading,disabled,saving,leaving,error,notice,q,onSearch,onMark,onReview,onRoster,onRetry}:{member?:SessionMember;counts?:AttendanceCounts;loading:boolean;disabled:boolean;saving:boolean;leaving:boolean;error?:string;notice?:string;q:string;onSearch:(value:string)=>void;onMark:(member:SessionMember,status:FinalAttendanceStatus)=>void;onReview?:()=>void;onRoster:()=>void;onRetry:()=>void}){
+ const student=member?.studentSnapshot;const total=counts?Object.values(counts).reduce((sum,value)=>sum+value,0):0;const marked=total-(counts?.UNMARKED??0);
+ return <section aria-label="Manual attendance" className="min-w-0 space-y-4"><HelpButton topic="manual"/>
+  <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-lg font-semibold text-slate-900">One student at a time</h2><p className="text-sm text-slate-600">{marked} of {total} marked · {counts?.UNMARKED??0} remaining</p></div><Button variant="outline" onClick={onRoster}>Roster</Button></div>
+  <progress aria-label="Attendance progress" className="h-2 w-full accent-indigo-600" value={marked} max={Math.max(total,1)}/>
+  <FormInput label="Find an unmarked student" value={q} maxLength={100} onChange={event=>onSearch(event.target.value)} placeholder="Name, USN or LRN"/>
+  {notice?<p role="status" className="rounded-xl bg-indigo-50 p-3 text-sm text-indigo-900">{notice}</p>:null}
+  {error?<div role="alert" className="space-y-2 rounded-xl bg-amber-50 p-4 text-sm text-amber-900"><p>{error}</p><Button variant="outline" onClick={onRetry}><RefreshCw aria-hidden className="size-4 shrink-0"/>Refresh roster</Button></div>:null}
+  {student&&member?<article data-focused-student={member.studentId} aria-label={'Attendance for '+student.lastName+', '+student.firstName} className={'mx-auto w-full max-w-xl space-y-6 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-[transform,opacity] duration-[180ms] motion-reduce:transition-none sm:p-8 '+(leaving?'-translate-x-8 opacity-0':'translate-x-0 opacity-100')}>
+   <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium text-slate-500">Current student</p><StatusBadge tone="neutral">Unmarked</StatusBadge></div>
+   <div className="space-y-3"><h3 className="break-words text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{student.lastName}, {student.firstName}{student.middleName?' '+student.middleName:''}</h3><dl className="grid gap-2 text-sm text-slate-600"><div><dt className="inline font-medium">USN: </dt><dd className="inline break-all tabular-nums">{student.usn||'—'}</dd></div><div><dt className="inline font-medium">LRN: </dt><dd className="inline break-all tabular-nums">{student.lrn||'—'}</dd></div><div><dt className="inline font-medium">Section: </dt><dd className="inline break-words">{student.groups.filter(group=>group.category==='SECTION').map(group=>group.name).join(' · ')||'Individual enrollment'}</dd></div></dl></div>
+   <div className="grid grid-cols-1 gap-3 min-[320px]:grid-cols-2">{actions.map(([status,label,tone])=><Button key={status} variant="outline" className={'min-h-16 rounded-2xl px-3 '+tone} disabled={disabled||saving||leaving} aria-label={label+' — '+student.lastName+', '+student.firstName} onClick={()=>onMark(member,status)}><AttendanceStatusIcon status={status}/>{label}</Button>)}</div>
+   {saving?<p role="status" className="text-sm text-indigo-800">Waiting for confirmation. Keep this student open.</p>:<p className="text-sm text-slate-500">Choose a result to save and continue.</p>}
+  </article>:loading?<p role="status" className="rounded-2xl bg-white p-6">{saving?'Recovering the previous student’s save…':'Loading unmarked students…'}</p>:<div className="mx-auto max-w-xl space-y-4 rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200"><h3 className="text-xl font-semibold">{q&&(counts?.UNMARKED??0)>0?'No unmarked search matches':'Everyone has been marked'}</h3><p className="text-sm text-slate-600">{q&&(counts?.UNMARKED??0)>0?'Try another name or identifier, or clear the search.':'Review the roster, then finalize this meeting when you are ready.'}</p>{q&&(counts?.UNMARKED??0)>0?<Button variant="outline" onClick={()=>onSearch('')}>Clear search</Button>:<Button variant="outline" onClick={onRoster}><Users aria-hidden className="size-4 shrink-0"/>Review roster</Button>}</div>}
+  {onReview?<Button className="w-full" variant="ghost" disabled={disabled||saving||leaving} onClick={onReview}>Review mark</Button>:null}
+ </section>;
+}

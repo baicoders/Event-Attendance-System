@@ -1,3 +1,4 @@
+import { guardEventsActor } from "@/globals/utils/guardedActor";
 import { NextRequest, NextResponse } from "next/server";
 import { takeRosterExclusiveLock } from "@/globals/utils/pgLocks";
 import { Prisma, SchoolLevel, YearLevel } from "@prisma/client";
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
     // Group creation extends the vocabulary events scope by, so it freezes
     // eligibility (exclusive form) across the insert.
     const group = await prisma.$transaction(async (tx) => {
+      await guardEventsActor(tx, user, true);
       await takeRosterExclusiveLock(tx);
       return tx.group.create({
         data,

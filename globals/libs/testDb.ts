@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { getPgPoolConfig } from "./dbConfig";
 
 /**
  * PostgreSQL disposable-database fixtures (issue #51 §6).
@@ -47,8 +48,8 @@ export type DisposableDb = {
   cleanup: () => Promise<void>;
 };
 
-/** Create `test_...`, apply real migrations, verify identity. */
-export async function createDisposableDb(prefix = "test"): Promise<DisposableDb> {
+/** Create `test_...`, apply real migrations unless a historical fixture opts out, verify identity. */
+export async function createDisposableDb(prefix = "test", { migrate = true }: { migrate?: boolean } = {}): Promise<DisposableDb> {
   const suffix = `${Date.now().toString(36)}_${randomBytes(4).toString("hex")}_${process.pid.toString(36)}`;
   const dbName = `${prefix}_${suffix}`.toLowerCase().replace(/[^a-z0-9_]/g, "_");
   if (!DISPOSABLE_PATTERN.test(dbName)) {
@@ -69,13 +70,15 @@ export async function createDisposableDb(prefix = "test"): Promise<DisposableDb>
   const pool = adminPool();
   try {
     await pool.query(`CREATE DATABASE "${dbName}"`);
+    // Match the runtime PrismaPg wire-session UTC contract for raw fixture pools.
+    await pool.query(`ALTER DATABASE "${dbName}" SET timezone TO 'UTC'`);
   } finally {
     await pool.end();
   }
 
   const url = databaseUrlWithDb(adminUrl, dbName);
   try {
-    execFileSync("pnpm", ["exec", "prisma", "migrate", "deploy"], {
+    if (migrate) execFileSync("pnpm", ["exec", "prisma", "migrate", "deploy"], {
       env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url },
       stdio: "pipe",
     });
@@ -126,7 +129,7 @@ export type TestClient = {
 /** Production-adapter client for a disposable URL (bounded pool). */
 export function createTestClient(url: string, max = 5): TestClient {
   const pool = new Pool({
-    connectionString: url,
+    ...getPgPoolConfig(url),
     max,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 10_000,

@@ -88,7 +88,7 @@ const FormSelect = <T extends FieldValues,>({
 
   return (
     <Field className="gap-1.5">
-      <FieldLabel htmlFor={fieldId} className="text-[10px] uppercase font-bold text-slate-400 ml-1">
+      <FieldLabel htmlFor={fieldId} className="text-sm font-medium text-slate-700">
         {label}
       </FieldLabel>
       <Select onValueChange={next => onChange(next === "__clear__" ? null : next)} value={typeof value === "string" ? value : ""}>
@@ -97,7 +97,7 @@ const FormSelect = <T extends FieldValues,>({
           aria-invalid={!!error}
           aria-describedby={error ? `${fieldId}-error` : description ? `${fieldId}-description` : undefined}
           ref={ref}
-          className="border-slate-200 rounded-xl focus:ring-slate-900"
+          className="w-full border-slate-300 rounded-xl focus:ring-indigo-400"
         >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
@@ -112,13 +112,13 @@ const FormSelect = <T extends FieldValues,>({
       </Select>
 
       {description && !error && (
-        <FieldDescription id={`${fieldId}-description`} className="text-[11px] ml-1 mt-1 text-slate-500">
+        <FieldDescription id={`${fieldId}-description`} className="text-xs mt-1 text-slate-600">
           {description}
         </FieldDescription>
       )}
 
       {error && (
-        <FieldError id={`${fieldId}-error`} className="flex items-center-safe text-[11px] font-medium text-rose-500 ml-1">
+        <FieldError id={`${fieldId}-error`} className="flex items-center-safe text-xs font-medium text-rose-700">
           <Info size={12} className="mr-1 inline-block" />
           {error}
         </FieldError>

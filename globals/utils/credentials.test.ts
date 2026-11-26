@@ -16,6 +16,7 @@ type Row = {
   password: string;
   credentialVersion: number;
   status: string;
+  accountState: string;
   role: string;
   mustChangePassword: boolean;
   name: string;
@@ -76,6 +77,7 @@ const user = (overrides: Partial<Row> = {}): Row => ({
   password: "hash-v0",
   credentialVersion: 0,
   status: "ACTIVE",
+  accountState: "ENABLED",
   role: "ORGANIZER",
   mustChangePassword: false,
   name: "Maria Santos",
@@ -96,7 +98,7 @@ test("temporary passwords keep the established alphabet and length", () => {
   }
 });
 
-test("own change commits only against the verified version, hash, and ACTIVE status", async () => {
+test("own change commits only against the verified version, hash, and enabled account state", async () => {
   const { db, rows } = fakeDb([user()]);
   const updated = await applyOwnPasswordChange(db, {
     userId: "u1",
@@ -124,7 +126,7 @@ test("own change loses to a newer reset instead of overwriting it", async () => 
   assert.equal(rows.get("u1")?.mustChangePassword, true);
 });
 
-test("own change refuses a wrong current password and a non-ACTIVE account", async () => {
+test("own change refuses a wrong current password and a globally disabled account", async () => {
   const { db } = fakeDb([user()]);
   assert.equal(
     await applyOwnPasswordChange(db, {
@@ -135,7 +137,7 @@ test("own change refuses a wrong current password and a non-ACTIVE account", asy
     }),
     null,
   );
-  const { db: suspended } = fakeDb([user({ status: "REJECTED" })]);
+  const { db: suspended } = fakeDb([user({ accountState: "DISABLED" })]);
   assert.equal(
     await applyOwnPasswordChange(suspended, {
       userId: "u1",
@@ -201,4 +203,12 @@ test("legacy upgrade only replaces the exact verified value", async () => {
     }),
     false,
   );
+});
+
+test("identity-only pending teacher can replace a forced temporary password", async () => {
+  const { db, rows } = fakeDb([user({ role: "MEMBER", status: "PENDING", mustChangePassword: true })]);
+  const result = await applyOwnPasswordChange(db, { userId: "u1", expectedCredentialVersion: 0, verifiedPasswordHash: "hash-v0", newPasswordHash: "hash-new" });
+  assert.equal(result?.credentialVersion, 1);
+  assert.equal(rows.get("u1")?.status, "PENDING");
+  assert.equal(rows.get("u1")?.role, "MEMBER");
 });

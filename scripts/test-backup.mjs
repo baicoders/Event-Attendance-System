@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /**
  * Verified PostgreSQL backup tests (#84) — real pg_dump/pg_restore, real
  * disposable databases, no file-copy mocks.
@@ -10,7 +11,7 @@
  * auth (ADMIN only, origin check, no secrets in payloads).
  *
  * Requires version-matched tools: BACKUP_PG_DUMP_PATH /
- * BACKUP_PG_RESTORE_PATH must resolve to the server major (17 here). In CI
+ * BACKUP_PG_RESTORE_PATH must resolve to the server major. In CI
  * they are on PATH; locally the docker wrappers in /tmp/opencode/pg17w are
  * used when present.
  */

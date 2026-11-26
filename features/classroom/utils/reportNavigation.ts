@@ -1,0 +1,2 @@
+import { reportQuerySchema,reportScopeFields } from '../schemas/reportSchema';
+export function reportReturnPath(raw:Record<string,string|string[]|undefined>){const fields=Object.fromEntries(Object.keys(reportScopeFields).flatMap(key=>typeof raw[key]==='string'?[[key,raw[key]]]:[]));if(!reportQuerySchema.safeParse(fields).success)return '/class/reports';return '/class/reports?'+new URLSearchParams(fields as Record<string,string>);}

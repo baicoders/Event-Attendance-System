@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Run against a disposable PostgreSQL test database and a running dev server. See docs below. */
 import assert from "node:assert/strict";
 import { prisma } from "@/globals/libs/prisma";

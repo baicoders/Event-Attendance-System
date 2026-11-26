@@ -115,7 +115,7 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
     } else return;
     await performSubmission(async () => {
       const accepted = await confirm({ title: `${action[0]}${action.slice(1).toLowerCase()} attendance?`,
-        description: `This changes the official current evidence for ${history.data?.studentLabel ?? studentId}. The previous values will remain in history.` });
+        description: `This changes the official current evidence for ${history.data?.studentLabel ?? "this student"}. The previous values will remain in history.` });
       if (accepted) await send(command);
     });
   };
@@ -132,16 +132,17 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
   };
 
   return <Sheet open={!!studentId} onOpenChange={(open) => { if (!open) onClose(); }}>
-    <SheetContent className="flex w-full max-w-none flex-col p-0 [&_button]:min-h-10 sm:w-[min(680px,95vw)] sm:max-w-none">
+    <SheetContent className="flex w-full max-w-none flex-col p-0 [&_button]:min-h-12 sm:w-[min(680px,95vw)] sm:max-w-none">
       <SheetHeader className="border-b p-5 text-left">
-        <SheetTitle>Review attendance — {history.data?.studentLabel ?? studentId}</SheetTitle>
-        <SheetDescription>{history.data?.eventTitle ?? "Loading event"} · Student {studentId} · Times shown in {ZONE}</SheetDescription>
+        <SheetTitle>Review attendance — {history.data?.studentLabel ?? "this student"}</SheetTitle>
+        <SheetDescription>{history.data?.eventTitle ?? "Loading event"}{history.data?.studentIdentifier?' · '+history.data.studentIdentifier:''} · Times shown in {ZONE}</SheetDescription>
       </SheetHeader>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
         {history.isLoading && <p role="status">Loading attendance evidence…</p>}
         {history.isError && <p role="alert">Could not load attendance evidence. <Button variant="outline" onClick={() => void history.refetch()}>Retry</Button></p>}
         {isSubmitting && <p role="status">Updating attendance evidence…</p>}
         {history.data && <>
+          <details><summary className="flex min-h-12 cursor-pointer items-center text-sm font-medium text-slate-600">Technical references</summary><p className="break-all text-xs text-slate-500">Student reference: {studentId}</p></details>
           {!history.data.inCurrentAudience && <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">This student is outside the event’s current audience. Existing evidence may still be corrected or voided; restoration requires current eligibility.</p>}
           <div className="flex flex-wrap gap-2">
             <Button disabled={isSubmitting || !!unknownCommand} variant={action === "HISTORY" ? "default" : "outline"} onClick={() => setAction("HISTORY")}>History</Button>
@@ -166,8 +167,8 @@ export function AttendanceCorrectionSheet({ eventId, studentId, initialAction, o
             {action === "CORRECT" && <div className="grid gap-4 sm:grid-cols-2">
               <div className="text-sm"><p className="font-medium">Current</p><p>Time in: {displayTime(record?.timein ?? null)}</p><p>Time out: {displayTime(record?.timeout ?? null)}</p></div>
               <div className="space-y-3"><p className="text-sm font-medium">Proposed ({ZONE})</p>
-                <label className="block text-sm">Time in<input disabled={isSubmitting || !!unknownCommand} className="mt-1 w-full rounded-md border p-2" type="datetime-local" step="1" value={timein} onChange={(event) => setField("timein", event.target.value)} /></label>
-                <label className="block text-sm">Time out<input disabled={isSubmitting || !!unknownCommand} className="mt-1 w-full rounded-md border p-2" type="datetime-local" step="1" value={timeout} onChange={(event) => setField("timeout", event.target.value)} /></label>
+                <label className="block text-sm">Time in<input disabled={isSubmitting || !!unknownCommand} className="mt-1 min-h-12 w-full rounded-xl border p-3" type="datetime-local" step="1" value={timein} onChange={(event) => setField("timein", event.target.value)} /></label>
+                <label className="block text-sm">Time out<input disabled={isSubmitting || !!unknownCommand} className="mt-1 min-h-12 w-full rounded-xl border p-3" type="datetime-local" step="1" value={timeout} onChange={(event) => setField("timeout", event.target.value)} /></label>
                 <Button disabled={isSubmitting || !!unknownCommand} type="button" variant="outline" onClick={() => setField("timein", "")}>Clear time-in</Button>
                 <Button disabled={isSubmitting || !!unknownCommand} type="button" variant="outline" onClick={() => setField("timeout", "")}>Clear accidental time-out</Button>
               </div>

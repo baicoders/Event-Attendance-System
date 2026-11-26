@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Reviewed-import PostgreSQL/HTTP fixture. Run after pnpm build:
  * node --import tsx scripts/test-student-import.mjs [--large] [--browser]
  * All writes use a migrated disposable database; no production fallback.
@@ -127,7 +128,7 @@ try {
   const event = await db.event.create({ data: { id: "import-event", title: "Import concurrency", category: "ALL", status: "APPROVED", createdById: admins[0].id, start: new Date(Date.now() - 3600000), end: new Date(Date.now() + 3600000) } });
   await db.record.create({ data: { eventId: event.id, studentId: omitted.id, method: "SCANNED", timeout: new Date(), recordedById: admins[0].id } });
   await pool.query('CREATE TABLE "ImportTestWrites" (id text NOT NULL, operation text NOT NULL)');
-  await pool.query(`CREATE FUNCTION import_test_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO "ImportTestWrites" VALUES (NEW.id, TG_OP); RETURN NEW; END; $$`);
+  await pool.query(`CREATE FUNCTION import_test_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP='UPDATE' AND to_jsonb(OLD)-'profileRevision'=to_jsonb(NEW)-'profileRevision' THEN RETURN NEW; END IF; INSERT INTO "ImportTestWrites" VALUES (NEW.id, TG_OP); RETURN NEW; END; $$`);
   await pool.query('CREATE TRIGGER import_test_write AFTER INSERT OR UPDATE ON "Student" FOR EACH ROW EXECUTE FUNCTION import_test_write()');
   await startTestServer();
   const beforeLegacyRoster = await snapshot();
@@ -187,7 +188,7 @@ try {
   await db.student.update({ where: { id: "00000123811" }, data: { groups: { connect: [{ id: "section-b" }] } } });
   const ambiguous = await preview(command([row("00000123811")]), adminCookie);
   assert.equal(ambiguous.data.counts.blocked, 1); assert.equal(ambiguous.data.previewToken, null);
-  await db.student.delete({ where: { id: "00000123811" } });
+  await assert.rejects(db.student.delete({ where: { id: "00000123811" } }), /Foreign key constraint/);
   const bytes = 10 * 1024 * 1024;
   rejected(await api("/api/students/imports/preview", fromCsv("x".repeat(bytes + 1)), adminCookie), [413]);
   rejected(await api("/api/students/imports/preview", undefined, adminCookie, { raw: JSON.stringify(small) + " ".repeat(bytes) }), [413]);
@@ -275,23 +276,24 @@ try {
   assert.equal(await snapshot(), laterRoster); assert.equal(await studentWrites(), laterWrites);
   record("historical exact replay after later Student/Group edits and token expiry performs zero roster reads/writes");
 
-  for (const mutation of ["student", "group-name", "group-slug", "group-delete", "appeared", "membership"]) {
-    const input = command([row("00000123463")]);
+  for (const [mutationIndex,mutation] of ["student", "group-name", "group-slug", "group-delete", "appeared", "membership"].entries()) {
+    const scenarioStudentId=String(123463+mutationIndex).padStart(11,"0");
+    const input = command([row(scenarioStudentId)]);
     const reviewed = await preview(input, adminCookie);
-    if (mutation === "student") { await save(row("00000123463")); }
+    if (mutation === "student") { await save(row(scenarioStudentId)); }
     if (mutation === "group-name") await db.group.update({ where: { id: "section-a" }, data: { name: "Renamed section" } });
     if (mutation === "group-slug") await db.group.update({ where: { id: "section-a" }, data: { slug: "section-a-renamed" } });
     if (mutation === "group-delete") await db.group.delete({ where: { id: "section-a" } });
-    if (mutation === "appeared") await save(row("00000123463"));
+    if (mutation === "appeared") await save(row(scenarioStudentId));
     if (mutation === "membership") {
-      await save(row("00000123463"));
+      await save(row(scenarioStudentId));
       const existingReview = await preview(input, adminCookie);
-      await db.student.update({ where: { id: "00000123463" }, data: { groups: { set: [{ id: "section-b" }] } } });
+      await db.student.update({ where: { id: scenarioStudentId }, data: { groups: { set: [{ id: "section-b" }] } } });
       stale(await commit(input, existingReview, adminCookie));
     } else {
       const beforeRejected = await snapshot(); stale(await commit(input, reviewed, adminCookie)); assert.equal(await snapshot(), beforeRejected);
     }
-    await db.student.deleteMany({ where: { id: "00000123463" } });
+    // Preserve immutable history; each stale-preview scenario uses a new identity.
     await db.group.upsert({ where: { id: "section-a" }, create: groupData[0], update: { name: "Section A", slug: "section-a" } });
   }
   const currentForChange = await db.student.findUniqueOrThrow({where:{id:existing.id}});

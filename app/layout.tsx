@@ -1,3 +1,4 @@
+import { AccountDialogNavigation } from "@/features/auth/components/AccountDialog";
 import type { Metadata } from "next";
 import { Geist_Mono, Poppins } from "next/font/google";
 import "./globals.css";
@@ -24,15 +25,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  modal: React.ReactNode;
 }>) {
   return (
     <html lang="en">
       <body className={`${poppins.variable} ${geistMono.variable} antialiased`}>
         <ConfirmProvider>
           <AuthProvider>
-            <QueryProvider>{children}</QueryProvider>
+            <QueryProvider><AccountDialogNavigation>{children}{modal}</AccountDialogNavigation></QueryProvider>
           </AuthProvider>
         </ConfirmProvider>
         <Toaster />

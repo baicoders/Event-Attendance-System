@@ -1,25 +1,29 @@
 export class ApiError extends Error {
   status: number;
   code?: string;
+  details?: Record<string, unknown>;
+  hasValidResponse: boolean;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: Record<string, unknown>, hasValidResponse = true) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
+    this.hasValidResponse = hasValidResponse;
   }
 }
 
 export type ApiResponse<T> =
   | { success: true; data: T }
-  | { success: false; message: string; code?: string };
+  | { success: false; message: string; code?: string; details?: Record<string, unknown> };
 
 export function ok<T>(data: T): ApiResponse<T> {
   return { success: true, data };
 }
 
-export function err(message: string, code?: string): ApiResponse<never> {
-  return { success: false, message, code };
+export function err(message: string, code?: string, details?: Record<string, unknown>): ApiResponse<never> {
+  return { success: false, message, code, ...(details ? { details } : {}) };
 }
 
 /**
@@ -31,7 +35,7 @@ export function err(message: string, code?: string): ApiResponse<never> {
  */
 function notifySessionInvalid(status: number, code?: string) {
   if (typeof window === "undefined") return;
-  if (code !== "UNAUTHORIZED" && code !== "PASSWORD_CHANGE_REQUIRED") return;
+  if (!["UNAUTHORIZED", "PASSWORD_CHANGE_REQUIRED", "ACCOUNT_DISABLED", "CLASSROOM_ACCESS_REQUIRED", "CLASSROOM_SUSPENDED"].includes(code ?? "")) return;
   window.dispatchEvent(
     new CustomEvent("auth:session-invalid", { detail: { status, code } }),
   );
@@ -54,28 +58,28 @@ export async function fetchApi<T>(
     json = await res.json();
   } catch {
     // If server returned non-JSON response
-    throw new ApiError("Invalid server response", res.status);
+    throw new ApiError("Invalid server response", res.status, undefined, undefined, false);
   }
 
   // If JSON doesnt exist
-  if (!json) {
-    throw new ApiError("Invalid server response", res.status);
+  if (!json || typeof json !== "object" || typeof json.success !== "boolean" || (json.success ? !Object.hasOwn(json,"data") : typeof json.message !== "string")) {
+    throw new ApiError("Invalid server response", res.status, undefined, undefined, false);
   }
 
   // 3. Handle HTTP-level errors (404, 500, etc.)
   if (!res.ok) {
     if (json && !json.success) {
       notifySessionInvalid(res.status, json.code);
-      throw new ApiError(json.message, res.status, json.code);
+      throw new ApiError(json.message, res.status, json.code, json.details);
     }
 
-    throw new ApiError(res.statusText || "Request failed", res.status);
+    throw new ApiError("Invalid server response", res.status, undefined, undefined, false);
   }
 
   // 4. Handle application-level errors
   if (!json.success) {
     notifySessionInvalid(res.status, json.code);
-    throw new ApiError(json.message, res.status, json.code);
+    throw new ApiError(json.message, res.status, json.code, json.details);
   }
 
   // 5. Success: return the typed data

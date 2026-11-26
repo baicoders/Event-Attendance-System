@@ -8,8 +8,8 @@ import { handlePrismaError } from "@/globals/utils/prismaError";
 
 export function respondWithError(error: unknown) {
   if (error instanceof AuthError || error instanceof StudentIdentityError) {
-    return NextResponse.json(err(error.message, error.code), {
-      status: error.status,
+    return NextResponse.json(err(error.message, error.code, error instanceof AuthError ? error.details : undefined), {
+      status: error.status, headers: { "Cache-Control": "private, no-store" },
     });
   }
 

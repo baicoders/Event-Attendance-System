@@ -26,6 +26,7 @@ type DataTablePaginationProps<TData> = {
    * this false.
    */
   disabled?: boolean;
+  showPageSizeSelector?: boolean;
 };
 
 /**
@@ -40,6 +41,7 @@ type DataTablePaginationProps<TData> = {
 function DataTablePagination<TData>({
   table,
   disabled = false,
+  showPageSizeSelector = true,
 }: DataTablePaginationProps<TData>) {
   const total = table.getRowCount();
   const { pageIndex, pageSize } = table.getState().pagination;
@@ -58,7 +60,7 @@ function DataTablePagination<TData>({
           : `Showing ${firstRow}–${lastRow} of ${total}`}
       </div>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 lg:gap-x-8">
-        <div className="flex items-center space-x-2">
+        {showPageSizeSelector ? <div className="flex items-center space-x-2">
           <p className="text-sm font-medium">Rows per page</p>
           <Select
             value={`${pageSize}`}
@@ -78,7 +80,7 @@ function DataTablePagination<TData>({
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </div> : null}
         <div className="flex w-[100px] items-center justify-center text-sm font-medium">
           Page {currentPage} of {pageCount}
         </div>

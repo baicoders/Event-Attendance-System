@@ -13,15 +13,14 @@ import { buildEventStudentFilter } from "@/globals/utils/buildEventStudentFilter
 
 export async function POST(request: NextRequest) {
   try {
-    // Policy: any active, authenticated user may manage the student roster
-    // (create/edit/delete) - intentionally broader than event-deletion and
-    // organizer-approval, which require ownership/admin. requireAuth already
-    // enforces active status.
-    await requireAuth();
+    // Individual creation/edit remains an Events organizer capability.
+    // Central imports, bulk changes and deletion require an administrator;
+    // Class membership never grants these legacy Events endpoints.
+    const principal = await requireAuth();
     const payload = await request.json();
     // Legacy callers supplied USN as id. New records always get a generated internal ID.
     const input = { ...payload, usn: payload.usn ?? (payload.id?.length === 11 ? payload.id : undefined) };
-    const student = await createStudentRecord(prisma, input);
+    const student = await createStudentRecord(prisma, input, principal);
 
     return NextResponse.json(ok(student), { status: 200 });
   } catch (error) {

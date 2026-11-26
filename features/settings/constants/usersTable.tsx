@@ -39,18 +39,19 @@ export const getUserColumns = ({
     header: "Role",
     cell: ({ row }) => (
       <StatusBadge tone={row.original.role === "ADMIN" ? "primary" : "neutral"}>
-        {row.original.role}
+        {row.original.role === "MEMBER" ? "Standard user" : row.original.role === "ADMIN" ? "Administrator" : "Events organizer"}
       </StatusBadge>
     ),
   },
   {
     accessorKey: "status",
-    header: "Status",
+    header: "Events access",
     cell: ({ row }) => (
       <div className="flex flex-wrap items-center gap-1.5">
-        <StatusBadge tone={USER_STATUS_TONE[row.original.status]} withDot>
-          {row.original.status}
+        <StatusBadge tone={row.original.role === "MEMBER" ? "neutral" : USER_STATUS_TONE[row.original.status]} withDot>
+          {row.original.role === "MEMBER" ? "Not requested" : row.original.status}
         </StatusBadge>
+        {row.original.accountState === "DISABLED" ? <StatusBadge tone="danger">Account disabled</StatusBadge> : null}
         {row.original.mustChangePassword ? (
           <StatusBadge tone="warning">Temp password</StatusBadge>
         ) : null}

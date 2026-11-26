@@ -1,7 +1,9 @@
+import { setStudentWriteContext } from '@/globals/utils/studentProfileAudit';
+import { guardEventsActor } from "@/globals/utils/guardedActor";
 import { NextResponse } from "next/server";
 import { prisma } from "@/globals/libs/prisma";
 import { err, ok } from "@/globals/utils/api";
-import { requireAuth } from "@/globals/utils/auth";
+import { requireAuth, requireRole } from "@/globals/utils/auth";
 import { respondWithError } from "@/globals/utils/httpError";
 import {
   BULK_MUTATION_JSON_LIMIT_BYTES,
@@ -22,6 +24,7 @@ const COMMIT_MAX_WAIT_MS = 10_000;
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
+    requireRole(user, "ADMIN");
 
     const raw = await req.text();
     if (Buffer.byteLength(raw, "utf8") > BULK_MUTATION_JSON_LIMIT_BYTES) {
@@ -47,7 +50,9 @@ export async function POST(req: Request) {
       const result = await prisma.$transaction(
         async (tx) => {
           // Bulk membership replacement freezes eligibility (exclusive form).
-          await takeRosterExclusiveLock(tx);
+          const fresh=await guardEventsActor(tx, user, true);
+          await setStudentWriteContext(tx,{actorId:fresh.id,actorName:fresh.name,source:'BULK',reason:'Administrator-reviewed '+category.toLowerCase()+' reassignment'});
+      await takeRosterExclusiveLock(tx);
           const target = await tx.group.findUnique({
             where: { id: token.targetId },
             select: { id: true, slug: true, name: true, category: true },

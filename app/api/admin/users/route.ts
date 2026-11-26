@@ -24,6 +24,7 @@ export async function GET() {
         name: true,
         email: true,
         role: true,
+        accountState: true,
         status: true,
         rejectionReason: true,
         mustChangePassword: true,

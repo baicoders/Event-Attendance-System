@@ -45,7 +45,8 @@ export type ManagedUser = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "ORGANIZER";
+  role: "ADMIN" | "ORGANIZER" | "MEMBER";
+  accountState?: "ENABLED" | "DISABLED";
   status: "PENDING" | "ACTIVE" | "REJECTED";
   rejectionReason: string | null;
   mustChangePassword: boolean;

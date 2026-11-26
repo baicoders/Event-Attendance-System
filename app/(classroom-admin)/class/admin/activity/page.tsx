@@ -1,0 +1,2 @@
+import ClassroomActivityPage from '@/features/classroom/components/admin/ClassroomActivityPage';
+export default async function ActivityPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){const p=await searchParams;const initial=Object.fromEntries(['source','actorId','classId','sessionId','studentId','entityId','from','to','action'].flatMap(key=>typeof p[key]==='string'?[[key,p[key]]]:[]));return <ClassroomActivityPage initial={initial}/>;}

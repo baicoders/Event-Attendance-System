@@ -37,11 +37,11 @@
 export const page = {
   /** Full-page background + padding. Pair with `page.container`. */
   surface:
-    "flex flex-1 justify-center overflow-y-auto bg-[radial-gradient(circle_at_top,#eef2ff_0%,#f8fafc_45%,#ffffff_100%)] p-6 text-slate-900 md:p-8",
-  /** Centered column inside `page.surface`. `max-w-6xl` is the app default. */
-  container: "flex w-full max-w-6xl flex-col gap-6",
+    "flex flex-1 justify-center overflow-y-auto bg-[radial-gradient(circle_at_top,#eef2ff_0%,#f8fafc_45%,#ffffff_100%)] min-w-0 p-4 text-slate-900 sm:p-6 md:p-8",
+  /** Centered column inside `page.surface`. `max-w-7xl` (1280px) is the app default. */
+  container: "flex w-full min-w-0 max-w-7xl flex-col gap-6",
   /** Wider variant for data-heavy screens (tables that need horizontal room). */
-  containerWide: "flex w-full max-w-7xl flex-col gap-6",
+  containerWide: "flex w-full min-w-0 max-w-7xl flex-col gap-6",
 } as const;
 
 /**
@@ -84,9 +84,9 @@ export const type = {
     "text-xs font-semibold uppercase tracking-[0.2em] text-indigo-100",
   /** Page h1. */
   pageTitle:
-    "mt-2 text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl",
+    "mt-2 break-words text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl",
   /** Page h1 on the dark gradient hero. */
-  pageTitleOnDark: "mt-2 text-3xl font-semibold tracking-tight md:text-4xl",
+  pageTitleOnDark: "mt-2 break-words text-3xl font-semibold tracking-tight md:text-4xl",
   /** Supporting sentence under a page title. */
   pageSubtitle: "mt-2 text-sm text-slate-500",
   /** Section title inside a panel. */
@@ -98,8 +98,8 @@ export const type = {
 /**
  * Pill actions — the Student List toolbar button style.
  *
- * These are deliberately *not* the shad-cn `Button`. They are the compact,
- * uppercase, fully-rounded actions that sit in a table/page toolbar.
+ * These match the shared Button typography, radius and target size.
+ * They remain available for existing toolbar markup during incremental adoption.
  *
  * **Prefer `<Button>` for ordinary actions** (dialog footers, forms, anything
  * in a card). Reach for a pill only when building a toolbar row that should
@@ -108,12 +108,12 @@ export const type = {
 export const pill = {
   /** Primary toolbar action (Add, Execute). Indigo-600 filled. */
   primary:
-    "inline-flex items-center gap-2 rounded-full border border-indigo-600 bg-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-indigo-600 bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 disabled:pointer-events-none disabled:opacity-50",
   /** Secondary toolbar action (Import, Sort, Filter). White with slate border. */
   secondary:
-    "inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 disabled:pointer-events-none disabled:opacity-50",
   /** Back / breadcrumb link. Softer than `secondary`. */
-  back: "group inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/50 px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm backdrop-blur-sm transition-all hover:border-indigo-300 hover:bg-white hover:text-indigo-600 hover:shadow-md",
+  back: "group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/50 px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm backdrop-blur-sm transition-all hover:border-indigo-300 hover:bg-white hover:text-indigo-600 hover:shadow-md",
 } as const;
 
 /**
@@ -125,7 +125,7 @@ export const pill = {
 export const control = {
   /** Rounded search field with a leading icon slot. See `StudentSearchInput`. */
   searchInput:
-    "w-full rounded-full border border-slate-300 bg-white px-10 py-2 text-sm font-normal text-slate-700 shadow-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-300/40",
+    "w-full rounded-full border border-slate-300 bg-white min-h-12 px-10 py-3 text-sm font-normal text-slate-700 shadow-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-300/40",
 } as const;
 
 /**

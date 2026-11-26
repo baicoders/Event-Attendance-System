@@ -62,7 +62,7 @@ const CheckboxGroup = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("min-w-[250px] justify-between", className)}
+          className={cn("min-w-0 max-w-full justify-between", className)}
         >
           {selectedValues.length > 0
             ? `${placeholder} (${selectedValues.length} selected)`
@@ -70,7 +70,7 @@ const CheckboxGroup = ({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="min-w-[300px] p-0">
+      <PopoverContent className="w-[min(320px,calc(100vw-2rem))] p-0">
         <Command>
           <CommandGroup>
             <div
@@ -122,7 +122,7 @@ const CheckboxGroup = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => onSelect(choices.map((c) => c.id))}
-                className="text-xs"
+                className="text-sm"
               >
                 Select All
               </Button>
@@ -130,7 +130,7 @@ const CheckboxGroup = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => onSelect([])}
-                className="text-xs"
+                className="text-sm"
               >
                 Clear All
               </Button>

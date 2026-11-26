@@ -30,6 +30,7 @@ import { PAGE_SIZE_OPTIONS } from "./config";
 export type DataTableManualConfig = {
   /** Zero-based index of the current page. */
   pageIndex: number;
+  fixedPageSize?: boolean;
   /** Rows per page currently applied on the server. */
   pageSize: number;
   /** Total rows matching the active query, across every page. */
@@ -348,7 +349,7 @@ export function DataTable<TData, TValue>({
       {/* No pagination while loading or errored: "Page 1 of 1" and page-size
           controls make no sense next to a skeleton or an error message. */}
       {!isLoading && !isError && (
-        <DataTablePagination table={table} disabled={isPending} />
+        <DataTablePagination table={table} disabled={isPending} showPageSizeSelector={!manual?.fixedPageSize} />
       )}
     </div>
   );

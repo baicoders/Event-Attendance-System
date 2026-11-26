@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { setAuthSession } from "@/globals/utils/auth";
+import { PUBLIC_IDENTITY_SELECT } from "@/features/classroom/server/access";
+import { readLimitedJson } from "@/globals/utils/requestBody";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/globals/libs/prisma";
@@ -9,7 +13,7 @@ import { signupSchema } from "@/features/auth/schema/signupSchema";
 
 export async function POST(req: Request) {
   try {
-    const parsed = signupSchema.parse(await req.json());
+    const parsed = signupSchema.parse(await readLimitedJson(req));
     const name = parsed.name;
     // Normalized so case-variant duplicate accounts are impossible
     const email = parsed.email.trim().toLowerCase();
@@ -19,7 +23,7 @@ export async function POST(req: Request) {
     // distinguish devices on the LAN and this bucket is effectively shared
     // by everyone. Sized to comfortably cover onboarding a whole staff in
     // one sitting rather than one person's realistic signup rate.
-    if (!rateLimit(`signup:${clientKey(req)}`, 20, 10 * 60_000)) {
+    if (!await rateLimit(`signup:${clientKey(req)}`, 20, 10 * 60_000)) {
       return NextResponse.json(
         err("Too many signup attempts. Try again in a few minutes."),
         { status: 429 }
@@ -34,21 +38,25 @@ export async function POST(req: Request) {
       });
     }
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: await hashPassword(password),
-        role: "ORGANIZER",
-        status: "PENDING",
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        status: true,
-      },
+    const hashedPassword = await hashPassword(password);
+    const user = await prisma.$transaction(async tx => {
+      const created = await tx.user.create({
+        data: { name, email, password: hashedPassword, role: parsed.workspace === "CLASS" ? "MEMBER" : "ORGANIZER", status: "PENDING" },
+        select: PUBLIC_IDENTITY_SELECT,
+      });
+      if (parsed.workspace === "CLASS") {
+        const member = await tx.classroomMembership.create({ data: {
+          userId: created.id, departmentOrDesignation: parsed.departmentOrDesignation!,
+          staffReference: parsed.staffReference || null, applicationText: parsed.applicationText ?? "",
+        } });
+        await tx.classroomAudit.create({ data: {
+          action: "TEACHER_APPLICATION_SUBMITTED", entityType: "ClassroomMembership", entityId: created.id,
+          actorId: created.id, actorName: created.name, commandId: randomUUID(), after: JSON.parse(JSON.stringify(member)),
+        } });
+      }
+      return created;
     });
+    if (parsed.workspace === "CLASS") await setAuthSession(user);
 
     return NextResponse.json(
       ok({
@@ -57,7 +65,7 @@ export async function POST(req: Request) {
         email: user.email,
         status: user.status,
       }),
-      { status: 201 }
+      { status: 201, headers: { "Cache-Control": "private, no-store" } }
     );
   } catch (error) {
     return respondWithError(error);

@@ -19,13 +19,14 @@ test("group deletion uses the roster state after queued writers commit", async t
     await fixture.cleanup();
   });
   globalDb.prisma = db;
+  await db.user.create({data:{id:"fixture-admin",name:"Group test administrator",email:"group-admin@example.test",password:"test",role:"ADMIN",status:"ACTIVE"}});
   // Only replace the request-context auth boundary. The handler, validation,
   // Prisma adapter, transactions, advisory locks and database remain real.
   const authPath = moduleRequire.resolve(`${process.cwd()}/globals/utils/auth.ts`);
   const auth = moduleRequire(authPath);
   const authCache = moduleRequire.cache[authPath]!;
   const previousAuth = authCache.exports;
-  authCache.exports = { ...auth, requireAuth: async () => ({ id: "fixture-admin", role: "ADMIN" }) };
+  authCache.exports = { ...auth, requireAuth: async () => ({ id: "fixture-admin", role: "ADMIN", credentialVersion: 0 }) };
   const { DELETE } = (() => {
     try {
       return moduleRequire(`${process.cwd()}/app/api/groups/[groupId]/route.ts`) as typeof import("../../app/api/groups/[groupId]/route");

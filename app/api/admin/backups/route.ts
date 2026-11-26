@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     requireRole(user, "ADMIN");
     assertSameOrigin(req);
 
-    if (!rateLimit(`backups:${user.id}`, 10, 5 * 60_000)) {
+    if (!await rateLimit(`backups:${user.id}`, 10, 5 * 60_000)) {
       return NextResponse.json(err("Too many backup requests. Wait and retry.", "RATE_LIMITED"), {
         status: 429,
         headers: NO_STORE,

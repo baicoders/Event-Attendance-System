@@ -1,3 +1,4 @@
+import type { ImportReservation } from '../../features/students/import/classify';
 import { classifyStudentImport } from '../../features/students/import/classify';
 import { IMPORT_GROUP_FIELDS, type CanonicalRow, type ExistingImportStudent, type ImportGroup } from '../../features/students/import/contract';
 import { EXPECTED, customGroupSlug } from './reconcile';
@@ -8,7 +9,7 @@ import {planUswagBaseline,type BaselineUser} from './setup-baseline';
 export type SetupEvent = {id:string;title:string;category:string;status:string;groupIds:string[];start:string;end:string;location:string|null;createdById:string|null;allDay?:boolean;reviewedById?:string|null;reviewedAt?:string|null;recordCount?:number};
 export type SetupOwner = {id:string;role:string;status:string;mustChangePassword:boolean;credentialVersion:number};
 export type EventOptions = {id?:string;create?:{title:string;start:string;end:string;location:string;ownerId:string}};
-export type SetupState = {groups:ImportGroup[];students:ExistingImportStudent[];memberships:Array<{studentId:string;groupId:string;position:string|null}>;events:SetupEvent[];owners:SetupOwner[];users?:BaselineUser[]};
+export type SetupState = {reservations?:ImportReservation[];groups:ImportGroup[];students:ExistingImportStudent[];memberships:Array<{studentId:string;groupId:string;position:string|null}>;events:SetupEvent[];owners:SetupOwner[];users?:BaselineUser[]};
 type GroupPlan = ImportGroup & {action:'create'|'reuse'|'blocked'};
 type StudentPlan = {sourceRow:number;id:string;student:CanonicalRow;groupSlugs:string[];action:'create'|'update'|'noop'|'blocked';reasons:string[]};
 type MembershipPlan = {sourceRow:number;studentId:string;groupSlug:string;position:string|null;action:'create'|'set-position'|'noop'|'blocked'};
@@ -31,7 +32,7 @@ export function buildSetupPlan(input:SetupInput,state:SetupState,eventOptions:Ev
  // The importer provides shared schema/blank/identity conflict rules. Unsupported
  // academic join categories are preserved separately instead of being deleted.
  const classified=classifyStudentImport({rows:input.rows.map(row=>({csvRow:row.sourceRow,student:row.student})),groups:vocabulary,
-  students:state.students.map(student=>({...student,groups:student.groups.filter(g=>academicCategories.has(g.category))}))});
+  reservations:state.reservations,students:state.students.map(student=>({...student,groups:student.groups.filter(g=>academicCategories.has(g.category))}))});
  const students:StudentPlan[]=classified.rows.map((row,index)=>{
   const source=input.rows[index];const exact=state.students.filter(s=>s.usn===source.student.usn);
   const selected=exact.length===1?exact[0]:undefined;

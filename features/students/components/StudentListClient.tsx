@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@/globals/contexts/AuthContext";
 import { useCallback, useMemo, useState } from "react";
 import StudentsDataTable from "./StudentsDataTable";
 import { getStudentColumns } from "./StudentsDataTable/studentTableColumn";
@@ -35,6 +36,8 @@ const StudentListClient = ({
   isLoading,
   isError = false,
 }: StudentListClientProps) => {
+  const { user } = useAuth();
+  const canDelete = user?.role === "ADMIN";
   const [formData, setFormData] = useState<Student>();
   const [isStudentFormOpen, setIsStudentFormOpen] = useState(false);
   const [isStudentCodeOpen, setIsStudentCodeOpen] = useState(false);
@@ -106,11 +109,12 @@ const StudentListClient = ({
       getStudentColumns({
         onEdit: handleEdit,
         onDelete: handleDelete,
+        canDelete,
         onViewQR: handleViewQR,
         onHistory: (student: Student) => setHistoryStudentId(student.id),
         profileHref: (student: Student) => `/students/${encodeURIComponent(student.id)}?returnTo=${encodeURIComponent(returnTo)}`,
       }),
-    [handleEdit, handleDelete, handleViewQR, returnTo],
+    [handleEdit, handleDelete, handleViewQR, returnTo, canDelete],
   );
 
   return (

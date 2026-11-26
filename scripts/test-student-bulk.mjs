@@ -1,3 +1,4 @@
+import "./test-browser-origin.mjs";
 /** Disposable bulk-actions API fixture. Run after `pnpm build` with `node scripts/test-student-bulk.mjs`. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -155,9 +156,9 @@ try {
   await prisma.user.createMany({
     data: [
       { id: "admin", name: "Admin", email: "admin@example.test", password: "fixture-password-123", role: "ADMIN", status: "ACTIVE" },
-      { id: "org", name: "Org", email: "org@example.test", password: "fixture-password-123", role: "ORGANIZER", status: "ACTIVE" },
+      { id: "org", name: "Bulk Admin", email: "org@example.test", password: "fixture-password-123", role: "ADMIN", status: "ACTIVE" },
       { id: "pending", name: "Pending", email: "pending@example.test", password: "fixture-password-123", role: "ORGANIZER", status: "PENDING" },
-      { id: "other", name: "Other", email: "other@example.test", password: "fixture-password-123", role: "ORGANIZER", status: "ACTIVE" },
+      { id: "other", name: "Other", email: "other@example.test", password: "fixture-password-123", role: "ADMIN", status: "ACTIVE" },
     ],
   });
   await prisma.group.createMany({
@@ -170,8 +171,8 @@ try {
       { id: "prog-bsit", name: "BSIT", slug: "bsit", category: "PROGRAM" },
     ],
   });
-  const studentData = (id, lastName, sec, house) => ({
-    id, firstName: "Test", lastName, middleName: null, schoolLevel: "COLLEGE", yearLevel: "YEAR_2",
+  const studentData = (id, lastName) => ({
+    id, usn: id, firstName: "Test", lastName, middleName: null, schoolLevel: "COLLEGE", yearLevel: "YEAR_2",
   });
   await prisma.student.create({ data: { ...studentData("00000123456", "Dela Cruz"), groups: { connect: [{ id: "sec-a" }, { id: "house-azul" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
   await prisma.student.create({ data: { ...studentData("00000123457", "Santos"), groups: { connect: [{ id: "sec-a" }, { id: "house-verde" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
@@ -179,7 +180,7 @@ try {
   // Ambiguous: two sections
   await prisma.student.create({ data: { ...studentData("00000123480", "Ambiguous"), groups: { connect: [{ id: "sec-a" }, { id: "sec-b" }, { id: "house-azul" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
   // Formula payload + unicode
-  await prisma.student.create({ data: { id: "00000123459", firstName: "=2+2", lastName: "Oñate, Jr.", middleName: null, schoolLevel: "COLLEGE", yearLevel: "YEAR_2", groups: { connect: [{ id: "sec-a" }, { id: "house-azul" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
+  await prisma.student.create({ data: { id: "00000123459", usn: "00000123459", firstName: "=2+2", lastName: "Oñate, Jr.", middleName: null, schoolLevel: "COLLEGE", yearLevel: "YEAR_2", groups: { connect: [{ id: "sec-a" }, { id: "house-azul" }, { id: "dept-cs" }, { id: "prog-bsit" }] } } });
 
   await prisma.event.create({
     data: {
@@ -204,7 +205,7 @@ try {
   // --- Permissions ---
   assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: ["00000123456"], action: "SET_SECTION", targetGroupId: "sec-b" } })).status, 401);
   const adminCookie = await login("admin@example.test", "fixture-password-123");
-  const orgCookie = await login("org@example.test", "fixture-password-123");
+  const bulkAdminCookie = await login("org@example.test", "fixture-password-123");
   const otherCookie = await login("other@example.test", "fixture-password-123");
   const pendingLogin = await fetch(`${origin}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "pending@example.test", password: "fixture-password-123" }) });
   assert.equal(pendingLogin.status, 403);
@@ -213,7 +214,7 @@ try {
   const previewRes = await api("/api/students/bulk/preview", {
     method: "POST",
     body: { studentIds: ["00000123457", "00000123456"], action: "SET_SECTION", targetGroupId: "sec-b" },
-    cookie: orgCookie,
+    cookie: bulkAdminCookie,
   });
   assert.equal(previewRes.status, 200);
   assert.equal(previewRes.cache, "private, no-store");
@@ -227,7 +228,7 @@ try {
   const unchangedRes = await api("/api/students/bulk/preview", {
     method: "POST",
     body: { studentIds: ["00000123458"], action: "SET_SECTION", targetGroupId: "sec-b" },
-    cookie: orgCookie,
+    cookie: bulkAdminCookie,
   });
   assert.equal(unchangedRes.body.data.changedCount, 0);
   assert.equal(unchangedRes.body.data.unchangedCount, 1);
@@ -237,18 +238,18 @@ try {
   const blockedRes = await api("/api/students/bulk/preview", {
     method: "POST",
     body: { studentIds: ["00000123480", "00000123490"], action: "SET_SECTION", targetGroupId: "sec-b" },
-    cookie: orgCookie,
+    cookie: bulkAdminCookie,
   });
   assert.equal(blockedRes.body.data.blockedCount, 2);
   assert.equal(blockedRes.body.data.previewToken, null);
 
   // Validation: duplicates, wrong-category, unknown target
-  assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: ["00000123456", "00000123456"], action: "SET_SECTION", targetGroupId: "sec-b" }, cookie: orgCookie })).status, 400);
-  assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: ["00000123456"], action: "SET_SECTION", targetGroupId: "house-azul" }, cookie: orgCookie })).status, 400);
-  assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: ["00000123456"], action: "SET_SECTION", targetGroupId: "missing" }, cookie: orgCookie })).status, 404);
+  assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: ["00000123456", "00000123456"], action: "SET_SECTION", targetGroupId: "sec-b" }, cookie: bulkAdminCookie })).status, 400);
+  assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: ["00000123456"], action: "SET_SECTION", targetGroupId: "house-azul" }, cookie: bulkAdminCookie })).status, 400);
+  assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: ["00000123456"], action: "SET_SECTION", targetGroupId: "missing" }, cookie: bulkAdminCookie })).status, 404);
   // Bounds: 101 mutation IDs rejected
   const many = Array.from({ length: 101 }, (_, i) => String(i).padStart(11, "0"));
-  assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: many, action: "SET_SECTION", targetGroupId: "sec-b" }, cookie: orgCookie })).status, 400);
+  assert.equal((await api("/api/students/bulk/preview", { method: "POST", body: { studentIds: many, action: "SET_SECTION", targetGroupId: "sec-b" }, cookie: bulkAdminCookie })).status, 400);
 
   // --- Commit happy path: narrow writes only ---
   const beforeUnchanged = await prisma.student.findUnique({ where: { id: "00000123456" }, include: { groups: true } });
@@ -256,7 +257,7 @@ try {
   const commitRes = await api("/api/students/bulk/commit", {
     method: "POST",
     body: { previewToken: goodToken, acknowledgeReportImpact: true },
-    cookie: orgCookie,
+    cookie: bulkAdminCookie,
   });
   const commitMs = performance.now() - t0;
   assert.equal(commitRes.status, 200);
@@ -279,7 +280,7 @@ try {
   const replay = await api("/api/students/bulk/commit", {
     method: "POST",
     body: { previewToken: goodToken, acknowledgeReportImpact: true },
-    cookie: orgCookie,
+    cookie: bulkAdminCookie,
   });
   assert.equal(replay.status, 409);
 
@@ -287,7 +288,7 @@ try {
   const preview2 = await api("/api/students/bulk/preview", {
     method: "POST",
     body: { studentIds: ["00000123456", "00000123457"], action: "SET_HOUSE", targetGroupId: "house-verde" },
-    cookie: orgCookie,
+    cookie: bulkAdminCookie,
   });
   assert.equal(preview2.status, 200);
   // Racing write via a second connection: move one student + touch updatedAt
@@ -295,7 +296,7 @@ try {
   const racedCommit = await api("/api/students/bulk/commit", {
     method: "POST",
     body: { previewToken: preview2.body.data.previewToken, acknowledgeReportImpact: true },
-    cookie: orgCookie,
+    cookie: bulkAdminCookie,
   });
   assert.equal(racedCommit.status, 409);
   // All-or-nothing: the other row must NOT have moved
@@ -306,8 +307,8 @@ try {
 
   // --- Token security ---
   const tampered = goodToken.slice(0, -1) + (goodToken.endsWith("A") ? "B" : "A");
-  assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: tampered, acknowledgeReportImpact: true }, cookie: orgCookie })).status, 409);
-  // Cross-user reuse
+  assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: tampered, acknowledgeReportImpact: true }, cookie: bulkAdminCookie })).status, 409);
+  // Cross-admin reuse still cannot consume another administrator's reviewed token
   assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: goodToken, acknowledgeReportImpact: true }, cookie: otherCookie })).status, 409);
   // Expired (craft with same secret, past window)
   const expiredPayload = {
@@ -317,18 +318,18 @@ try {
     contentVersions: {}, reviewFingerprint: "x",
     preparedAt: Date.now() - 20 * 60 * 1000, expiresAt: Date.now() - 10 * 60 * 1000,
   };
-  assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: signToken(expiredPayload), acknowledgeReportImpact: true }, cookie: orgCookie })).status, 409);
+  assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: signToken(expiredPayload), acknowledgeReportImpact: true }, cookie: bulkAdminCookie })).status, 409);
   // Purpose confusion
   const wrongPurpose = { ...expiredPayload, purpose: "event-attendance-auth", preparedAt: Date.now(), expiresAt: Date.now() + 600000 };
-  assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: signToken(wrongPurpose), acknowledgeReportImpact: true }, cookie: orgCookie })).status, 409);
+  assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: signToken(wrongPurpose), acknowledgeReportImpact: true }, cookie: bulkAdminCookie })).status, 409);
   // Deactivated at commit
   const freshPreview = await api("/api/students/bulk/preview", {
     method: "POST",
     body: { studentIds: ["00000123457"], action: "SET_HOUSE", targetGroupId: "house-azul" },
-    cookie: orgCookie,
+    cookie: bulkAdminCookie,
   });
   await prisma.user.update({ where: { id: "org" }, data: { status: "REJECTED" } });
-  assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: freshPreview.body.data.previewToken, acknowledgeReportImpact: true }, cookie: orgCookie })).status, 403);
+  assert.equal((await api("/api/students/bulk/commit", { method: "POST", body: { previewToken: freshPreview.body.data.previewToken, acknowledgeReportImpact: true }, cookie: bulkAdminCookie })).status, 403);
   await prisma.user.update({ where: { id: "org" }, data: { status: "ACTIVE" } });
 
   // --- Export ---

@@ -9,6 +9,7 @@ import Link from "next/link";
 type ColumnArgs = {
   onEdit: (student: Student) => void;
   onDelete: (id: string) => void;
+  canDelete?: boolean;
   onViewQR: (student: Student) => void;
   onHistory: (student: Student) => void;
   profileHref: (student: Student) => string;
@@ -17,6 +18,7 @@ type ColumnArgs = {
 export const getStudentColumns = ({
   onEdit,
   onDelete,
+  canDelete = false,
   onViewQR,
   onHistory,
   profileHref,
@@ -153,14 +155,14 @@ export const getStudentColumns = ({
           >
             <Edit className="size-3.5" strokeWidth={1.6} />
           </button>
-          <button
+          {canDelete ? <button
             type="button"
             aria-label={`Delete ${student.id}`}
             className="inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 md:px-2 md:text-xs"
             onClick={() => onDelete(student.id)}
           >
             <Delete className="size-3.5" strokeWidth={1.6} />
-          </button>
+          </button> : null}
         </div>
       );
     },

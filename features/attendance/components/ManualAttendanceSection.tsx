@@ -186,7 +186,7 @@ export default function ManualAttendanceSection({ selectedEvent, displayedStuden
     {displayedStudent && <div className="mt-5 rounded-lg border bg-slate-50 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2"><div>
         <h3 className="font-semibold">{[displayedStudent.firstName, displayedStudent.middleName, displayedStudent.lastName].filter(Boolean).join(" ")}</h3>
-        <p className="text-sm">{displayedStudent.id} · {identity(displayedStudent)}</p></div>
+        <p className="text-sm">{studentDisplayIdentifier(displayedStudent)} · {identity(displayedStudent)}</p></div>
         <Button type="button" size="sm" variant="outline" onClick={() => setQrStudent(displayedStudent)}>View QR</Button></div>
       <div role="status" className="mt-3 text-sm">
         {recordState.kind === "LOADING" && "Checking attendance status…"}

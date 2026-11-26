@@ -5,10 +5,12 @@ import { prepareQrDecoder } from "./scripts/prepare-qr-decoder.mjs";
 prepareQrDecoder();
 
 const nextConfig: NextConfig = {
+  outputFileTracingExcludes: { "/*": ["./.superpowers/**/*", "./test-results/**/*"] },
   distDir: process.env.USWAG_TEST_DIST_DIR || ".next",
   typescript: {tsconfigPath: process.env.USWAG_TEST_TSCONFIG || "tsconfig.json"},
   async headers() {
     return [
+      { source: "/class/reports/print", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
       {
         source: "/(.*)",
         headers: [
