@@ -1,11 +1,14 @@
 'use client';
-import { Play, Plus, Search, BarChart3, ClipboardCheck } from 'lucide-react';
+import { Play, Plus, Search, BarChart3, ClipboardCheck, BookOpen, Radio, CalendarDays } from 'lucide-react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/globals/contexts/AuthContext';
 import { fetchApi } from '@/globals/utils/api';
 import { Button } from '@/globals/components/shad-cn/button';
-import { ClassroomPage,SectionPanel,ClassroomSelect,LoadingState,Feedback,IdentityBlock,StatusBadge,EmptyState } from './ui';
+import { Card } from '@/globals/components/shad-cn/card';
+import { Skeleton } from '@/globals/components/shad-cn/skeleton';
+import { cn } from '@/globals/libs/shad-cn';
+import { ClassroomPage,SectionPanel,ClassroomSelect,Feedback,IdentityBlock,StatusBadge,EmptyState } from './ui';
 import { useClassroomListState } from '../hooks/useClassroomListState';
 import { useClassroomTermPreference } from '../hooks/useClassroomTermPreference';
 import { classroomReadRetry } from '../hooks/useClassroomSession';
@@ -13,16 +16,59 @@ import { formatManila } from '../utils/manualRosterState';
 import type { ClassroomOverview as Overview, OverviewMeeting } from '../types/overview';
 import OnboardingChecklist from './onboarding/OnboardingChecklist';
 function MeetingPreview({meeting,administrator}:{meeting:OverviewMeeting;administrator:boolean}){const active=meeting.state==='ACTIVE';return <div className="space-y-4 border-b border-slate-100 py-4 first:pt-0 last:border-0 last:pb-0"><div className="flex flex-wrap items-start justify-between gap-3"><IdentityBlock name={meeting.classSnapshot.displayName} description={<>{meeting.classSnapshot.sections.map(section=>section.name).join(' + ')||meeting.classSnapshot.subject.title}<br/>{formatManila(meeting.scheduledStartAt)}</>}/><StatusBadge tone={active?'primary':meeting.state==='FINALIZED'?'success':'neutral'}>{active?'Active':meeting.state==='FINALIZED'?'Finalized':'Canceled'}</StatusBadge></div>{active?<><progress aria-label={'Attendance progress for '+meeting.classSnapshot.displayName} max={Math.max(meeting.rosterCount,1)} value={meeting.markedCount} className="h-2 w-full overflow-hidden rounded-full accent-indigo-600"/><p className="text-sm text-slate-500">{meeting.markedCount} of {meeting.rosterCount} marked · {meeting.counts.UNMARKED} remaining</p></>:null}<Button asChild variant={active?'default':'outline'}><Link href={meeting.href}><Play aria-hidden className="size-4 shrink-0"/>{active?administrator?'View session':'Resume attendance':'Review meeting'}</Link></Button></div>;}
+function OverviewMetrics({ administrator, stats }: { administrator: boolean; stats?: Overview['stats'] }) {
+ const metrics = [
+  {
+   label: administrator ? 'Classes' : 'Your classes',
+   value: stats?.classCount,
+   icon: BookOpen,
+   iconClassName: 'bg-indigo-50 text-indigo-700',
+  },
+  {
+   label: 'Active meetings',
+   value: stats?.activeMeetingCount,
+   icon: Radio,
+   cardClassName: 'border-indigo-200 bg-indigo-50/80',
+   iconClassName: 'bg-indigo-600 text-white',
+  },
+  {
+   label: 'Meetings today',
+   value: stats?.meetingsTodayCount,
+   icon: CalendarDays,
+   iconClassName: 'bg-sky-50 text-sky-700',
+  },
+ ];
+
+ return <div>
+  {!stats && <p role="status" className="sr-only">Preparing your classroom overview…</p>}
+  <dl aria-label="Classroom metrics" aria-busy={!stats} className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+   {metrics.map(({ label, value, icon: Icon, cardClassName, iconClassName }) =>
+    <Card key={label} className={cn('min-w-0 gap-2 rounded-2xl border-slate-200 bg-white p-4 sm:p-5', cardClassName)}>
+     <dt className="flex items-start justify-between gap-2 text-sm font-medium text-slate-700">
+      <span className="min-w-0 self-center">{label}</span>
+      <span aria-hidden="true" className={cn('flex size-9 shrink-0 items-center justify-center rounded-xl', iconClassName)}>
+       <Icon className="size-5"/>
+      </span>
+     </dt>
+     <dd className="text-3xl leading-none font-semibold tabular-nums text-slate-900">
+      {value === undefined ? <Skeleton aria-hidden="true" className="h-[1em] w-12 motion-reduce:animate-none"/> : value.toLocaleString()}
+     </dd>
+    </Card>
+   )}
+  </dl>
+ </div>;
+}
 export default function ClassroomOverview(){
  const {user}=useAuth();const administrator=user?.role==='ADMIN';const classesPath=administrator?'/class/admin/classes':'/class/classes';const {values,setValues,ready}=useClassroomListState({termId:''});const {terms,chooseTerm}=useClassroomTermPreference(ready,termId=>setValues({termId}));
  const query=useQuery({queryKey:['classroom','overview',user?.id,user?.role,user?.classroomStatus,values.termId],enabled:ready&&!!user,queryFn:({signal})=>fetchApi<Overview>('/api/classroom/overview?'+new URLSearchParams(values.termId?{termId:values.termId}:{}),{signal}),retry:classroomReadRetry,staleTime:0});const data=query.data;
+ const loading=!ready||query.isLoading;
  return <ClassroomPage title={user?.name?'Welcome, '+user.name.split(' ')[0]:'Classroom overview'} eyebrow={administrator?'Class administration':'Your classroom'} hero description={administrator?'Review classroom activity and support your teachers.':'Pick up an active meeting or get ready for your next class.'} actions={<Button asChild variant="secondary"><Link href={classesPath+'/new'}><Plus aria-hidden className="size-4 shrink-0"/>Create class</Link></Button>}>
  <div className="max-w-sm"><ClassroomSelect label="Academic term" value={values.termId} onValueChange={chooseTerm} options={[{value:'',label:'All terms'},...(terms.data?.items.map(term=>({value:term.id,label:term.name}))??[])]}/></div>
+ {loading||data?<OverviewMetrics administrator={administrator} stats={data?.stats}/>:null}
  {terms.isError?<Feedback title="Academic terms could not be loaded" tone="warning" onRetry={()=>void terms.refetch()}/>:null}
  {!administrator?<OnboardingChecklist/>:null}
- {!ready||query.isLoading?<LoadingState label="Preparing your classroom overview…"/>:query.isError&&!data?<Feedback title="Your classroom overview is unavailable" onRetry={()=>void query.refetch()}>Your confirmed attendance and classes remain saved.</Feedback>:data?<>
+ {loading?null:query.isError&&!data?<Feedback title="Your classroom overview is unavailable" onRetry={()=>void query.refetch()}>Your confirmed attendance and classes remain saved.</Feedback>:data?<>
  {query.isError?<Feedback title="Overview refresh failed" tone="warning" onRetry={()=>void query.refetch()}>Showing the last confirmed overview.</Feedback>:null}
- <div className="grid gap-4 sm:grid-cols-3">{[{label:administrator?'Classes':'Your classes',value:data.stats.classCount,detail:'Current, nonarchived classes'},{label:'Active meetings',value:data.stats.activeMeetingCount,detail:'Meetings still in progress'},{label:'Meetings today',value:data.stats.meetingsTodayCount,detail:'Active and finalized · Asia/Manila'}].map(metric=><SectionPanel key={metric.label}><p className="text-sm text-slate-500">{metric.label}</p><p className="text-3xl font-semibold tabular-nums text-slate-900">{metric.value}</p><p className="text-xs text-slate-500">{metric.detail}</p></SectionPanel>)}</div>
  <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]"><div className="min-w-0 space-y-6"><SectionPanel title="Active meetings" actions={<Button asChild variant="ghost"><Link href={data.activeMeetings.href}>View all ({data.activeMeetings.total})</Link></Button>}>
  {data.activeMeetings.items.length?data.activeMeetings.items.map(meeting=><MeetingPreview key={meeting.id} meeting={meeting} administrator={administrator}/>):<div className="space-y-3"><p className="text-sm text-slate-500">No meetings are in progress.</p><Button asChild variant="outline"><Link href="/class/attendance?view=start"><Play aria-hidden className="size-4 shrink-0"/>{administrator?'Review available classes':'Start a meeting'}</Link></Button></div>}</SectionPanel>
  <SectionPanel title={administrator?'Recent classes':'Your classes'} actions={<Button asChild variant="ghost"><Link href={data.recentClasses.href}>View all ({data.recentClasses.total})</Link></Button>}>{data.recentClasses.items.length?data.recentClasses.items.map(item=><div key={item.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-3 first:pt-0 last:border-0"><IdentityBlock name={item.displayName} description={item.sections.map(section=>section.name).join(' + ')||item.subject.title}/><Button asChild variant="outline"><Link href={classesPath+'/'+encodeURIComponent(item.id)}>Open class</Link></Button></div>):<EmptyState title="Your first class starts here" description="Save class details and sections, then review the roster before attendance." actions={<Button asChild><Link href={classesPath+'/new'}><Plus aria-hidden className="size-4 shrink-0"/>Create class</Link></Button>}/>}</SectionPanel></div>
