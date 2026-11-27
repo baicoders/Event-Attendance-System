@@ -8,6 +8,17 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: { "/*": ["./.superpowers/**/*", "./test-results/**/*"] },
   distDir: process.env.USWAG_TEST_DIST_DIR || ".next",
   typescript: {tsconfigPath: process.env.USWAG_TEST_TSCONFIG || "tsconfig.json"},
+  async rewrites() {
+    return {
+      beforeFiles: [{
+        source: "/class/onboarding",
+        has: [{ type: "query", key: "help", value: "1" }],
+        destination: "/class/help/legacy",
+      }],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
   async headers() {
     return [
       { source: "/class/reports/print", headers: [{ key: "Cache-Control", value: "private, no-store" }] },

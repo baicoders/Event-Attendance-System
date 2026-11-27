@@ -19,6 +19,9 @@ await withClassroomTestApp(async({db,request,base})=>{
   assert.equal(term.response.status,201,term.text);assert.equal(subject.response.status,201,subject.text);
   assert.equal((await request('/api/classroom/onboarding')).response.status,401);
   assert.equal((await request('/api/classroom/onboarding',{cookie:pending.cookie})).response.status,403);
+  const legacyHelp=await request('/class/onboarding?help=1',{cookie:actor.cookie});
+  assert.equal(legacyHelp.response.status,307);
+  assert.equal(legacyHelp.response.headers.get('location'),'/class/help');
   const path='/api/classroom/onboarding';
   const initial=await request(path,{cookie:actor.cookie});assert.equal(initial.json.data.nextStep,'WELCOME');assert.equal(await db.teacherOnboarding.count(),0);
   const welcome={commandId:randomUUID(),expectedRevision:0,step:'WELCOME'};

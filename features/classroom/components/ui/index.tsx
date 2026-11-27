@@ -18,8 +18,29 @@ import { page } from '@/globals/constants/designTokens';
 export function ClassroomPage({title,description,eyebrow,actions,hero=false,breadcrumbs,children,className}:{title:string;description?:string;eyebrow?:string;actions?:ReactNode;hero?:boolean;breadcrumbs?:Array<{label:string;href?:string}>;children:ReactNode;className?:string}) {
  return <div className={cn(page.surface,'bg-none')}><div className={cn(page.container,'[&_h1]:break-words',className)}>{breadcrumbs?.length?<nav aria-label="Breadcrumb"><ol className="flex flex-wrap items-center gap-x-2 text-sm text-slate-500">{breadcrumbs.map((item,index)=><li key={index} className="flex min-w-0 items-center gap-2">{index>0?<span aria-hidden="true">/</span>:null}{item.href?<Link className="inline-flex min-h-12 items-center font-medium text-indigo-700 hover:underline" href={item.href}>{item.label}</Link>:<span aria-current="page" className="break-words">{item.label}</span>}</li>)}</ol></nav>:null}<PageHeader title={title} description={description} eyebrow={eyebrow} actions={actions} variant={hero?'hero':'plain'}/>{children}</div></div>;
 }
-export function SectionPanel({title,description,actions,children,footer,className,contentClassName,icon:Icon}:{title?:string;description?:string;actions?:ReactNode;children:ReactNode;footer?:ReactNode;className?:string;contentClassName?:string;icon?:LucideIcon}){
- return <Card className={cn('min-w-0 gap-0 overflow-hidden rounded-2xl border-slate-200 bg-white py-0 shadow-sm',className)}>{title||description||actions?<CardHeader className="gap-2 border-b border-slate-100 px-5 py-4 sm:px-6">{title?<CardTitle><h2 className="flex items-center gap-2 text-base leading-6 font-semibold text-slate-900">{Icon?<Icon aria-hidden className="size-5 shrink-0 text-indigo-600"/>:null}{title}</h2></CardTitle>:null}{description?<CardDescription className="leading-relaxed">{description}</CardDescription>:null}{actions?<CardAction className="max-w-full">{actions}</CardAction>:null}</CardHeader>:null}<CardContent className={cn('min-w-0 space-y-4 p-5 sm:p-6',contentClassName)}>{children}</CardContent>{footer?<CardFooter className="flex flex-wrap justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:px-6">{footer}</CardFooter>:null}</Card>;
+export function SectionPanel({
+ title, description, actions, children, footer, className, contentClassName, icon: Icon,
+}: {
+ title?: string;
+ description?: string;
+ actions?: ReactNode;
+ children: ReactNode;
+ footer?: ReactNode;
+ className?: string;
+ contentClassName?: string;
+ icon?: LucideIcon;
+}) {
+ return <Card className={cn('min-w-0 gap-0 overflow-hidden rounded-2xl border-slate-200 bg-white py-0 shadow-sm', className)}>
+  {(title || description || actions) && <CardHeader className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+   {(title || description) && <div className="min-w-0 space-y-1">
+    {title && <CardTitle><h2 className="flex items-center gap-2 break-words text-base leading-6 font-semibold text-slate-900">{Icon && <Icon aria-hidden className="size-5 shrink-0 text-indigo-600"/>}<span className="min-w-0">{title}</span></h2></CardTitle>}
+    {description && <CardDescription className="leading-relaxed">{description}</CardDescription>}
+   </div>}
+   {actions && <CardAction className="max-w-full sm:shrink-0">{actions}</CardAction>}
+  </CardHeader>}
+  <CardContent className={cn('min-w-0 space-y-4 p-5 sm:p-6', contentClassName)}>{children}</CardContent>
+  {footer && <CardFooter className="flex flex-wrap justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:px-6">{footer}</CardFooter>}
+ </Card>;
 }
 export function FilterToolbar({children,resultCount,onReset}:{children:ReactNode;resultCount?:number;onReset?:()=>void}){return <div className="flex min-w-0 flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">{children}<div className="flex min-h-12 items-center gap-3 text-sm text-slate-500">{resultCount!==undefined?<span aria-live="polite">{resultCount.toLocaleString()} results</span>:null}{onReset?<Button variant="ghost" onClick={onReset}>Reset filters</Button>:null}</div></div>;}
 export function IdentityBlock({name,identifier,description}:{name:string;identifier?:string;description?:ReactNode}){return <div className="flex min-w-0 items-center gap-3"><span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-sm font-semibold text-indigo-700">{name.split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join('').toUpperCase()}</span><div className="min-w-0"><p className="break-words font-semibold text-slate-900">{name}</p>{identifier?<p className="break-all text-xs text-slate-500">{identifier}</p>:null}{description?<div className="mt-1 break-words text-sm text-slate-500">{description}</div>:null}</div></div>;}
